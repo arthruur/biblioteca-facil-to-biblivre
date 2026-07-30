@@ -1,0 +1,5 @@
+# Nenhuma dependência externa é necessária para os scripts de extração
+# atuais (usam apenas a biblioteca padrão: struct, zlib, re, csv, pickle).
+#
+# A partir da geração de MARC21 (ver docs/ROADMAP.md), vamos precisar de:
+pymarc>=5.0

@@ -1,0 +1,19 @@
+# Dados reais extraídos de backups (podem conter informações pessoais de
+# leitores, usuários etc.) NUNCA devem ir para o repositório público.
+*.bkp
+*.pkl
+*.db
+tabelas_extraidas/
+*.csv
+saida/
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor/OS
+.DS_Store
+.vscode/

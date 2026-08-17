@@ -16,34 +16,70 @@ para extrair os dados.
 
 ## O que já foi descoberto
 
-- O `.bkp` é um **container proprietário** que empacota 16 tabelas
-  **Paradox** (pares `.dat`/`.idx`), comprimidas em blocos **zlib**.
+- O `.bkp` é um **container proprietário** que empacota 16 tabelas (pares
+  `.dat`/`.idx`), comprimidas em blocos **zlib**.
   Ver [docs/FORMATO_BKP.md](docs/FORMATO_BKP.md).
-- Layout de registro (offsets de campo) mapeado parcialmente para as
-  tabelas **Acervo** (livros) e **Autores**.
-  Ver [docs/TABELAS.md](docs/TABELAS.md).
+- Os `.dat` **não são Paradox**, apesar da cara de aplicativo Delphi da
+  época. São um formato próprio — e, felizmente, **auto-descritivo**:
+  cada arquivo traz no cabeçalho um catálogo com nome, tipo, tamanho e
+  offset de todos os seus campos. Com isso, as **16 tabelas estão
+  completamente decodificadas**. Ver [docs/TABELAS.md](docs/TABELAS.md).
 
 ## Uso rápido
 
 ```bash
 pip install -r requirements.txt
 
-# 1. Descompacta o .bkp nas tabelas Paradox originais
+# 1. Descompacta o .bkp nas tabelas originais
 python scripts/extrair_bkp.py caminho/para/backup.bkp saida/
 
-# 2. Extrai os registros já mapeados para CSV
-python scripts/extrair_acervo.py saida/
-python scripts/extrair_autores.py saida/
+# 2. Mostra o layout de todas as tabelas
+python scripts/extrair_tabela.py saida/ --listar
+
+# 3. Exporta uma tabela qualquer para CSV
+python scripts/extrair_tabela.py saida/ T09_ACER.dat acervo.csv
+
+# 4. Gera o CSV consolidado (acervo + autores + editoras + idiomas...)
+python scripts/consolidar.py saida/ acervo_consolidado.csv
+
+# 5. Gera o MARC21/ISO 2709 + o CSV de exemplares
+python scripts/gerar_marc.py acervo_consolidado.csv obras.mrc
+
+# 6. Carrega os registros no banco do BibLivre (base principal)
+#    Sem --executar é só relatório; não escreve nada.
+python scripts/inserir_obras.py obras.mrc --executar
+#    -> agora Reindexe pela tela: Administração → Manutenção → base bibliográfica
+
+# 7. Cria os exemplares (holdings) no banco do BibLivre
+python scripts/inserir_exemplares.py exemplares.csv --executar
 ```
+
+`obras.mrc` é o MARC21/ISO 2709 do acervo; `exemplares.csv` é 1 linha por
+cópia física. A carga é feita **direto no banco** do BibLivre por dois
+motivos apurados no código-fonte: a importação pela tela não escala para
+~15 mil registros no heap padrão do Tomcat (256 MB) e não tem "mover todos"
+da base de trabalho para a principal; e a importação **não cria exemplares**
+— sem eles o acervo não pode ser emprestado. Todo o procedimento (com a
+validação byte a byte contra a tela) está em
+[docs/IMPORTACAO_BIBLIVRE.md](docs/IMPORTACAO_BIBLIVRE.md).
 
 ## Estrutura
 
 ```
-scripts/          scripts de extração
+scripts/
+  extrair_bkp.py     descompacta o container .bkp
+  bf_tabela.py       leitor genérico (lê o layout do próprio cabeçalho)
+  extrair_tabela.py  exporta qualquer tabela para CSV
+  consolidar.py      join entre as tabelas → CSV pronto para virar MARC
+  gerar_marc.py      CSV → obras.mrc (ISO 2709) + exemplares.csv
+  inserir_obras.py   obras.mrc → biblio_records, no banco do BibLivre
+  inserir_exemplares.py
+                     exemplares.csv → biblio_holdings, no banco do BibLivre
 docs/
-  FORMATO_BKP.md   engenharia reversa do container .bkp
-  TABELAS.md       offsets de campo mapeados por tabela
-  ROADMAP.md       o que falta até a importação no BibLivre
+  FORMATO_BKP.md          engenharia reversa do container .bkp
+  TABELAS.md              formato do cabeçalho e layout das 16 tabelas
+  IMPORTACAO_BIBLIVRE.md  o que o BibLivre 5 aceita, apurado no código
+  ROADMAP.md              o que falta até a importação no BibLivre
 ```
 
 ## Aviso importante

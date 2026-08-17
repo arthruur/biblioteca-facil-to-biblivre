@@ -3,6 +3,9 @@
 *.bkp
 *.pkl
 *.db
+*.dat
+*.idx
+*.mrc
 tabelas_extraidas/
 *.csv
 saida/

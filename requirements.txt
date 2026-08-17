@@ -1,5 +1,13 @@
-# Nenhuma dependência externa é necessária para os scripts de extração
-# atuais (usam apenas a biblioteca padrão: struct, zlib, re, csv, pickle).
-#
-# A partir da geração de MARC21 (ver docs/ROADMAP.md), vamos precisar de:
+# extrair_bkp.py, bf_tabela.py e extrair_tabela.py usam apenas a biblioteca
+# padrão (struct, zlib, re, csv). As dependências abaixo são para o resto:
+
+# consolidar.py — join entre as tabelas
+pandas>=2.0
+
+# gerar_marc.py e inserir_exemplares.py — MARC21/ISO 2709 (ver docs/ROADMAP.md)
 pymarc>=5.0
+
+# inserir_exemplares.py — insere os exemplares direto no banco do BibLivre.
+# O instalador do BibLivre traz o PostgreSQL, mas não expõe o psql no PATH,
+# por isso o passo é feito por aqui e não por linha de comando do psql.
+psycopg2-binary>=2.9

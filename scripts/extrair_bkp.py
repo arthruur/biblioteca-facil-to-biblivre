@@ -4,7 +4,7 @@ Extrai o conteúdo de um arquivo .bkp do Biblioteca Fácil.
 O QUE DESCOBRIMOS SOBRE O FORMATO .bkp
 ----------------------------------------
 O .bkp é um container proprietário criado pelo Biblioteca Fácil que empacota
-16 tabelas Paradox (cada uma com um arquivo .dat = dados e .idx = índice),
+16 tabelas (cada uma com um arquivo .dat = dados e .idx = índice),
 compactadas em blocos zlib de até 64KB cada (tabelas grandes viram vários
 blocos em sequência).
 
@@ -31,7 +31,8 @@ termina. Isso é robusto e não depende de acertar o tamanho exato dos
 campos de metadados.
 
 Resultado: recupera os 32 arquivos de tabela originais, byte a byte,
-prontos para serem lidos como tabelas Paradox.
+prontos para serem lidos por scripts/bf_tabela.py (o formato do .dat NÃO é
+Paradox, apesar da aparência - ver docs/TABELAS.md).
 """
 
 import struct

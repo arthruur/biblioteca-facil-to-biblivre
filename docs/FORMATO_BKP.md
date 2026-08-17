@@ -24,9 +24,11 @@ Abrindo em hexdump, o início do arquivo é:
 ```
 
 Os primeiros 16 bytes se repetem **idênticos** em todos os backups desse
-mesmo Biblioteca Fácil que analisamos — não parecem ser um hash do
-conteúdo, e sim algum tipo de assinatura fixa da instalação/aplicativo.
-Não foi necessário decodificá-los para extrair os dados.
+mesmo Biblioteca Fácil que analisamos. Deciframos depois, ao atacar o
+cabeçalho dos `.dat`: são um **double TDateTime do Delphi seguido de um
+FILETIME do Windows**, copiados do cabeçalho de uma tabela (os mesmos 16
+bytes aparecem no offset `0x09` de cada `.dat`). Ver
+[TABELAS.md](TABELAS.md).
 
 **Armadilha:** o campo de quantidade de tabelas parece à primeira vista
 ser 1 byte (valor `0x10` = 16), mas na verdade é um **int32** (4 bytes:
@@ -36,7 +38,7 @@ os 3 bytes seguintes como se fossem entradas vazias.
 ## Entradas de arquivo (uma por tabela `.dat`/`.idx`)
 
 Depois da lista de nomes de tabela, o arquivo é uma sequência de
-entradas, cada uma representando um arquivo de tabela Paradox:
+entradas, cada uma representando um arquivo de tabela:
 
 ```
 0c "T01_USUA.dat"                          <- string Pascal: nome do arquivo
@@ -83,6 +85,6 @@ arquivo (nenhum byte sobrando, nenhum erro de descompressão).
 ## Resultado
 
 32 arquivos recuperados (16 tabelas × `.dat` + `.idx`), idênticos aos
-originais gerados pelo Paradox. A partir daqui, o trabalho passa a ser
+originais. A partir daqui, o trabalho passa a ser
 sobre o **formato de registro de cada tabela** — ver
 [TABELAS.md](TABELAS.md).

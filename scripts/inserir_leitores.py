@@ -123,9 +123,11 @@ ROTULO_OBS = {chave: trad[0] for chave, _, _, _, _, trad in CAMPOS_NOVOS}
 # chutar ali erraria mais do que acertaria.
 RE_NUMERO = re.compile(r"^(.*?)[,\s]*(?:n[º°o\.]*\s*)?(\d{1,6}[A-Za-z]?)$", re.I)
 
+# `created` é NOT NULL com DEFAULT now(): passar NULL explicitamente viola a
+# restrição, então o coalesce cobre o único leitor sem T04_DATACADASTRO.
 SQL_USER = """
 INSERT INTO users (id, name, type, status, created, created_by, name_ascii)
-VALUES (%s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, coalesce(%s::timestamp, now()), %s, %s)
 """
 SQL_VALOR = """
 INSERT INTO users_values (user_id, key, value, ascii) VALUES (%s, %s, %s, %s)

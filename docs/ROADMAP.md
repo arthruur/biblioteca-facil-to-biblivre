@@ -64,11 +64,20 @@ tabelas de schema válido, então deixamos o BibLivre gerá-lo. Ver
 
 - [x] Conferir na interface: busca no catálogo, aba Exemplares de uma obra,
       etiqueta de teste e um empréstimo de teste (feito e devolvido)
-- [ ] Apagar o usuário e o empréstimo de teste (o `users.id` 1 é o primeiro
+- [x] Apagar o usuário e o empréstimo de teste (o `users.id` 1 é o primeiro
       leitor da origem)
-- [ ] Rodar `inserir_leitores.py --executar` e **reiniciar o Tomcat**
-      (`UserFields`/`Translations` são caches estáticos)
-- [ ] Rodar `inserir_emprestimos.py --executar`
+- [x] **Carga de circulação executada (2026-08-19):** 2.743 leitores em
+      `users` (2.488 active, 255 inactive) e 39.580 valores em
+      `users_values`; 9 campos criados em `users_fields` com as traduções;
+      19.592 empréstimos em `lendings` (974 em aberto, 707 leitores com
+      pendência), 8 multas, 12 reservas. Integridade verificada: 0
+      empréstimos com leitor ou exemplar inexistente, 0 exemplares com dois
+      empréstimos em aberto, 0 chaves de `users_values` sem campo, 0 reservas
+      sem registro, sequences em 2.743 e 19.592.
+- [ ] **Reiniciar o Tomcat** — `Restart-Service Tomcat7` num PowerShell como
+      administrador (o serviço não aceita parada sem elevação). Sem isso os 9
+      campos novos não aparecem no formulário: `UserFields` e `Translations`
+      são caches estáticos.
 - [ ] Conferir na interface: ficha de um leitor, lista de atrasos de quem tem
       pendência, relatório de devoluções em atraso
 - [ ] Gerar o `.b5bz` (Administração → Backup → Full) — o backup só do acervo,

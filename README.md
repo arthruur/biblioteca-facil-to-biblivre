@@ -1,7 +1,8 @@
 # biblioteca-facil-to-biblivre
 
 Engenharia reversa do formato de backup `.bkp` do software **Biblioteca
-Fácil**, com o objetivo de migrar o acervo para o **BibLivre 5**.
+Fácil**, com o objetivo de migrar o acervo e a circulação (leitores,
+empréstimos, reservas) para o **BibLivre 5**.
 
 > Status: 🚧 em andamento. Ver [docs/ROADMAP.md](docs/ROADMAP.md) para o
 > que já funciona e o que falta.
@@ -52,6 +53,13 @@ python scripts/inserir_obras.py obras.mrc --executar
 
 # 7. Cria os exemplares (holdings) no banco do BibLivre
 python scripts/inserir_exemplares.py exemplares.csv --executar
+
+# 8. Carrega os leitores (cria os campos que faltam em users_fields)
+#    -> depois reinicie o Tomcat: UserFields/Translations são caches estáticos
+python scripts/inserir_leitores.py saida/ --executar --mapa-out saida/leitores_mapa.csv
+
+# 9. Carrega empréstimos, multas e reservas
+python scripts/inserir_emprestimos.py saida/ --executar
 ```
 
 `obras.mrc` é o MARC21/ISO 2709 do acervo; `exemplares.csv` é 1 linha por
@@ -75,6 +83,9 @@ scripts/
   inserir_obras.py   obras.mrc → biblio_records, no banco do BibLivre
   inserir_exemplares.py
                      exemplares.csv → biblio_holdings, no banco do BibLivre
+  inserir_leitores.py    T04_LEIT → users + users_values (+ campos novos)
+  inserir_emprestimos.py T13_MOVM/T11_MOVI/T15_RESE → lendings,
+                     lending_fines e reservations
 docs/
   FORMATO_BKP.md          engenharia reversa do container .bkp
   TABELAS.md              formato do cabeçalho e layout das 16 tabelas

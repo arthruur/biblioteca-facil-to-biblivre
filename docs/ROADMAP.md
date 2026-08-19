@@ -39,16 +39,40 @@
       referencial verificada (0 holdings órfãos, 0 obras sem exemplar,
       16.251 tombos únicos). Índice reconstruído pela tela.
 
+- [x] **Circulação decodificada e mapeada** — leitores (`T04_LEIT`),
+      empréstimos (`T13_MOVM` + `T11_MOVI`), multas e reservas
+      (`T15_RESE`). O `holding_id` de cada empréstimo sai do
+      `exemplares_mapa.csv` pelo tombo: **19.707 das 19.711**
+      movimentações têm exemplar (as 4 restantes são de um registro de
+      acervo excluído, nenhuma em aberto).
+- [x] `scripts/inserir_leitores.py` — `T04_LEIT` → `users` +
+      `users_values`, preservando o `NUMLEITOR` como `users.id`. Cria em
+      `users_fields` os 9 campos que o BibLivre não tem (nome dos pais,
+      naturalidade, escolaridade, bairro, ponto de referência, contato de
+      emergência, matrícula) com as traduções nos três idiomas.
+- [x] `scripts/inserir_emprestimos.py` — `lendings`, `lending_fines` e
+      `reservations`. Verificado no fonte que empréstimo em aberto **não**
+      altera `biblio_holdings.availability`: "emprestado" é derivado de
+      `return_date IS NULL`.
+
 ## 🚧 Próximos passos
 
-Falta só empacotar e implantar. O `.b5bz` é um dump PostgreSQL e carrega
-registros + exemplares juntos — montá-lo à mão exigiria reproduzir 61
+Falta executar a carga de circulação e empacotar. O `.b5bz` é um dump
+PostgreSQL e carrega tudo junto — montá-lo à mão exigiria reproduzir 61
 tabelas de schema válido, então deixamos o BibLivre gerá-lo. Ver
 [IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md).
 
-- [ ] Conferir na interface: busca no catálogo, aba Exemplares de uma obra,
-      impressão de etiqueta de teste e um empréstimo de teste
-- [ ] Gerar o `.b5bz` (Administração → Backup → Full)
+- [x] Conferir na interface: busca no catálogo, aba Exemplares de uma obra,
+      etiqueta de teste e um empréstimo de teste (feito e devolvido)
+- [ ] Apagar o usuário e o empréstimo de teste (o `users.id` 1 é o primeiro
+      leitor da origem)
+- [ ] Rodar `inserir_leitores.py --executar` e **reiniciar o Tomcat**
+      (`UserFields`/`Translations` são caches estáticos)
+- [ ] Rodar `inserir_emprestimos.py --executar`
+- [ ] Conferir na interface: ficha de um leitor, lista de atrasos de quem tem
+      pendência, relatório de devoluções em atraso
+- [ ] Gerar o `.b5bz` (Administração → Backup → Full) — o backup só do acervo,
+      gerado antes da circulação, vira ponto de retorno
 - [ ] Restaurar o `.b5bz` na máquina final (o restore **apaga** o schema de
       destino — ok em máquina limpa, perigoso sobre dados existentes)
 
@@ -110,13 +134,32 @@ normalizadas, mas nada além disso é adivinhado. Dos 16.251 registros,
 1.385 foram reconhecidos como cópias; o que restou de duplicata real
 aparece como fichas separadas, não como perda.
 
-## Dados que ficam de fora
+## Circulação: o que entra e o que não entra
 
-A migração cobre o acervo bibliográfico. **Não** estão no escopo:
-leitores (`T04_LEIT`, 2.743 pessoas — dados pessoais), empréstimos
-(`T13_MOVM`), movimentações (`T11_MOVI`) e reservas (`T15_RESE`). Se o
-histórico de circulação precisar ir junto, é um segundo projeto — o
-leitor genérico já decodifica essas tabelas.
+A circulação entrou no escopo depois do acervo, com estas decisões:
+
+- **Histórico completo de empréstimos**, não só os abertos: 19.592 linhas em
+  `lendings` (974 em aberto, 18.618 devolvidos). O `--apenas-abertos` existe
+  para quem preferir o contrário.
+- **Todos os 2.743 leitores**, inclusive os 255 excluídos/desativados na
+  origem — que entram como `inactive`, o status que o BibLivre esconde da
+  busca e recusa em empréstimo. Sem eles, 89 movimentações históricas
+  ficariam sem dono.
+- **Só as 12 reservas pendentes de 2026.** Das 115 pendentes, 103 são de
+  2016-2020 — reserva vencida há anos não é intenção viva.
+- **Fora:** as 113 movimentações apagadas na origem (`T11_EXCLUSAO` é a data
+  da exclusão), 2 sem cabeçalho em `T13_MOVM` (sem leitor, e `user_id` é NOT
+  NULL), as fotos de leitor (só o caminho da máquina antiga está no backup) e
+  12 datas de nascimento impossíveis.
+
+Vale lembrar o que isso significa: `users_values` passa a guardar CPF, RG,
+nome da mãe, endereço e telefone de 2.743 pessoas, e o `.b5bz` leva tudo
+consigo.
+
+Um efeito colateral esperado: 717 dos empréstimos em aberto venceram entre
+2013 e 2025. Eles migram como atraso, e é assim que o acervo realmente está —
+o BibLivre vai mostrar esses leitores como pendentes até que a biblioteca dê
+baixa neles.
 
 ## Por que MARC21/ISO 2709 e não XML ou texto simples
 

@@ -164,6 +164,57 @@ Biblivre 3 (`DataMigrationDAO.java` + `HoldingDAO.saveFromBiblivre3`) —
 ou seja, inserir exemplares por SQL é o caminho que o projeto usa, não uma
 gambiarra.
 
+## Circulação: leitores, empréstimos e reservas
+
+Também não há importação por arquivo aqui — a única entrada de usuário é o
+formulário de Circulação, um leitor por vez. E, de novo, o próprio BibLivre faz
+esta carga por SQL na migração dele do Biblivre 3: `UserDAO.saveFromBiblivre3` e
+`LendingDAO.saveFromBiblivre3` gravam com **id explícito**, o que permite
+preservar a numeração de origem.
+
+### O leitor é chave/valor
+
+`users` guarda só id, name, type, status e `name_ascii`. Todo o resto vive em
+`users_values (user_id, key, value, ascii)`, e as chaves válidas são as linhas
+de `users_fields` — há FK, então **campo que não existe em `users_fields` não
+pode ser gravado**. A instalação padrão traz 16 campos (email, gender, telefones,
+id_rg, id_cpf, endereço em 6 partes, birthday, obs).
+
+| Detalhe | Onde está | Consequência |
+|---|---|---|
+| `users.status` | enum `UserStatus`: active, pending_issues, inactive, blocked | `LendingBO.checkLending` recusa empréstimo para inactive/blocked e `UserDAO.search` esconde inactive — serve para os desativados/excluídos da origem |
+| `name_ascii`, `users_values.ascii` | usados com `ilike` em `UserDAO.search` | preencher com `TextUtils.removeDiacriticals` (NFD sem acentos, **sem** mudar a caixa), senão a busca não acha |
+| rótulo do campo | tradução `circulation.custom.user_field.<chave>` em `global.translations` (6.395 linhas; a tabela do schema da biblioteca está vazia) | campo novo sem tradução aparece sem nome na tela |
+| opções de `gender` | `...user_field.gender.1` = Masculino, `.2` = Feminino | o valor gravado é `"1"`/`"2"` |
+| `birthday` | `UserFieldsDAO` força o tipo para DATE, com um comentário `//BACALHAAAAAAU` | o valor é texto livre, renderizado pelo date picker no padrão do idioma (dd/mm/aaaa em pt-BR) |
+| `users_fields.required` | validado em `user/Validator.java`, não no banco | inserir sem email passa, mas a tela exigiria preencher em qualquer edição futura |
+| cache | `UserFields` e `Translations` são `StaticBO` | criar campo ou tradução por SQL exige **reiniciar o Tomcat** para aparecer |
+
+Campos do Biblioteca Fácil sem equivalente (nome dos pais, naturalidade,
+escolaridade, bairro, ponto de referência, contato de emergência, matrícula)
+entram como campos novos em `users_fields` + tradução nos três idiomas. Isso é
+uso previsto, não gambiarra: o nome da chave de tradução é literalmente
+`circulation.custom.user_field.*`.
+
+### Empréstimo em aberto não mexe no exemplar
+
+`lendings` é uma linha por exemplar (holding_id, user_id,
+expected_return_date, return_date, created). O ponto que precisava ser
+verificado: **`LendingBO.doLend` não altera `biblio_holdings.availability`**.
+"Emprestado" é estado derivado — `isLent` e `LendingDAO` consultam
+`lendings.return_date IS NULL`; `availability` responde outra pergunta (se o
+exemplar pode circular). Logo, empréstimo em aberto migrado é só uma linha em
+`lendings`, sem UPDATE em exemplar.
+
+O elo com o acervo é o exemplar, e ele existe: `exemplares_mapa.csv` guarda
+`numacervo -> tombo`, o tombo é UNIQUE em `biblio_holdings`, e daí sai o
+`holding_id`. `previous_lending_id` (cadeia de renovação) fica nulo — o
+Biblioteca Fácil não guarda essa relação.
+
+Multa vai em `lending_fines` (lending_id, user_id, fine_value, payment_date).
+Reserva vai em `reservations`, ligada ao **registro**, não ao exemplar
+(`record_id`).
+
 ## Outros detalhes que afetam a importação
 
 **O 001 é sobrescrito.** `BiblioRecordBO.save()` faz:
@@ -336,7 +387,36 @@ real (Windows, BibLivre 5.0.x, PostgreSQL 9.1, Tomcat 7).
 6. **Conferir na interface** — buscar no catálogo, abrir uma obra e ver a
    aba Exemplares, imprimir uma etiqueta de teste e simular um empréstimo.
 
-7. **Administração → Backup → Full**, que produz o `.b5bz`.
+7. **Carregar os leitores** com o `inserir_leitores.py`. Ele cria os campos que
+   faltam em `users_fields` (com as traduções), desmarca o `required` do email
+   e preserva o `NUMLEITOR` como `users.id`:
+
+   ```bash
+   # relatório, sem escrever nada
+   python scripts/inserir_leitores.py saida
+
+   # grava, numa transação só
+   python scripts/inserir_leitores.py saida --executar \
+       --mapa-out saida/leitores_mapa.csv
+   ```
+
+   O usuário e o empréstimo de teste do passo 6 precisam ser apagados antes
+   (`users.id` 1 é o primeiro leitor da origem), ou use `--offset-id`. Depois
+   **reinicie o Tomcat**: `UserFields` e `Translations` são caches estáticos.
+
+8. **Carregar a circulação** com o `inserir_emprestimos.py`, que junta
+   `T13_MOVM` + `T11_MOVI` e resolve o exemplar pelo tombo:
+
+   ```bash
+   python scripts/inserir_emprestimos.py saida
+   python scripts/inserir_emprestimos.py saida --executar
+   ```
+
+   Padrões: histórico completo (o `--apenas-abertos` limita aos não
+   devolvidos), sem as 113 movimentações apagadas na origem, e só as reservas
+   pendentes de 2026 em diante (`--reservas-desde`).
+
+9. **Administração → Backup → Full**, que produz o `.b5bz`.
 
 **Na máquina final:** restaurar esse `.b5bz`. Um arquivo, uma operação,
 com exemplares e tudo mais dentro. O restore **apaga o schema de destino** —

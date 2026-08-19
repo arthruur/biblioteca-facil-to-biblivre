@@ -176,10 +176,77 @@ Ou seja: os joins são confiáveis, com um punhado de órfãos irrelevantes.
 outro valor é a data em que o registro foi excluído. No acervo há 7
 registros excluídos; entre os autores, 46.
 
+## Tabelas de circulação
+
+Não fazem parte da migração bibliográfica, mas entram na migração de
+circulação (ver [IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md)).
+
+### T04_LEIT — Leitores (2.743 registros, 33 campos) — **dados pessoais**
+
+CPF, RG, nome dos pais, endereço e data de nascimento de 2.743 pessoas.
+Campos usados na migração: `T04_NUMLEITOR` (long, 25 — é 1..2743 sem
+buracos, então vira o `users.id` do BibLivre), `T04_LEITOR` (nome),
+`T04_CPF`, `T04_IDENTIDADE`, `T04_ENDERECO`, `T04_BAIRRO`, `T04_CIDADE`,
+`T04_ESTADO`, `T04_CEP`, `T04_PONTOREFER`, `T04_TELEFONE1/2`,
+`T04_FONECONTATO`, `T04_NOMECONTATO`, `T04_INTERNET` (email),
+`T04_NOMEPAI`, `T04_NOMEMAE`, `T04_ESCOLARIDADE`, `T04_NATURALIDADE`,
+`T04_OBS1/2`, `T04_MATRICULA`, `T04_DATACADASTRO`, `T04_DATANASC`,
+`T04_EXCLUSAO`, `T04_DESATIVADO`.
+
+**Armadilhas:** os campos numéricos `T04_SEXO`, `T04_TURNO` e `T04_TURMA`
+estão zerados em todo o cadastro; valem os equivalentes texto `T04_SEXO2`
+(`M`/`F`, 2.689 preenchidos) e `T04_TURNO2` (4). `T04_FOTO` guarda um
+caminho da máquina antiga (`C:\MTG\BibFacil8\FotoLeitor\...`) — as imagens
+não estão no `.bkp`. 12 datas de nascimento são impossíveis
+(`1111-11-11`, `0961-05-08`), provavelmente erro de digitação do ano.
+Rua e número vêm juntos em `T04_ENDERECO` ("RUA X nº 476").
+
+### T13_MOVM — Empréstimos, cabeçalho (17.492 registros)
+
+`T13_NUMEMPRESTIMO` (long, 25) · `T13_NUMLEITOR` (long, 30) ·
+`T13_DATA` (date, 35) · `T13_EXCLUSAO` (date, 40)
+
+Um registro por ato de empréstimo: quem levou e quando. Nenhum excluído,
+nenhum apontando para leitor inexistente. Vai de 2006 a 2026, com o
+volume concentrado em 2013-2019.
+
+### T11_MOVI — Movimentação, um item por linha (19.711 registros)
+
+| Campo | Tipo | Offset |
+|---|---|---|
+| T11_NUMMOVIMENTO | long | 25 |
+| T11_NUMACERVO | long | 30 |
+| T11_PREVISAO | date | 35 |
+| T11_DEVOLUCAO | date | 40 |
+| T11_NUMEMPRESTIMO | long | 45 |
+| T11_EXCLUSAO | date | 50 |
+| T11_EXCLUIDOPOR | alpha | 55 |
+| T11_MULTA | double | 67 |
+| T11_PGTOMULTA | date | 76 |
+| T11_MultaCancelada | date | 81 |
+
+É esta a tabela que casa com `lendings` do BibLivre (uma linha por
+exemplar). `T11_DEVOLUCAO` vazio = **em aberto**: 976 casos, dos quais só
+259 têm previsão em 2026 — os outros 717 venceram entre 2013 e 2025.
+Confere com os 977 itens marcados `T09_EMPRESTADO=1` no acervo (1 de
+diferença). 113 movimentações têm `T11_EXCLUSAO` (apagadas no sistema
+antigo), 2 apontam para um `T11_NUMEMPRESTIMO` que não existe em
+`T13_MOVM`, 4 para o registro de acervo excluído 13392, e 8 têm multa —
+todas as 8 pagas, nenhuma cancelada.
+
+### T15_RESE — Reservas (803 registros)
+
+`T15_NUMRESERVA` (long, 25) · `T15_NUMLEITOR` (long, 30) ·
+`T15_NUMACERVO` (long, 35) · `T15_DATA` (date, 40) · `T15_VALIDADE1`
+(date, 45) · `T15_VALIDADE2` (date, 50) · `T15_UTILIZOU` (short, 55) ·
+`T15_EXCLUSAO` (date, 58)
+
+688 excluídas, nenhuma marcada como utilizada, **115 pendentes** — e 103
+delas são de 2016-2020.
+
 ## Demais tabelas
 
-Não são necessárias para a migração bibliográfica, mas o leitor genérico
-já as decodifica: T01_USUA (usuários), T02_ACES (permissões), T03_CONF
-(configuração), T04_LEIT (2.743 leitores — **dados pessoais**), T11_MOVI
-(19.711 movimentações), T12_INDC (índice), T13_MOVM (17.492 empréstimos),
-T15_RESE (803 reservas), T16_TURM (turmas).
+Decodificadas pelo leitor genérico, sem uso na migração: T01_USUA
+(1 usuário do sistema antigo), T02_ACES (permissões, vazia), T03_CONF
+(configuração, vazia), T12_INDC (índice de livros, vazia), T16_TURM
+(turmas, vazia).

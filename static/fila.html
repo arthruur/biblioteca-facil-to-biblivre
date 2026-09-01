@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fila — Exportar para Biblivre 5</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#eee;min-height:100vh}
+header{background:#16213e;padding:12px 16px;text-align:center;font-weight:600;border-bottom:2px solid #0f3460;display:flex;justify-content:space-between;align-items:center}
+header a{color:#3498db;text-decoration:none;font-size:14px}
+#main{max-width:900px;margin:0 auto;padding:16px}
+h2{font-size:14px;color:#3498db;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
+.card{background:#16213e;border:1px solid #333;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;gap:12px;align-items:center}
+.card img{width:48px;height:72px;background:#333;border-radius:4px;object-fit:cover;flex-shrink:0}
+.card-info{flex:1;min-width:0}
+.card-titulo{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-meta{font-size:12px;color:#aaa}
+.card-isbn{font-family:monospace;font-size:11px;color:#2ecc71}
+.badge{font-size:10px;background:rgba(52,152,219,.15);color:#3498db;padding:2px 6px;border-radius:4px}
+#export-bar{position:sticky;bottom:0;background:#0f2040;border-top:2px solid #3498db;padding:12px;display:flex;gap:8px;justify-content:center}
+#export-bar button{padding:12px 20px;border:none;border-radius:10px;font-weight:600;cursor:pointer}
+#btn-export{background:#2ecc71;color:#fff}
+#btn-export:disabled{background:#555}
+#btn-limpar{background:#555;color:#ccc}
+#empty{color:#666;text-align:center;padding:40px 20px}
+#status{text-align:center;font-size:13px;color:#aaa;min-height:18px;margin:8px 0}
+</style>
+</head>
+<body>
+<header><a href="/">← Voltar</a><span>Fila / Exportar</span><span></span></header>
+<div id="main">
+<div id="status"></div>
+<h2>Lote (a enviar) — <span id="count-carrinho">0</span></h2>
+<div id="carrinho"></div>
+<h2>Fila (já enviados para Biblivre) — <span id="count-fila">0</span></h2>
+<div id="fila"></div>
+</div>
+<div style="max-width:900px;margin:0 auto;padding:0 16px 8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+<label style="font-size:13px;color:#aaa;display:flex;gap:6px;align-items:center"><input type="checkbox" id="chk-executar" onchange="document.getElementById('senha-box').style.display=this.checked?'flex':'none'"> Inserir direto no Biblivre (executar)</label>
+<div id="senha-box" style="display:none;gap:6px;align-items:center">
+<input type="password" id="senha-input" placeholder="Senha Postgres biblivre" style="padding:8px;border-radius:6px;border:1px solid #333;background:#0f2040;color:#eee;font-size:13px">
+</div>
+</div>
+<div id="export-bar">
+<button id="btn-limpar" onclick="limparFila()">Limpar fila</button>
+<button id="btn-export" onclick="exportar()">Exportar para Biblivre 5</button>
+</div>
+<script>
+async function carregar(){
+    const [cr, fr]=await Promise.all([fetch('/api/lote').then(r=>r.json()), fetch('/api/fila').then(r=>r.json())]);
+    document.getElementById('count-carrinho').textContent=cr.total||0;
+    document.getElementById('count-fila').textContent=fr.total||0;
+    const cdiv=document.getElementById('carrinho');
+    cdiv.innerHTML=cr.itens.length? cr.itens.map(i=>card(i)).join('') : '<div id="empty">Lote vazio — escaneie na página inicial</div>';
+    const fdiv=document.getElementById('fila');
+    fdiv.innerHTML=fr.itens.length? fr.itens.map(i=>card(i)).join('') : '<div id="empty">Fila vazia</div>';
+    document.getElementById('btn-export').disabled=(cr.total===0 && fr.total===0);
+}
+function card(i){
+    return `<div class="card">
+        <img src="${i.capa||''}" onerror="this.style.visibility='hidden'">
+        <div class="card-info">
+            <div class="card-titulo">${i.titulo||'—'}</div>
+            <div class="card-meta">${i.autor||'—'} • ${i.editora||''} ${i.ano||''}</div>
+            <div class="card-isbn">${i.isbn||''} <span class="badge">${i.fonte||''}</span></div>
+        </div>
+    </div>`;
+}
+async function exportar(){
+    const status=document.getElementById('status');
+    const executar=document.getElementById('chk-executar').checked;
+    const senha=document.getElementById('senha-input').value;
+    if(executar && !senha){ status.textContent='Informe a senha do Postgres para inserir'; status.style.color='#e74c3c'; return; }
+    status.textContent=executar?'Gerando e inserindo no Biblivre...':'Gerando MRC/CSV...'; status.style.color='#aaa';
+    try{
+        await fetch('/api/lote/enviar',{method:'POST'});
+        const resp=await fetch('/api/fila/exportar-biblivre',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({executar, db:{senha}})});
+        const data=await resp.json();
+        if(data.status==='vazio'){ status.textContent='Nada para exportar'; status.style.color='#e74c3c'; return; }
+        if(!resp.ok){ status.textContent=data.mensagem||'Erro'; status.style.color='#e74c3c'; return; }
+        // Baixa lista como JSON para conferencia
+        const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download='biblivre_export_'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+        URL.revokeObjectURL(url);
+        let msg=`${data.mensagem||''} MRC: ${data.mrc||''} CSV: ${data.csv||''}`;
+        if(data.inseridos) msg+=` Inseridos: ${data.inseridos}. Reindex necessario: Administracao → Manutencao → Reindexar.`;
+        if(data.erro_insercao) msg+=` Aviso: ${data.erro_insercao}`;
+        status.textContent=msg;
+        status.style.color=data.status==='ok' || data.status==='gerado_sem_inserir' ? '#2ecc71' : '#e74c3c';
+        carregar();
+    }catch(e){ status.textContent='Erro: '+e.message; status.style.color='#e74c3c'; }
+}
+async function limparFila(){
+    if(!confirm('Limpar lote e fila?')) return;
+    await fetch('/api/lote',{method:'DELETE'});
+    location.reload();
+}
+carregar();
+</script>
+</body>
+</html>

@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from catalogacao import config
 from catalogacao.cert import gerar_certificado
 from catalogacao.ficha import processar_foto
+from catalogacao.export import exportar_itens
 from catalogacao.fila import (
     adicionar_fila,
     carrinho_adicionar,
@@ -48,6 +49,39 @@ async def _to_thread(func, *args):
 async def index():
     html = (config.STATIC_DIR / "index.html").read_text(encoding="utf-8") if (config.STATIC_DIR / "index.html").exists() else "<h1>index.html nao encontrado</h1>"
     return HTMLResponse(html.replace("{{SERVER_URL}}", config.SERVER_URL))
+
+
+@app.get("/fila", response_class=HTMLResponse)
+async def fila_page():
+    html = (config.STATIC_DIR / "fila.html").read_text(encoding="utf-8") if (config.STATIC_DIR / "fila.html").exists() else "<h1>fila.html nao encontrado</h1>"
+    return HTMLResponse(html)
+
+
+@app.get("/api/fila/export")
+async def fila_export():
+    dados = listar_fila()
+    if dados["total"] == 0:
+        return {"status": "vazio", "total": 0, "itens": []}
+    return {"status": "ok", **dados}
+
+
+@app.post("/api/fila/exportar-biblivre")
+async def fila_exportar_biblivre(dados: dict | None = None):
+    """Gera MRC/CSV via gerar_marc e, se executar=true, insere direto no Biblivre via inserir_obras."""
+    executar = bool((dados or {}).get("executar"))
+    # Se houver itens no carrinho, envia primeiro
+    from catalogacao.config import carrinho as _carrinho
+
+    if _carrinho:
+        await _to_thread(carrinho_enviar)
+    fila_dados = listar_fila()
+    itens = fila_dados.get("itens") or []
+    if not itens:
+        return JSONResponse({"status": "vazio", "mensagem": "Nada na fila para exportar"}, status_code=400)
+    # db_args opcional no body
+    db_args = (dados or {}).get("db") if isinstance(dados, dict) else None
+    resultado = await _to_thread(exportar_itens, itens, executar, db_args)
+    return JSONResponse(resultado)
 
 
 @app.get("/api/qrcode")
@@ -81,15 +115,26 @@ async def fila():
     return listar_fila()
 
 
-# --- Carrinho: acumula ISBNs antes do envio (scanner de documentos) ---
+# --- Lote (antes "carrinho"): acumula ISBNs antes do envio ---
+# Mantem alias /api/carrinho para compatibilidade
 
 
-@app.post("/api/carrinho")
-async def carrinho_add(dados: dict):
+@app.post("/api/lote")
+async def lote_add(dados: dict):
     isbn = (dados.get("isbn") or "").strip()
     if not isbn:
         return JSONResponse({"status": "erro", "mensagem": "ISBN vazio"}, status_code=400)
     return await _to_thread(carrinho_adicionar, isbn)
+
+
+@app.post("/api/carrinho")
+async def carrinho_add(dados: dict):
+    return await lote_add(dados)
+
+
+@app.get("/api/lote")
+async def lote_get():
+    return carrinho_listar()
 
 
 @app.get("/api/carrinho")
@@ -97,14 +142,29 @@ async def carrinho_get():
     return carrinho_listar()
 
 
+@app.delete("/api/lote/{isbn}")
+async def lote_del(isbn: str):
+    return carrinho_remover(isbn)
+
+
 @app.delete("/api/carrinho/{isbn}")
 async def carrinho_del(isbn: str):
     return carrinho_remover(isbn)
 
 
+@app.delete("/api/lote")
+async def lote_clear():
+    return carrinho_limpar()
+
+
 @app.delete("/api/carrinho")
 async def carrinho_clear():
     return carrinho_limpar()
+
+
+@app.post("/api/lote/enviar")
+async def lote_send():
+    return await _to_thread(carrinho_enviar)
 
 
 @app.post("/api/carrinho/enviar")

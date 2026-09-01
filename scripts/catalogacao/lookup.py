@@ -1,4 +1,4 @@
-"""Lookup de metadados por ISBN: Google Books (primario) + Open Library (fallback)."""
+"""Lookup de metadados por ISBN: Google Books + BrasilAPI (CBL) + Open Library."""
 
 import json
 import urllib.request
@@ -26,6 +26,33 @@ def buscar_google_books(isbn: str) -> dict | None:
                 "descricao": vol.get("description", "")[:500],
                 "capa": vol.get("imageLinks", {}).get("thumbnail", ""),
                 "fonte": "Google Books",
+            }
+    except Exception:
+        return None
+
+
+def buscar_brasilapi(isbn: str) -> dict | None:
+    """BrasilAPI — base CBL, essencial para ISBNs brasileiros 97865* (ex: 9786559870530)."""
+    url = f"https://brasilapi.com.br/api/isbn/v1/{isbn}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "CatalogacaoBiblioteca/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            d = json.loads(resp.read().decode())
+            if not d.get("title"):
+                return None
+            autores = d.get("authors") or []
+            return {
+                "titulo": d.get("title", ""),
+                "subtitulo": d.get("subtitle", ""),
+                "autor": ", ".join(autores),
+                "editora": d.get("publisher", ""),
+                "ano": str(d.get("year") or "")[:4],
+                "edicao": "",
+                "paginas": str(d.get("page_count") or ""),
+                "idioma": "por",
+                "descricao": (d.get("synopsis") or "")[:500],
+                "capa": d.get("cover_url") or f"https://covers.openlibrary.org/b/isbn/{isbn}-M.jpg",
+                "fonte": "BrasilAPI/CBL",
             }
     except Exception:
         return None
@@ -70,12 +97,10 @@ def buscar_open_library(isbn: str) -> dict | None:
 
 
 def buscar_metadados(isbn: str) -> dict:
-    r = buscar_google_books(isbn)
-    if r:
-        return {"status": "ok", "isbn": isbn, **r}
-    r = buscar_open_library(isbn)
-    if r:
-        return {"status": "ok", "isbn": isbn, **r}
+    for fn in (buscar_google_books, buscar_brasilapi, buscar_open_library):
+        r = fn(isbn)
+        if r:
+            return {"status": "ok", "isbn": isbn, **r}
     return {
         "status": "nao_encontrado",
         "isbn": isbn,

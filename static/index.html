@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Catalogacao ISBN — Carrinho</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#eee;min-height:100vh;display:flex;flex-direction:column}
@@ -22,13 +23,13 @@
         #scanner-reader video{width:100%!important;height:100%!important;object-fit:cover!important}
         #scanner-status{position:absolute;bottom:0;left:0;right:0;padding:10px;background:rgba(0,0,0,.7);text-align:center;font-size:13px;color:#aaa;z-index:5}
         #scanner-status.ok{color:#2ecc71}
-        /* Carrinho — galeria que acumula */
-        #carrinho-bar{display:none;background:#0f2040;border-top:2px solid #3498db;padding:10px}
-        #carrinho-bar.visivel{display:block}
-        #carrinho-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-        #carrinho-head h3{font-size:12px;color:#3498db;text-transform:uppercase;letter-spacing:1px}
-        #carrinho-count{background:#3498db;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:700}
-        #carrinho-lista{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
+        /* Lote — galeria que acumula (antes carrinho) */
+        #lote-bar{display:none;background:#0f2040;border-top:2px solid #3498db;padding:10px}
+        #lote-bar.visivel{display:block}
+        #lote-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+        #lote-head h3{font-size:12px;color:#3498db;text-transform:uppercase;letter-spacing:1px}
+        #lote-count{background:#3498db;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:700}
+        #lote-lista{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
         .cart-item{min-width:140px;max-width:160px;background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:8px;scroll-snap-align:start;position:relative;animation:pop .25s ease}
         @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
         .cart-item .ci-isbn{font-family:monospace;font-size:11px;color:#2ecc71;word-break:break-all}
@@ -48,16 +49,21 @@
         .livro-autor{font-size:12px;color:#aaa}
         .livro-meta{font-size:11px;color:#666}
         .livro-fonte{font-size:10px;color:#3498db;background:rgba(52,152,219,.15);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px}
+        #foto-teste{display:none}
         /* Controls */
         #controls{padding:12px;background:#16213e;display:flex;flex-direction:column;gap:8px}
         #status-msg{text-align:center;font-size:13px;color:#aaa;min-height:18px}
         #status-msg.erro{color:#e74c3c}#status-msg.ok{color:#2ecc71}
-        .botoes-row{display:flex;gap:8px}
-        .botoes-row button{flex:1;padding:14px;font-size:15px;font-weight:600;border:none;border-radius:12px;cursor:pointer}
+        .botoes-row{display:flex;gap:8px;flex-wrap:wrap}
+        .botoes-row button{flex:1;padding:14px;font-size:15px;font-weight:600;border:none;border-radius:12px;cursor:pointer;min-width:120px}
         #escanear-btn{background:#2ecc71;color:#fff}#escanear-btn:active{background:#27ae60}
         #parar-btn{background:#e74c3c;color:#fff;display:none}#parar-btn:active{background:#c0392b}
         #enviar-btn{background:#3498db;color:#fff;display:none}#enviar-btn:active{background:#2980b9}#enviar-btn:disabled{background:#555}
         #limpar-btn{background:#555;color:#ccc;display:none;font-size:13px}
+        #foto-btn{background:#7f8c8d;color:#fff}#foto-btn:active{background:#6c7a7d}
+        #manual-box{display:flex;gap:8px;margin-top:8px}
+        #manual-input{flex:1;padding:12px;border-radius:8px;border:1px solid #333;background:#0f2040;color:#eee;font-family:monospace;font-size:14px}
+        #manual-btn{background:#8e44ad;color:#fff;border:none;border-radius:8px;padding:12px 16px;font-weight:600;cursor:pointer}#manual-btn:active{background:#7a3a9a}
         @media(min-width:768px){
             body{flex-direction:row}
             header{position:fixed;top:0;left:0;right:0;z-index:10}
@@ -83,16 +89,35 @@
         <div id="scanner-reader"></div>
         <div id="scanner-status">Toque em Escanear para iniciar — modo continuo</div>
     </div>
-    <!-- Carrinho que acumula, como galeria do scanner de documentos -->
-    <div id="carrinho-bar">
-        <div id="carrinho-head">
-            <h3>Carrinho</h3>
+    <!-- Lote que acumula, como galeria do scanner de documentos -->
+    <div id="lote-bar">
+        <div id="lote-head">
+            <h3>Lote</h3>
             <div style="display:flex;gap:8px;align-items:center">
-                <span id="carrinho-count">0</span>
-                <button id="limpar-btn" onclick="limparCarrinho()">Limpar</button>
+                <span id="lote-count">0</span>
+                <button id="limpar-btn" onclick="limparLote()">Limpar</button>
             </div>
         </div>
-        <div id="carrinho-lista"></div>
+        <div id="lote-lista"></div>
+    </div>
+    <!-- Modal ficha completa ao clicar no livro do lote -->
+    <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this) fecharModal()">
+        <div style="background:#16213e;border-radius:12px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:16px;position:relative">
+            <button onclick="fecharModal()" style="position:absolute;top:8px;right:8px;background:#333;color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer">×</button>
+            <img id="modal-capa" src="" style="width:120px;height:180px;object-fit:cover;border-radius:8px;display:none;margin:0 auto 12px">
+            <h3 id="modal-titulo" style="font-size:18px;text-align:center"></h3>
+            <p id="modal-autor" style="color:#aaa;text-align:center;font-size:13px;margin:4px 0"></p>
+            <p id="modal-meta" style="color:#666;text-align:center;font-size:12px"></p>
+            <div id="modal-desc" style="font-size:12px;color:#ccc;margin:12px 0;max-height:120px;overflow:auto;white-space:pre-wrap"></div>
+            <div style="font-size:12px;line-height:1.8">
+                <div><span style="color:#888">ISBN:</span> <span id="modal-isbn" style="font-family:monospace;color:#2ecc71"></span></div>
+                <div><span style="color:#888">Editora:</span> <span id="modal-editora"></span></div>
+                <div><span style="color:#888">Ano:</span> <span id="modal-ano"></span> <span style="color:#888">Páginas:</span> <span id="modal-paginas"></span></div>
+                <div><span style="color:#888">Idioma:</span> <span id="modal-idioma"></span> <span style="color:#888">Fonte:</span> <span id="modal-fonte" style="color:#3498db"></span></div>
+                <div style="margin-top:8px;display:flex;gap:6px"><span style="color:#888">CDD:</span><input id="modal-cdd" style="flex:1;padding:6px;border-radius:6px;border:1px solid #333;background:#0f2040;color:#eee"> <span style="color:#888">Cutter:</span><input id="modal-cutter" style="flex:1;padding:6px;border-radius:6px;border:1px solid #333;background:#0f2040;color:#eee"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px"><button onclick="removerDoLote(modalIsbn);fecharModal()" style="flex:1;padding:10px;background:#e74c3c;color:#fff;border:none;border-radius:8px;cursor:pointer">Remover do lote</button><button onclick="fecharModal()" style="flex:1;padding:10px;background:#3498db;color:#fff;border:none;border-radius:8px;cursor:pointer">Fechar</button></div>
+        </div>
     </div>
     <div id="resultado">
         <div class="livro-header">
@@ -105,13 +130,20 @@
             </div>
         </div>
     </div>
+    <input type="file" id="foto-teste" accept="image/*">
     <div id="controls">
         <div id="status-msg"></div>
         <div class="botoes-row">
             <button id="escanear-btn" onclick="iniciarScanner()">Escanear</button>
             <button id="parar-btn" onclick="pararScanner()">Parar</button>
-            <button id="enviar-btn" onclick="enviarCarrinho()">Enviar para catalogacao</button>
+            <button id="foto-btn" onclick="document.getElementById('foto-teste').click()">Foto</button>
+            <button id="enviar-btn" onclick="enviarLote()">Enviar para fila</button>
         </div>
+        <div id="manual-box">
+            <input id="manual-input" placeholder="Digite o ISBN (com ou sem hifen)" inputmode="numeric" maxlength="17">
+            <button id="manual-btn" onclick="adicionarManual()">Adicionar</button>
+        </div>
+        <div style="text-align:center;margin-top:4px"><a href="/fila" style="color:#3498db;font-size:13px">Ver fila / Exportar para Biblivre 5 →</a></div>
     </div>
 </div>
 <script>
@@ -121,60 +153,99 @@ const escanearBtn=document.getElementById('escanear-btn');
 const pararBtn=document.getElementById('parar-btn');
 const enviarBtn=document.getElementById('enviar-btn');
 const limparBtn=document.getElementById('limpar-btn');
-const carrinhoBar=document.getElementById('carrinho-bar');
-const carrinhoLista=document.getElementById('carrinho-lista');
-const carrinhoCount=document.getElementById('carrinho-count');
+const loteBar=document.getElementById('lote-bar');
+const loteLista=document.getElementById('lote-lista');
+const loteCount=document.getElementById('lote-count');
 const resultado=document.getElementById('resultado');
+let modalIsbn=null;
 
 let scanner=null, escaneando=false;
-let vistos=new Set(); // deduplicacao local imediata
-let carrinho=[];
+let vistos=new Set();
+let lote=[];
+
+// Alias para compatibilidade com codigo antigo
+const carrinhoBar=loteBar, carrinhoLista=loteLista, carrinhoCount=loteCount;
+let carrinho=lote;
 
 function setStatus(m,t){statusMsg.textContent=m;statusMsg.className=t||''}
 
-function renderCarrinho(){
-    carrinhoLista.innerHTML='';
-    carrinho.forEach(item=>{
+function abrirModal(isbn){
+    const item=lote.find(x=>x.isbn===isbn); if(!item) return;
+    modalIsbn=isbn;
+    document.getElementById('modal-titulo').textContent=item.titulo||'—';
+    document.getElementById('modal-autor').textContent=item.autor||'—';
+    let meta=[]; if(item.ano) meta.push(item.ano); if(item.paginas) meta.push(item.paginas+' p.'); if(item.editora) meta.push(item.editora);
+    document.getElementById('modal-meta').textContent=meta.join(' • ')||item.isbn;
+    document.getElementById('modal-desc').textContent=item.descricao||'';
+    document.getElementById('modal-isbn').textContent=item.isbn;
+    document.getElementById('modal-editora').textContent=item.editora||'—';
+    document.getElementById('modal-ano').textContent=item.ano||'—';
+    document.getElementById('modal-paginas').textContent=item.paginas||'—';
+    document.getElementById('modal-idioma').textContent=item.idioma||'—';
+    document.getElementById('modal-fonte').textContent=item.fonte||'';
+    document.getElementById('modal-cdd').value=item.cdd||'';
+    document.getElementById('modal-cutter').value=item.cutter||'';
+    const cap=document.getElementById('modal-capa');
+    if(item.capa){cap.src=item.capa; cap.style.display='block';} else cap.style.display='none';
+    document.getElementById('modal').style.display='flex';
+}
+function fecharModal(){
+    // salvar CDD/Cutter editados
+    if(modalIsbn){
+        const it=lote.find(x=>x.isbn===modalIsbn);
+        if(it){ it.cdd=document.getElementById('modal-cdd').value.trim(); it.cutter=document.getElementById('modal-cutter').value.trim(); renderLote(); }
+    }
+    document.getElementById('modal').style.display='none';
+}
+
+function renderLote(){
+    // manter alias
+    carrinho=lote;
+    loteLista.innerHTML='';
+    lote.forEach(item=>{
         const div=document.createElement('div');
         div.className='cart-item'+(item.status==='buscando'?' buscando':'');
-        div.innerHTML=`<button class="ci-remove" onclick="removerDoCarrinho('${item.isbn}')">×</button>
+        div.style.cursor='pointer';
+        div.onclick=()=>abrirModal(item.isbn);
+        div.innerHTML=`<button class="ci-remove" onclick="event.stopPropagation(); removerDoLote('${item.isbn}')">×</button>
             <div class="ci-isbn">${item.isbn}</div>
             <div class="ci-titulo">${item.titulo|| (item.status==='buscando'?'buscando...': '—')}</div>
             <div class="ci-autor">${item.autor||''}</div>
             <div class="ci-fonte">${item.fonte||''}${item.status==='duplicado'?' • duplicado':''}</div>`;
-        carrinhoLista.appendChild(div);
+        loteLista.appendChild(div);
     });
-    carrinhoCount.textContent=carrinho.length;
-    const visivel=carrinho.length>0;
-    carrinhoBar.classList.toggle('visivel',visivel);
+    loteCount.textContent=lote.length;
+    const visivel=lote.length>0;
+    loteBar.classList.toggle('visivel',visivel);
     enviarBtn.style.display=visivel?'':'none';
     limparBtn.style.display=visivel?'':'none';
-    if(visivel) carrinhoLista.scrollLeft=carrinhoLista.scrollWidth;
+    if(visivel) loteLista.scrollLeft=loteLista.scrollWidth;
 }
+const renderCarrinho=renderLote;
 
-async function adicionarAoCarrinho(isbn){
-    if(vistos.has(isbn)){ setStatus('Ja no carrinho: '+isbn,'erro'); vibrar(); return; }
+async function adicionarAoLote(isbn){
+    if(vistos.has(isbn)){ setStatus('Ja no lote: '+isbn,'erro'); vibrar(); return; }
     vistos.add(isbn);
     const placeholder={isbn,titulo:'',autor:'',fonte:'',status:'buscando'};
-    carrinho.push(placeholder);
-    renderCarrinho();
+    lote.push(placeholder);
+    renderLote();
     scannerStatus.textContent='Adicionado: '+isbn;
     scannerStatus.className='ok';
     vibrar();
     try{
-        const resp=await fetch('/api/carrinho',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({isbn})});
+        const resp=await fetch('/api/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({isbn})});
         const data=await resp.json();
-        // data: {status, item, total} — item contem titulo/autor/fonte
-        const idx=carrinho.findIndex(x=>x.isbn===isbn);
+        const idx=lote.findIndex(x=>x.isbn===isbn);
         if(idx>=0){
-            if(data.status==='duplicado'){ carrinho[idx].status='duplicado'; }
-            else if(data.item){ Object.assign(carrinho[idx], data.item); delete carrinho[idx].status; }
-            renderCarrinho();
-            mostrarDetalhe(carrinho[idx]);
+            if(data.status==='duplicado'){ lote[idx].status='duplicado'; }
+            else if(data.item){ Object.assign(lote[idx], data.item); delete lote[idx].status; }
+            renderLote();
+            mostrarDetalhe(lote[idx]);
         }
-        setStatus(`Carrinho: ${carrinho.length} livro(s)`, 'ok');
+        setStatus(`Lote: ${lote.length} livro(s)`, 'ok');
     }catch(e){ setStatus('Erro ao adicionar: '+e.message,'erro'); }
 }
+const adicionarAoCarrinho=adicionarAoLote;
 
 function vibrar(){ if(navigator.vibrate) navigator.vibrate(60); }
 
@@ -189,47 +260,111 @@ function mostrarDetalhe(d){
     resultado.classList.add('visivel');
 }
 
-async function removerDoCarrinho(isbn){
-    carrinho=carrinho.filter(x=>x.isbn!==isbn);
+async function removerDoLote(isbn){
+    lote=lote.filter(x=>x.isbn!==isbn);
+    carrinho=lote;
     vistos.delete(isbn);
-    renderCarrinho();
-    if(carrinho.length===0) resultado.classList.remove('visivel');
-    await fetch('/api/carrinho/'+encodeURIComponent(isbn),{method:'DELETE'});
+    renderLote();
+    if(lote.length===0) resultado.classList.remove('visivel');
+    await fetch('/api/lote/'+encodeURIComponent(isbn),{method:'DELETE'});
 }
+const removerDoCarrinho=removerDoLote;
 
-async function limparCarrinho(){
-    carrinho=[]; vistos.clear(); renderCarrinho(); resultado.classList.remove('visivel');
-    await fetch('/api/carrinho',{method:'DELETE'});
-    setStatus('Carrinho limpo','');
+async function limparLote(){
+    lote=[]; carrinho=lote; vistos.clear(); renderLote(); resultado.classList.remove('visivel');
+    await fetch('/api/lote',{method:'DELETE'});
+    setStatus('Lote limpo','');
 }
+const limparCarrinho=limparLote;
 
-async function enviarCarrinho(){
-    if(carrinho.length===0) return;
+async function enviarLote(){
+    if(lote.length===0) return;
     enviarBtn.disabled=true; enviarBtn.textContent='Enviando...';
     try{
-        const resp=await fetch('/api/carrinho/enviar',{method:'POST'});
+        const resp=await fetch('/api/lote/enviar',{method:'POST'});
         const data=await resp.json();
         setStatus(`Enviados ${data.enviados} livro(s) para a fila!`,'ok');
-        carrinho=[]; vistos.clear(); renderCarrinho(); resultado.classList.remove('visivel');
+        lote=[]; carrinho=lote; vistos.clear(); renderLote(); resultado.classList.remove('visivel');
     }catch(e){ setStatus('Erro ao enviar: '+e.message,'erro'); }
-    enviarBtn.disabled=false; enviarBtn.textContent='Enviar para catalogacao';
+    enviarBtn.disabled=false; enviarBtn.textContent='Enviar para fila';
+}
+const enviarCarrinho=enviarLote;
+
+let tentativasFalhas=0;
+let ocrEmAndamento=false;
+
+function validarISBN13Check(isbn13){
+    let s=0;
+    for(let i=0;i<12;i++) s+= parseInt(isbn13[i]) * (i%2===0?1:3);
+    return ((10 - (s%10))%10) === parseInt(isbn13[12]);
+}
+
+async function fallbackOCR(){
+    if(ocrEmAndamento) return;
+    const video=document.querySelector('#scanner-reader video');
+    if(!video || video.videoWidth===0) return;
+    ocrEmAndamento=true;
+    scannerStatus.textContent='ZXing falhou — tentando OCR nos numeros...';
+    try{
+        const canvas=document.createElement('canvas');
+        const w=video.videoWidth, h=video.videoHeight;
+        canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(video,0,0,w,h);
+        // Recorta faixa inferior central onde ficam os numeros impressos (OCR-B abaixo do codigo)
+        const cropW=Math.floor(w*0.8), cropH=Math.floor(h*0.18);
+        const cropX=Math.floor((w-cropW)/2), cropY=Math.floor(h*0.68);
+        const cropCanvas=document.createElement('canvas');
+        cropCanvas.width=cropW; cropCanvas.height=cropH;
+        cropCanvas.getContext('2d').drawImage(canvas,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
+        // Upscale + grayscale para ajudar o Tesseract
+        const upCanvas=document.createElement('canvas');
+        upCanvas.width=cropW*2; upCanvas.height=cropH*2;
+        const upCtx=upCanvas.getContext('2d');
+        upCtx.imageSmoothingEnabled=false;
+        upCtx.drawImage(cropCanvas,0,0,upCanvas.width,upCanvas.height);
+        const imgData=upCtx.getImageData(0,0,upCanvas.width,upCanvas.height);
+        for(let i=0;i<imgData.data.length;i+=4){
+            const v=0.299*imgData.data[i]+0.587*imgData.data[i+1]+0.114*imgData.data[i+2];
+            const bw=v>140?255:0;
+            imgData.data[i]=imgData.data[i+1]=imgData.data[i+2]=bw;
+        }
+        upCtx.putImageData(imgData,0,0);
+        const {data:{text}}=await Tesseract.recognize(upCanvas, 'eng', {
+            tessedit_char_whitelist:'0123456789- ',
+            tessedit_pageseg_mode:'7',
+        });
+        const m=text.replace(/[^0-9]/g,'').match(/\d{13}/);
+        if(m && validarISBN13Check(m[0]) && !vistos.has(m[0])){
+            scannerStatus.textContent='ISBN via OCR: '+m[0];
+            scannerStatus.className='ok';
+            await adicionarAoLote(m[0]);
+            tentativasFalhas=0;
+        } else {
+            scannerStatus.textContent='OCR nao encontrou ISBN valido';
+        }
+    }catch(e){
+        scannerStatus.textContent='Falha no OCR';
+    }finally{ ocrEmAndamento=false; }
 }
 
 function iniciarScanner(){
     if(escaneando) return;
     scanner=new Html5Qrcode("scanner-reader");
     escaneando=true;
+    tentativasFalhas=0;
     escanearBtn.style.display='none'; pararBtn.style.display='';
     scannerStatus.textContent='Procurando codigo de barras...'; scannerStatus.className='';
-    // Carregar carrinho existente
-    fetch('/api/carrinho').then(r=>r.json()).then(d=>{
-        if(d.itens) { d.itens.forEach(i=>vistos.add(i.isbn)); carrinho=d.itens; renderCarrinho(); }
+    fetch('/api/lote').then(r=>r.json()).then(d=>{
+        if(d.itens) { d.itens.forEach(i=>vistos.add(i.isbn)); lote=d.itens; carrinho=lote; renderLote(); }
     });
     scanner.start({facingMode:"environment"},{
         fps:10,
         qrbox:(w,h)=>{let m=Math.min(w,h);return{width:Math.floor(m*0.85),height:Math.floor(m*0.4)}},
         aspectRatio:1.0,
-    }, onSucesso, ()=>{}).catch(err=>{
+        experimentalFeatures:{useBarCodeDetectorIfSupported:false},
+        formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39],
+    }, onSucesso, onFalha).catch(err=>{
         setStatus('Erro camera: '+err,'erro');
         escaneando=false; escanearBtn.style.display=''; pararBtn.style.display='none';
     });
@@ -239,12 +374,49 @@ function pararScanner(){
     scanner.stop().then(()=>{scanner.clear(); escaneando=false; escanearBtn.style.display=''; pararBtn.style.display='none'; scannerStatus.textContent='Scanner parado';});
 }
 async function onSucesso(text){
+    tentativasFalhas=0;
     const limpo=text.replace(/[\s\-]/g,'');
     if(!/^\d{10}(\d{3})?$/.test(limpo)) return;
-    // debounce 1.5s ja esta no Set, mas evita spam do mesmo frame
     if(vistos.has(limpo)) return;
-    await adicionarAoCarrinho(limpo);
+    await adicionarAoLote(limpo);
 }
+async function onFalha(err){
+    tentativasFalhas++;
+    if(tentativasFalhas>5 && !ocrEmAndamento){
+        tentativasFalhas=0;
+        await fallbackOCR();
+    }
+}
+
+// Teste por foto direta (sem camera streaming)
+document.getElementById('foto-teste').addEventListener('change', async (e)=>{
+    const file=e.target.files[0]; if(!file) return;
+    setStatus('Decodificando foto...','');
+    try{
+        const tempScanner=new Html5Qrcode("scanner-reader");
+        const decoded=await tempScanner.scanFile(file, true);
+        const limpo=decoded.replace(/[\s\-]/g,'');
+        if(!/^\d{10}(\d{3})?$/.test(limpo)){ setStatus('Nenhum ISBN EAN-13 encontrado na foto','erro'); return; }
+        await adicionarAoCarrinho(limpo);
+    }catch(err){ setStatus('Nenhum codigo detectado na foto — tente mais perto/nitida','erro'); }
+    e.target.value='';
+});
+
+function validarISBN(s){
+    const d=s.replace(/[^0-9Xx]/g,'');
+    if(d.length===13) return /^\d{13}$/.test(d) ? d : null;
+    if(d.length===10) return /^\d{9}[\dXx]$/.test(d) ? d : null;
+    return null;
+}
+async function adicionarManual(){
+    const inp=document.getElementById('manual-input');
+    const raw=inp.value.trim(); if(!raw){ setStatus('Digite um ISBN','erro'); return; }
+    const isbn=validarISBN(raw);
+    if(!isbn){ setStatus('ISBN invalido — use 10 ou 13 digitos','erro'); return; }
+    inp.value='';
+    await adicionarAoCarrinho(isbn);
+}
+document.getElementById('manual-input').addEventListener('keydown', e=>{ if(e.key==='Enter') adicionarManual(); });
 </script>
 </body>
 </html>

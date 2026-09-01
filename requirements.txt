@@ -15,3 +15,8 @@ psycopg2-binary>=2.9
 # detectar_ficha.py — detecção e retificação da ficha CIP via OpenCV
 opencv-python>=4.8
 pytesseract>=0.3.10
+
+# servidor.py — servidor web para captura via câmera do celular
+fastapi>=0.100
+uvicorn>=0.20
+python-multipart>=0.0.6

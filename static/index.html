@@ -3,449 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Catalogacao ISBN</title>
+    <title>Catalogacao ISBN — Carrinho</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        header {
-            background: #16213e;
-            padding: 12px 16px;
-            text-align: center;
-            font-size: 16px;
-            font-weight: 600;
-            border-bottom: 2px solid #0f3460;
-        }
-        #qr-section {
-            background: #16213e;
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid #333;
-        }
-        #qr-section h2 {
-            font-size: 14px;
-            color: #3498db;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        #qr-container {
-            display: inline-block;
-            background: white;
-            padding: 12px;
-            border-radius: 12px;
-        }
-        #qr-container img { display: block; width: 180px; height: 180px; }
-        #qr-url {
-            margin-top: 10px;
-            font-size: 12px;
-            color: #888;
-            word-break: break-all;
-            font-family: monospace;
-        }
-        #qr-instrucoes {
-            margin-top: 10px;
-            font-size: 13px;
-            color: #aaa;
-        }
-        #toggle-qr {
-            margin-top: 10px;
-            background: none;
-            border: 1px solid #555;
-            color: #aaa;
-            padding: 6px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        #main-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Preview da foto */
-        #preview-container {
-            flex: 1;
-            position: relative;
-            background: #000;
-            min-height: 250px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        #preview-img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-        #inicio-msg {
-            position: absolute;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            padding: 20px;
-        }
-
-        /* ISBN detectado */
-        #isbn-detectado {
-            display: none;
-            background: #0f3460;
-            padding: 16px;
-            text-align: center;
-            border-bottom: 1px solid #333;
-        }
-        #isbn-detectado.visivel { display: block; }
-        #isbn-detectado .isbn-numero {
-            font-size: 24px;
-            font-weight: 700;
-            color: #2ecc71;
-            font-family: monospace;
-            letter-spacing: 2px;
-        }
-        #isbn-detectado .isbn-label {
-            font-size: 11px;
-            color: #888;
-            margin-top: 4px;
-            text-transform: uppercase;
-        }
-
-        /* Resultado */
-        #resultado {
-            display: none;
-            background: #1a1a2e;
-            padding: 16px;
-            border-top: 1px solid #333;
-        }
-        #resultado.visivel { display: block; }
-        .livro-header {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-        .livro-capa {
-            width: 80px;
-            height: 120px;
-            background: #333;
-            border-radius: 6px;
-            object-fit: cover;
-            flex-shrink: 0;
-        }
-        .livro-info { flex: 1; }
-        .livro-titulo {
-            font-size: 16px;
-            font-weight: 600;
-            color: #eee;
-            margin-bottom: 4px;
-        }
-        .livro-autor {
-            font-size: 13px;
-            color: #aaa;
-            margin-bottom: 2px;
-        }
-        .livro-meta {
-            font-size: 12px;
-            color: #666;
-        }
-        .livro-fonte {
-            display: inline-block;
-            margin-top: 6px;
-            font-size: 10px;
-            color: #3498db;
-            background: rgba(52,152,219,0.15);
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .campo-extra {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            border-top: 1px solid #222;
-            font-size: 13px;
-        }
-        .campo-extra-label { color: #888; }
-        .campo-extra-valor { color: #ccc; }
-
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#eee;min-height:100vh;display:flex;flex-direction:column}
+        header{background:#16213e;padding:12px 16px;text-align:center;font-size:16px;font-weight:600;border-bottom:2px solid #0f3460}
+        #qr-section{background:#16213e;padding:20px;text-align:center;border-bottom:1px solid #333}
+        #qr-section h2{font-size:14px;color:#3498db;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+        #qr-container{display:inline-block;background:white;padding:12px;border-radius:12px}
+        #qr-container img{display:block;width:180px;height:180px}
+        #qr-url{margin-top:10px;font-size:12px;color:#888;word-break:break-all;font-family:monospace}
+        #qr-instrucoes{margin-top:10px;font-size:13px;color:#aaa}
+        #toggle-qr{margin-top:10px;background:none;border:1px solid #555;color:#aaa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px}
+        #main-section{flex:1;display:flex;flex-direction:column;min-height:0}
+        #scanner-container{flex:1;position:relative;background:#000;min-height:280px}
+        #scanner-reader{width:100%;height:100%}
+        #scanner-reader video{width:100%!important;height:100%!important;object-fit:cover!important}
+        #scanner-status{position:absolute;bottom:0;left:0;right:0;padding:10px;background:rgba(0,0,0,.7);text-align:center;font-size:13px;color:#aaa;z-index:5}
+        #scanner-status.ok{color:#2ecc71}
+        /* Carrinho — galeria que acumula */
+        #carrinho-bar{display:none;background:#0f2040;border-top:2px solid #3498db;padding:10px}
+        #carrinho-bar.visivel{display:block}
+        #carrinho-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+        #carrinho-head h3{font-size:12px;color:#3498db;text-transform:uppercase;letter-spacing:1px}
+        #carrinho-count{background:#3498db;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:700}
+        #carrinho-lista{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
+        .cart-item{min-width:140px;max-width:160px;background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:8px;scroll-snap-align:start;position:relative;animation:pop .25s ease}
+        @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+        .cart-item .ci-isbn{font-family:monospace;font-size:11px;color:#2ecc71;word-break:break-all}
+        .cart-item .ci-titulo{font-size:11px;color:#eee;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .cart-item .ci-autor{font-size:10px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .cart-item .ci-fonte{font-size:9px;color:#3498db;margin-top:4px}
+        .cart-item .ci-remove{position:absolute;top:4px;right:4px;background:rgba(231,76,60,.9);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer}
+        .cart-item.buscando{opacity:.6}
+        .cart-item.duplicado{border-color:#f39c12}
+        /* Resultado detalhado do ultimo */
+        #resultado{display:none;background:#1a1a2e;padding:12px;border-top:1px solid #333}
+        #resultado.visivel{display:block}
+        .livro-header{display:flex;gap:12px}
+        .livro-capa{width:64px;height:96px;background:#333;border-radius:6px;object-fit:cover;flex-shrink:0}
+        .livro-info{flex:1;min-width:0}
+        .livro-titulo{font-size:14px;font-weight:600}
+        .livro-autor{font-size:12px;color:#aaa}
+        .livro-meta{font-size:11px;color:#666}
+        .livro-fonte{font-size:10px;color:#3498db;background:rgba(52,152,219,.15);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px}
         /* Controls */
-        #controls {
-            padding: 16px;
-            background: #16213e;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+        #controls{padding:12px;background:#16213e;display:flex;flex-direction:column;gap:8px}
+        #status-msg{text-align:center;font-size:13px;color:#aaa;min-height:18px}
+        #status-msg.erro{color:#e74c3c}#status-msg.ok{color:#2ecc71}
+        .botoes-row{display:flex;gap:8px}
+        .botoes-row button{flex:1;padding:14px;font-size:15px;font-weight:600;border:none;border-radius:12px;cursor:pointer}
+        #escanear-btn{background:#2ecc71;color:#fff}#escanear-btn:active{background:#27ae60}
+        #parar-btn{background:#e74c3c;color:#fff;display:none}#parar-btn:active{background:#c0392b}
+        #enviar-btn{background:#3498db;color:#fff;display:none}#enviar-btn:active{background:#2980b9}#enviar-btn:disabled{background:#555}
+        #limpar-btn{background:#555;color:#ccc;display:none;font-size:13px}
+        @media(min-width:768px){
+            body{flex-direction:row}
+            header{position:fixed;top:0;left:0;right:0;z-index:10}
+            #qr-section{width:340px;min-height:100vh;border-bottom:none;border-right:1px solid #333;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:50px}
+            #main-section{flex:1;margin-top:40px}
         }
-        #status-msg {
-            text-align: center;
-            font-size: 14px;
-            color: #aaa;
-            min-height: 20px;
-        }
-        #status-msg.erro { color: #e74c3c; }
-        #status-msg.ok { color: #2ecc71; }
-        .botoes-row {
-            display: flex;
-            gap: 10px;
-        }
-        .botoes-row button {
-            flex: 1;
-            padding: 14px;
-            font-size: 16px;
-            font-weight: 600;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-        }
-        #escanear-btn { background: #2ecc71; color: white; }
-        #escanear-btn:active { background: #27ae60; }
-        #cadastrar-btn { background: #3498db; color: white; display: none; }
-        #cadastrar-btn:active { background: #2980b9; }
-        #novo-btn { background: #555; color: #ccc; display: none; }
-        #novo-btn:active { background: #666; }
-        #foto-input { display: none; }
-        @media (min-width: 768px) {
-            body { flex-direction: row; }
-            header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; }
-            #qr-section {
-                width: 350px;
-                min-height: 100vh;
-                border-bottom: none;
-                border-right: 1px solid #333;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                padding-top: 50px;
-            }
-            #main-section { flex: 1; margin-top: 40px; }
-        }
-        @media (max-width: 767px) {
-            #qr-section { display: none; }
-            #qr-section.visivel { display: block; }
+        @media(max-width:767px){
+            #qr-section{display:none}#qr-section.visivel{display:block}
         }
     </style>
 </head>
 <body>
-    <header>Catalogacao ISBN — Biblioteca</header>
-
-    <div id="qr-section">
-        <h2>Abra no celular</h2>
-        <div id="qr-container">
-            <img src="/api/qrcode" alt="QR Code">
-        </div>
-        <div id="qr-url">{{SERVER_URL}}</div>
-        <div id="qr-instrucoes">Escaneie com a camera do celular</div>
-        <button id="toggle-qr" onclick="toggleQR()">Mostrar/Esconder</button>
+<header>Catalogacao ISBN — Carrinho</header>
+<div id="qr-section">
+    <h2>Abra no celular</h2>
+    <div id="qr-container"><img src="/api/qrcode" alt="QR Code"></div>
+    <div id="qr-url">{{SERVER_URL}}</div>
+    <div id="qr-instrucoes">Escaneie com a camera do celular</div>
+    <button id="toggle-qr" onclick="document.getElementById('qr-section').classList.toggle('visivel')">Mostrar/Esconder</button>
+</div>
+<div id="main-section">
+    <div id="scanner-container">
+        <div id="scanner-reader"></div>
+        <div id="scanner-status">Toque em Escanear para iniciar — modo continuo</div>
     </div>
-
-    <div id="main-section">
-        <div id="preview-container">
-            <img id="preview-img" style="display:none">
-            <div id="inicio-msg">Toque em Escanear para tirar a foto do codigo de barras</div>
-        </div>
-
-        <div id="isbn-detectado">
-            <div class="isbn-label">ISBN detectado</div>
-            <div class="isbn-numero" id="isbn-numero"></div>
-        </div>
-
-        <div id="resultado">
-            <div class="livro-header">
-                <img class="livro-capa" id="livro-capa" src="" style="display:none">
-                <div class="livro-info">
-                    <div class="livro-titulo" id="livro-titulo">—</div>
-                    <div class="livro-autor" id="livro-autor">—</div>
-                    <div class="livro-meta" id="livro-meta">—</div>
-                    <div class="livro-fonte" id="livro-fonte"></div>
-                </div>
-            </div>
-            <div class="campo-extra">
-                <span class="campo-extra-label">Editora</span>
-                <span class="campo-extra-valor" id="campo-editora">—</span>
-            </div>
-            <div class="campo-extra">
-                <span class="campo-extra-label">Ano</span>
-                <span class="campo-extra-valor" id="campo-ano">—</span>
-            </div>
-            <div class="campo-extra">
-                <span class="campo-extra-label">Paginas</span>
-                <span class="campo-extra-valor" id="campo-paginas">—</span>
-            </div>
-            <div class="campo-extra">
-                <span class="campo-extra-label">Idioma</span>
-                <span class="campo-extra-valor" id="campo-idioma">—</span>
+    <!-- Carrinho que acumula, como galeria do scanner de documentos -->
+    <div id="carrinho-bar">
+        <div id="carrinho-head">
+            <h3>Carrinho</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+                <span id="carrinho-count">0</span>
+                <button id="limpar-btn" onclick="limparCarrinho()">Limpar</button>
             </div>
         </div>
-
-        <div id="controls">
-            <div id="status-msg"></div>
-            <input type="file" id="foto-input" accept="image/*" capture="environment">
-            <div class="botoes-row">
-                <button id="escanear-btn" onclick="abrirCamera()">Escanear</button>
-                <button id="cadastrar-btn" onclick="cadastrar()">Cadastrar</button>
-                <button id="novo-btn" onclick="novo()">Novo livro</button>
+        <div id="carrinho-lista"></div>
+    </div>
+    <div id="resultado">
+        <div class="livro-header">
+            <img class="livro-capa" id="livro-capa" src="" style="display:none">
+            <div class="livro-info">
+                <div class="livro-titulo" id="livro-titulo">—</div>
+                <div class="livro-autor" id="livro-autor">—</div>
+                <div class="livro-meta" id="livro-meta">—</div>
+                <div class="livro-fonte" id="livro-fonte"></div>
             </div>
         </div>
     </div>
+    <div id="controls">
+        <div id="status-msg"></div>
+        <div class="botoes-row">
+            <button id="escanear-btn" onclick="iniciarScanner()">Escanear</button>
+            <button id="parar-btn" onclick="pararScanner()">Parar</button>
+            <button id="enviar-btn" onclick="enviarCarrinho()">Enviar para catalogacao</button>
+        </div>
+    </div>
+</div>
+<script>
+const statusMsg=document.getElementById('status-msg');
+const scannerStatus=document.getElementById('scanner-status');
+const escanearBtn=document.getElementById('escanear-btn');
+const pararBtn=document.getElementById('parar-btn');
+const enviarBtn=document.getElementById('enviar-btn');
+const limparBtn=document.getElementById('limpar-btn');
+const carrinhoBar=document.getElementById('carrinho-bar');
+const carrinhoLista=document.getElementById('carrinho-lista');
+const carrinhoCount=document.getElementById('carrinho-count');
+const resultado=document.getElementById('resultado');
 
-    <script>
-        const statusMsg = document.getElementById('status-msg');
-        const isbnDetectado = document.getElementById('isbn-detectado');
-        const isbnNumero = document.getElementById('isbn-numero');
-        const resultado = document.getElementById('resultado');
-        const escanearBtn = document.getElementById('escanear-btn');
-        const cadastrarBtn = document.getElementById('cadastrar-btn');
-        const novoBtn = document.getElementById('novo-btn');
-        const previewImg = document.getElementById('preview-img');
-        const inicioMsg = document.getElementById('inicio-msg');
-        const fotoInput = document.getElementById('foto-input');
+let scanner=null, escaneando=false;
+let vistos=new Set(); // deduplicacao local imediata
+let carrinho=[];
 
-        let ultimoISBN = null;
-        let ultimoDados = null;
+function setStatus(m,t){statusMsg.textContent=m;statusMsg.className=t||''}
 
-        function toggleQR() {
-            document.getElementById('qr-section').classList.toggle('visivel');
+function renderCarrinho(){
+    carrinhoLista.innerHTML='';
+    carrinho.forEach(item=>{
+        const div=document.createElement('div');
+        div.className='cart-item'+(item.status==='buscando'?' buscando':'');
+        div.innerHTML=`<button class="ci-remove" onclick="removerDoCarrinho('${item.isbn}')">×</button>
+            <div class="ci-isbn">${item.isbn}</div>
+            <div class="ci-titulo">${item.titulo|| (item.status==='buscando'?'buscando...': '—')}</div>
+            <div class="ci-autor">${item.autor||''}</div>
+            <div class="ci-fonte">${item.fonte||''}${item.status==='duplicado'?' • duplicado':''}</div>`;
+        carrinhoLista.appendChild(div);
+    });
+    carrinhoCount.textContent=carrinho.length;
+    const visivel=carrinho.length>0;
+    carrinhoBar.classList.toggle('visivel',visivel);
+    enviarBtn.style.display=visivel?'':'none';
+    limparBtn.style.display=visivel?'':'none';
+    if(visivel) carrinhoLista.scrollLeft=carrinhoLista.scrollWidth;
+}
+
+async function adicionarAoCarrinho(isbn){
+    if(vistos.has(isbn)){ setStatus('Ja no carrinho: '+isbn,'erro'); vibrar(); return; }
+    vistos.add(isbn);
+    const placeholder={isbn,titulo:'',autor:'',fonte:'',status:'buscando'};
+    carrinho.push(placeholder);
+    renderCarrinho();
+    scannerStatus.textContent='Adicionado: '+isbn;
+    scannerStatus.className='ok';
+    vibrar();
+    try{
+        const resp=await fetch('/api/carrinho',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({isbn})});
+        const data=await resp.json();
+        // data: {status, item, total} — item contem titulo/autor/fonte
+        const idx=carrinho.findIndex(x=>x.isbn===isbn);
+        if(idx>=0){
+            if(data.status==='duplicado'){ carrinho[idx].status='duplicado'; }
+            else if(data.item){ Object.assign(carrinho[idx], data.item); delete carrinho[idx].status; }
+            renderCarrinho();
+            mostrarDetalhe(carrinho[idx]);
         }
+        setStatus(`Carrinho: ${carrinho.length} livro(s)`, 'ok');
+    }catch(e){ setStatus('Erro ao adicionar: '+e.message,'erro'); }
+}
 
-        function setStatus(msg, tipo) {
-            statusMsg.textContent = msg;
-            statusMsg.className = tipo || '';
-        }
+function vibrar(){ if(navigator.vibrate) navigator.vibrate(60); }
 
-        function abrirCamera() {
-            fotoInput.value = '';
-            fotoInput.click();
-        }
+function mostrarDetalhe(d){
+    document.getElementById('livro-titulo').textContent=d.titulo||'—';
+    document.getElementById('livro-autor').textContent=d.autor||'—';
+    let meta=[]; if(d.ano) meta.push(d.ano); if(d.paginas) meta.push(d.paginas+' p.');
+    document.getElementById('livro-meta').textContent=meta.join(' | ')||d.isbn||'—';
+    document.getElementById('livro-fonte').textContent=d.fonte||'';
+    const capa=document.getElementById('livro-capa');
+    if(d.capa){capa.src=d.capa; capa.style.display='';} else capa.style.display='none';
+    resultado.classList.add('visivel');
+}
 
-        fotoInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+async function removerDoCarrinho(isbn){
+    carrinho=carrinho.filter(x=>x.isbn!==isbn);
+    vistos.delete(isbn);
+    renderCarrinho();
+    if(carrinho.length===0) resultado.classList.remove('visivel');
+    await fetch('/api/carrinho/'+encodeURIComponent(isbn),{method:'DELETE'});
+}
 
-            // Mostrar preview
-            const url = URL.createObjectURL(file);
-            previewImg.src = url;
-            previewImg.style.display = 'block';
-            inicioMsg.style.display = 'none';
+async function limparCarrinho(){
+    carrinho=[]; vistos.clear(); renderCarrinho(); resultado.classList.remove('visivel');
+    await fetch('/api/carrinho',{method:'DELETE'});
+    setStatus('Carrinho limpo','');
+}
 
-            setStatus('Decodificando codigo de barras...', '');
+async function enviarCarrinho(){
+    if(carrinho.length===0) return;
+    enviarBtn.disabled=true; enviarBtn.textContent='Enviando...';
+    try{
+        const resp=await fetch('/api/carrinho/enviar',{method:'POST'});
+        const data=await resp.json();
+        setStatus(`Enviados ${data.enviados} livro(s) para a fila!`,'ok');
+        carrinho=[]; vistos.clear(); renderCarrinho(); resultado.classList.remove('visivel');
+    }catch(e){ setStatus('Erro ao enviar: '+e.message,'erro'); }
+    enviarBtn.disabled=false; enviarBtn.textContent='Enviar para catalogacao';
+}
 
-            // Decodificar ISBN da imagem
-            const isbn = await decodificarISBN(file);
-            if (!isbn) {
-                setStatus('Codigo de barras nao detectado. Tente mais perto ou melhore a iluminacao.', 'erro');
-                escanearBtn.style.display = '';
-                cadastrarBtn.style.display = 'none';
-                novoBtn.style.display = 'none';
-                return;
-            }
-
-            ultimoISBN = isbn;
-            isbnNumero.textContent = isbn;
-            isbnDetectado.classList.add('visivel');
-
-            // Buscar metadados
-            setStatus('Buscando metadados...', '');
-            try {
-                const resp = await fetch('/api/lookup/' + isbn);
-                const dados = await resp.json();
-                ultimoDados = dados;
-                mostrarResultado(dados);
-            } catch (err) {
-                setStatus('Erro de conexao: ' + err.message, 'erro');
-            }
-        });
-
-        async function decodificarISBN(file) {
-            try {
-                const html5QrCode = new Html5Qrcode("preview-container");
-                const resultado = await html5QrCode.scanFile(file, true);
-                // Validar se e ISBN (10 ou 13 digitos)
-                const limpo = resultado.replace(/[\s\-]/g, '');
-                if (/^\d{10}(\d{3})?$/.test(limpo)) {
-                    return limpo;
-                }
-                return null;
-            } catch (err) {
-                return null;
-            }
-        }
-
-        function mostrarResultado(dados) {
-            if (dados.status === 'nao_encontrado') {
-                setStatus(dados.mensagem, 'erro');
-                cadastrarBtn.style.display = '';
-                novoBtn.style.display = '';
-                return;
-            }
-
-            setStatus('Livro encontrado!', 'ok');
-
-            document.getElementById('livro-titulo').textContent = dados.titulo || '—';
-            document.getElementById('livro-autor').textContent = dados.autor || '—';
-
-            let meta = [];
-            if (dados.ano) meta.push(dados.ano);
-            if (dados.edicao) meta.push(dados.edicao + ' ed.');
-            if (dados.paginas) meta.push(dados.paginas + ' p.');
-            document.getElementById('livro-meta').textContent = meta.join(' | ') || '—';
-
-            document.getElementById('campo-editora').textContent = dados.editora || '—';
-            document.getElementById('campo-ano').textContent = dados.ano || '—';
-            document.getElementById('campo-paginas').textContent = dados.paginas || '—';
-            document.getElementById('campo-idioma').textContent = dados.idioma || '—';
-
-            document.getElementById('livro-fonte').textContent = dados.fonte || '';
-
-            const capa = document.getElementById('livro-capa');
-            if (dados.capa) {
-                capa.src = dados.capa;
-                capa.style.display = '';
-            } else {
-                capa.style.display = 'none';
-            }
-
-            resultado.classList.add('visivel');
-            cadastrarBtn.style.display = '';
-            novoBtn.style.display = '';
-        }
-
-        async function cadastrar() {
-            if (!ultimoDados && !ultimoISBN) return;
-            setStatus('Salvando...', '');
-
-            const item = ultimoDados || { isbn: ultimoISBN, status: 'incompleto' };
-
-            try {
-                await fetch('/api/confirmar', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item)
-                });
-                setStatus('Cadastrado na fila de revisao!', 'ok');
-                cadastrarBtn.style.display = 'none';
-            } catch (err) {
-                setStatus('Erro ao salvar: ' + err.message, 'erro');
-            }
-        }
-
-        function novo() {
-            ultimoISBN = null;
-            ultimoDados = null;
-            isbnDetectado.classList.remove('visivel');
-            resultado.classList.remove('visivel');
-            previewImg.style.display = 'none';
-            inicioMsg.style.display = '';
-            cadastrarBtn.style.display = 'none';
-            novoBtn.style.display = 'none';
-            escanearBtn.style.display = '';
-            setStatus('', '');
-        }
-    </script>
+function iniciarScanner(){
+    if(escaneando) return;
+    scanner=new Html5Qrcode("scanner-reader");
+    escaneando=true;
+    escanearBtn.style.display='none'; pararBtn.style.display='';
+    scannerStatus.textContent='Procurando codigo de barras...'; scannerStatus.className='';
+    // Carregar carrinho existente
+    fetch('/api/carrinho').then(r=>r.json()).then(d=>{
+        if(d.itens) { d.itens.forEach(i=>vistos.add(i.isbn)); carrinho=d.itens; renderCarrinho(); }
+    });
+    scanner.start({facingMode:"environment"},{
+        fps:10,
+        qrbox:(w,h)=>{let m=Math.min(w,h);return{width:Math.floor(m*0.85),height:Math.floor(m*0.4)}},
+        aspectRatio:1.0,
+    }, onSucesso, ()=>{}).catch(err=>{
+        setStatus('Erro camera: '+err,'erro');
+        escaneando=false; escanearBtn.style.display=''; pararBtn.style.display='none';
+    });
+}
+function pararScanner(){
+    if(!scanner||!escaneando) return;
+    scanner.stop().then(()=>{scanner.clear(); escaneando=false; escanearBtn.style.display=''; pararBtn.style.display='none'; scannerStatus.textContent='Scanner parado';});
+}
+async function onSucesso(text){
+    const limpo=text.replace(/[\s\-]/g,'');
+    if(!/^\d{10}(\d{3})?$/.test(limpo)) return;
+    // debounce 1.5s ja esta no Set, mas evita spam do mesmo frame
+    if(vistos.has(limpo)) return;
+    await adicionarAoCarrinho(limpo);
+}
+</script>
 </body>
 </html>

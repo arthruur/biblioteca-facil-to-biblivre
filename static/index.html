@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Catalogacao por Foto</title>
+    <title>Catalogacao ISBN</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -64,48 +65,26 @@
             cursor: pointer;
             font-size: 12px;
         }
-        #camera-section {
+        #main-section {
             flex: 1;
             display: flex;
             flex-direction: column;
         }
+
+        /* Preview da foto */
         #preview-container {
             flex: 1;
             position: relative;
             background: #000;
+            min-height: 250px;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
-            min-height: 300px;
         }
-        #preview-container img {
+        #preview-img {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
-        }
-        #overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 75%;
-            height: 50%;
-            border: 3px solid rgba(52, 152, 219, 0.8);
-            border-radius: 8px;
-            pointer-events: none;
-        }
-        #overlay-label {
-            position: absolute;
-            top: -28px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(52, 152, 219, 0.9);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            white-space: nowrap;
         }
         #inicio-msg {
             position: absolute;
@@ -114,6 +93,87 @@
             font-size: 14px;
             padding: 20px;
         }
+
+        /* ISBN detectado */
+        #isbn-detectado {
+            display: none;
+            background: #0f3460;
+            padding: 16px;
+            text-align: center;
+            border-bottom: 1px solid #333;
+        }
+        #isbn-detectado.visivel { display: block; }
+        #isbn-detectado .isbn-numero {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2ecc71;
+            font-family: monospace;
+            letter-spacing: 2px;
+        }
+        #isbn-detectado .isbn-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }
+
+        /* Resultado */
+        #resultado {
+            display: none;
+            background: #1a1a2e;
+            padding: 16px;
+            border-top: 1px solid #333;
+        }
+        #resultado.visivel { display: block; }
+        .livro-header {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .livro-capa {
+            width: 80px;
+            height: 120px;
+            background: #333;
+            border-radius: 6px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        .livro-info { flex: 1; }
+        .livro-titulo {
+            font-size: 16px;
+            font-weight: 600;
+            color: #eee;
+            margin-bottom: 4px;
+        }
+        .livro-autor {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 2px;
+        }
+        .livro-meta {
+            font-size: 12px;
+            color: #666;
+        }
+        .livro-fonte {
+            display: inline-block;
+            margin-top: 6px;
+            font-size: 10px;
+            color: #3498db;
+            background: rgba(52,152,219,0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .campo-extra {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-top: 1px solid #222;
+            font-size: 13px;
+        }
+        .campo-extra-label { color: #888; }
+        .campo-extra-valor { color: #ccc; }
+
+        /* Controls */
         #controls {
             padding: 16px;
             background: #16213e;
@@ -121,91 +181,34 @@
             flex-direction: column;
             gap: 10px;
         }
-        #status {
+        #status-msg {
             text-align: center;
             font-size: 14px;
             color: #aaa;
             min-height: 20px;
         }
-        #status.erro { color: #e74c3c; }
-        #status.ok { color: #2ecc71; }
-        #capturar-btn {
-            width: 100%;
-            padding: 16px;
-            font-size: 18px;
-            font-weight: 600;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            background: #3498db;
-            color: white;
-        }
-        #capturar-btn:active { background: #2980b9; }
-        #capturar-btn:disabled { background: #555; cursor: not-allowed; }
-        #foto-input { display: none; }
-        #resultado {
-            display: none;
-            background: #1a1a2e;
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 16px;
-            margin-top: 4px;
-        }
-        #resultado.visivel { display: block; }
-        #resultado h3 {
-            font-size: 14px;
-            color: #3498db;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .campo {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #222;
-        }
-        .campo:last-child { border-bottom: none; }
-        .campo-label { color: #888; font-size: 13px; }
-        .campo-valor {
-            font-size: 14px;
-            font-weight: 500;
-            text-align: right;
-            max-width: 60%;
-            word-break: break-all;
-        }
-        .campo-valor.valido { color: #2ecc71; }
-        .campo-valor.invalido { color: #e74c3c; }
-        #ocr-texto {
-            margin-top: 10px;
-            padding: 8px;
-            background: #111;
-            border-radius: 6px;
-            font-size: 11px;
-            color: #888;
-            max-height: 80px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        #botoes-resultado {
+        #status-msg.erro { color: #e74c3c; }
+        #status-msg.ok { color: #2ecc71; }
+        .botoes-row {
             display: flex;
             gap: 10px;
-            margin-top: 12px;
         }
-        #botoes-resultado button {
+        .botoes-row button {
             flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 14px;
+            font-size: 16px;
             font-weight: 600;
+            border: none;
+            border-radius: 12px;
             cursor: pointer;
         }
-        #confirmar-btn { background: #2ecc71; color: white; }
-        #confirmar-btn:active { background: #27ae60; }
-        #refazer-btn { background: #333; color: #ccc; }
-        #refazer-btn:active { background: #444; }
+        #escanear-btn { background: #2ecc71; color: white; }
+        #escanear-btn:active { background: #27ae60; }
+        #cadastrar-btn { background: #3498db; color: white; display: none; }
+        #cadastrar-btn:active { background: #2980b9; }
+        #novo-btn { background: #555; color: #ccc; display: none; }
+        #novo-btn:active { background: #666; }
+        #foto-input { display: none; }
         @media (min-width: 768px) {
             body { flex-direction: row; }
             header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; }
@@ -220,7 +223,7 @@
                 justify-content: center;
                 padding-top: 50px;
             }
-            #camera-section { flex: 1; margin-top: 40px; }
+            #main-section { flex: 1; margin-top: 40px; }
         }
         @media (max-width: 767px) {
             #qr-section { display: none; }
@@ -229,7 +232,7 @@
     </style>
 </head>
 <body>
-    <header>Catalogacao por Foto — Ficha CIP</header>
+    <header>Catalogacao ISBN — Biblioteca</header>
 
     <div id="qr-section">
         <h2>Abra no celular</h2>
@@ -241,59 +244,81 @@
         <button id="toggle-qr" onclick="toggleQR()">Mostrar/Esconder</button>
     </div>
 
-    <div id="camera-section">
+    <div id="main-section">
         <div id="preview-container">
-            <img id="preview" style="display:none">
-            <div id="overlay">
-                <div id="overlay-label">Alinhe a ficha aqui</div>
+            <img id="preview-img" style="display:none">
+            <div id="inicio-msg">Toque em Escanear para tirar a foto do codigo de barras</div>
+        </div>
+
+        <div id="isbn-detectado">
+            <div class="isbn-label">ISBN detectado</div>
+            <div class="isbn-numero" id="isbn-numero"></div>
+        </div>
+
+        <div id="resultado">
+            <div class="livro-header">
+                <img class="livro-capa" id="livro-capa" src="" style="display:none">
+                <div class="livro-info">
+                    <div class="livro-titulo" id="livro-titulo">—</div>
+                    <div class="livro-autor" id="livro-autor">—</div>
+                    <div class="livro-meta" id="livro-meta">—</div>
+                    <div class="livro-fonte" id="livro-fonte"></div>
+                </div>
             </div>
-            <div id="inicio-msg">Toque em Capturar para tirar a foto</div>
+            <div class="campo-extra">
+                <span class="campo-extra-label">Editora</span>
+                <span class="campo-extra-valor" id="campo-editora">—</span>
+            </div>
+            <div class="campo-extra">
+                <span class="campo-extra-label">Ano</span>
+                <span class="campo-extra-valor" id="campo-ano">—</span>
+            </div>
+            <div class="campo-extra">
+                <span class="campo-extra-label">Paginas</span>
+                <span class="campo-extra-valor" id="campo-paginas">—</span>
+            </div>
+            <div class="campo-extra">
+                <span class="campo-extra-label">Idioma</span>
+                <span class="campo-extra-valor" id="campo-idioma">—</span>
+            </div>
         </div>
 
         <div id="controls">
-            <div id="status"></div>
-            <div id="resultado">
-                <h3>Campos extraidos</h3>
-                <div class="campo">
-                    <span class="campo-label">ISBN</span>
-                    <span class="campo-valor" id="isbn-valor">—</span>
-                </div>
-                <div class="campo">
-                    <span class="campo-label">CDD</span>
-                    <span class="campo-valor" id="cdd-valor">—</span>
-                </div>
-                <div class="campo">
-                    <span class="campo-label">Cutter</span>
-                    <span class="campo-valor" id="cutter-valor">—</span>
-                </div>
-                <div id="ocr-texto"></div>
-                <div id="botoes-resultado">
-                    <button id="refazer-btn" onclick="refazer()">Refazer</button>
-                    <button id="confirmar-btn" onclick="confirmar()">Confirmar</button>
-                </div>
-            </div>
+            <div id="status-msg"></div>
             <input type="file" id="foto-input" accept="image/*" capture="environment">
-            <button id="capturar-btn" onclick="abrirCamera()">Capturar</button>
+            <div class="botoes-row">
+                <button id="escanear-btn" onclick="abrirCamera()">Escanear</button>
+                <button id="cadastrar-btn" onclick="cadastrar()">Cadastrar</button>
+                <button id="novo-btn" onclick="novo()">Novo livro</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const fotoInput = document.getElementById('foto-input');
-        const preview = document.getElementById('preview');
-        const status = document.getElementById('status');
+        const statusMsg = document.getElementById('status-msg');
+        const isbnDetectado = document.getElementById('isbn-detectado');
+        const isbnNumero = document.getElementById('isbn-numero');
         const resultado = document.getElementById('resultado');
-        const capturarBtn = document.getElementById('capturar-btn');
+        const escanearBtn = document.getElementById('escanear-btn');
+        const cadastrarBtn = document.getElementById('cadastrar-btn');
+        const novoBtn = document.getElementById('novo-btn');
+        const previewImg = document.getElementById('preview-img');
         const inicioMsg = document.getElementById('inicio-msg');
+        const fotoInput = document.getElementById('foto-input');
 
-        let ultimoResultado = null;
-        let processando = false;
+        let ultimoISBN = null;
+        let ultimoDados = null;
 
         function toggleQR() {
             document.getElementById('qr-section').classList.toggle('visivel');
         }
 
+        function setStatus(msg, tipo) {
+            statusMsg.textContent = msg;
+            statusMsg.className = tipo || '';
+        }
+
         function abrirCamera() {
-            if (processando) return;
             fotoInput.value = '';
             fotoInput.click();
         }
@@ -302,81 +327,124 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            processando = true;
-            capturarBtn.disabled = true;
-            capturarBtn.textContent = 'Processando...';
-            resultado.classList.remove('visivel');
-
             // Mostrar preview
             const url = URL.createObjectURL(file);
-            preview.src = url;
-            preview.style.display = 'block';
+            previewImg.src = url;
+            previewImg.style.display = 'block';
             inicioMsg.style.display = 'none';
 
-            setStatus('Processando...', '');
-            const formData = new FormData();
-            formData.append('foto', file, 'captura.jpg');
+            setStatus('Decodificando codigo de barras...', '');
 
+            // Decodificar ISBN da imagem
+            const isbn = await decodificarISBN(file);
+            if (!isbn) {
+                setStatus('Codigo de barras nao detectado. Tente mais perto ou melhore a iluminacao.', 'erro');
+                escanearBtn.style.display = '';
+                cadastrarBtn.style.display = 'none';
+                novoBtn.style.display = 'none';
+                return;
+            }
+
+            ultimoISBN = isbn;
+            isbnNumero.textContent = isbn;
+            isbnDetectado.classList.add('visivel');
+
+            // Buscar metadados
+            setStatus('Buscando metadados...', '');
             try {
-                const resp = await fetch('/api/capturar', { method: 'POST', body: formData });
+                const resp = await fetch('/api/lookup/' + isbn);
                 const dados = await resp.json();
+                ultimoDados = dados;
                 mostrarResultado(dados);
             } catch (err) {
                 setStatus('Erro de conexao: ' + err.message, 'erro');
             }
-
-            processando = false;
-            capturarBtn.disabled = false;
-            capturarBtn.textContent = 'Capturar';
         });
 
-        function mostrarResultado(dados) {
-            ultimoResultado = dados;
-            if (dados.status === 'erro') {
-                setStatus(dados.mensagem, 'erro');
-                resultado.classList.remove('visivel');
-                return;
+        async function decodificarISBN(file) {
+            try {
+                const html5QrCode = new Html5Qrcode("preview-container");
+                const resultado = await html5QrCode.scanFile(file, true);
+                // Validar se e ISBN (10 ou 13 digitos)
+                const limpo = resultado.replace(/[\s\-]/g, '');
+                if (/^\d{10}(\d{3})?$/.test(limpo)) {
+                    return limpo;
+                }
+                return null;
+            } catch (err) {
+                return null;
             }
-            setStatus('Ficha detectada!', 'ok');
-            const isbnEl = document.getElementById('isbn-valor');
-            isbnEl.textContent = dados.isbn || 'Nao encontrado';
-            isbnEl.className = 'campo-valor ' + (dados.isbn_valido ? 'valido' : dados.isbn ? 'invalido' : '');
-            document.getElementById('cdd-valor').textContent = dados.cdd || 'Nao encontrado';
-            document.getElementById('cutter-valor').textContent = dados.cutter || 'Nao encontrado';
-            document.getElementById('ocr-texto').textContent = dados.texto_ocr || '';
-            resultado.classList.add('visivel');
         }
 
-        async function confirmar() {
-            if (!ultimoResultado) return;
+        function mostrarResultado(dados) {
+            if (dados.status === 'nao_encontrado') {
+                setStatus(dados.mensagem, 'erro');
+                cadastrarBtn.style.display = '';
+                novoBtn.style.display = '';
+                return;
+            }
+
+            setStatus('Livro encontrado!', 'ok');
+
+            document.getElementById('livro-titulo').textContent = dados.titulo || '—';
+            document.getElementById('livro-autor').textContent = dados.autor || '—';
+
+            let meta = [];
+            if (dados.ano) meta.push(dados.ano);
+            if (dados.edicao) meta.push(dados.edicao + ' ed.');
+            if (dados.paginas) meta.push(dados.paginas + ' p.');
+            document.getElementById('livro-meta').textContent = meta.join(' | ') || '—';
+
+            document.getElementById('campo-editora').textContent = dados.editora || '—';
+            document.getElementById('campo-ano').textContent = dados.ano || '—';
+            document.getElementById('campo-paginas').textContent = dados.paginas || '—';
+            document.getElementById('campo-idioma').textContent = dados.idioma || '—';
+
+            document.getElementById('livro-fonte').textContent = dados.fonte || '';
+
+            const capa = document.getElementById('livro-capa');
+            if (dados.capa) {
+                capa.src = dados.capa;
+                capa.style.display = '';
+            } else {
+                capa.style.display = 'none';
+            }
+
+            resultado.classList.add('visivel');
+            cadastrarBtn.style.display = '';
+            novoBtn.style.display = '';
+        }
+
+        async function cadastrar() {
+            if (!ultimoDados && !ultimoISBN) return;
             setStatus('Salvando...', '');
+
+            const item = ultimoDados || { isbn: ultimoISBN, status: 'incompleto' };
+
             try {
                 await fetch('/api/confirmar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(ultimoResultado)
+                    body: JSON.stringify(item)
                 });
-                setStatus('Salvo na fila de revisao!', 'ok');
-                resultado.classList.remove('visivel');
-                ultimoResultado = null;
-                preview.style.display = 'none';
-                inicioMsg.style.display = '';
+                setStatus('Cadastrado na fila de revisao!', 'ok');
+                cadastrarBtn.style.display = 'none';
             } catch (err) {
                 setStatus('Erro ao salvar: ' + err.message, 'erro');
             }
         }
 
-        function refazer() {
+        function novo() {
+            ultimoISBN = null;
+            ultimoDados = null;
+            isbnDetectado.classList.remove('visivel');
             resultado.classList.remove('visivel');
-            ultimoResultado = null;
-            preview.style.display = 'none';
+            previewImg.style.display = 'none';
             inicioMsg.style.display = '';
+            cadastrarBtn.style.display = 'none';
+            novoBtn.style.display = 'none';
+            escanearBtn.style.display = '';
             setStatus('', '');
-        }
-
-        function setStatus(msg, tipo) {
-            status.textContent = msg;
-            status.className = tipo || '';
         }
     </script>
 </body>

@@ -11,3 +11,7 @@ pymarc>=5.0
 # O instalador do BibLivre traz o PostgreSQL, mas não expõe o psql no PATH,
 # por isso o passo é feito por aqui e não por linha de comando do psql.
 psycopg2-binary>=2.9
+
+# detectar_ficha.py — detecção e retificação da ficha CIP via OpenCV
+opencv-python>=4.8
+pytesseract>=0.3.10

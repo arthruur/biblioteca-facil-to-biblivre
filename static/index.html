@@ -364,6 +364,8 @@ async function fallbackOCR(){
     const video=document.querySelector('#scanner-reader video');
     if(!video || video.videoWidth===0) return;
     ocrEmAndamento=true;
+    scannerStatus.textContent='Tentando OCR nos números...';
+    scannerStatus.className='';
     try{
         const canvas=document.createElement('canvas');
         const w=video.videoWidth, h=video.videoHeight;
@@ -397,8 +399,11 @@ async function fallbackOCR(){
             scannerStatus.className='ok';
             await adicionarAoLote(m[0]);
             tentativasFalhas=0;
+        } else {
+            scannerStatus.textContent='OCR não encontrou ISBN — aproxime/foque nos números';
+            scannerStatus.className='';
+            setTimeout(()=>{ if(escaneando && scannerStatus.textContent.includes('OCR')){ scannerStatus.textContent='Procurando código de barras...'; }}, 1500);
         }
-        // falha silenciosa — nao polui status, mantem "Procurando..."
     }catch(e){}finally{ ocrEmAndamento=false; }
 }
 
@@ -441,7 +446,7 @@ async function onSucesso(text){
 }
 async function onFalha(err){
     tentativasFalhas++;
-    if(tentativasFalhas>15 && !ocrEmAndamento){
+    if(tentativasFalhas>8 && !ocrEmAndamento){
         tentativasFalhas=0;
         await fallbackOCR();
     }

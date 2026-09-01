@@ -1,28 +1,26 @@
 """
-Servidor web para captura de ficha CIP via câmera do celular.
+Servidor web para captura de ficha CIP via camera do celular.
 
 Roda um FastAPI que:
-  1. Serve a página HTML com acesso à câmera
+  1. Serve a pagina HTML com acesso a camera
   2. Recebe a foto capturada
-  3. Roda detecção + OCR + extração de ISBN
-  4. Retorna os campos extraídos
+  3. Roda deteccao + OCR + extracao de ISBN
+  4. Retorna os campos extraidos
 
 Uso:
-  python scripts/servidor.py                    # inicia em https://0.0.0.0:8000
+  python scripts/servidor.py                    # inicia em http://0.0.0.0:8000
   python scripts/servidor.py --porta 9000       # porta alternativa
-  python scripts/servidor.py --sem-ssl          # HTTP (só funciona em localhost)
 
-Acessa no celular: https://IP-DO-PC:8000
+Acessa no celular: http://IP-DO-PC:8000
 """
 
 import argparse
+import io
 import json
 import socket
-import ssl
 import sys
 import tempfile
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -30,7 +28,7 @@ import cv2
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # Importar funções dos scripts locais
@@ -38,13 +36,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 from detectar_ficha import binarizar, encontrar_ficha, nitidez, preparar_para_ocr
 from extrair_isbn import extrair_isbn_do_texto
 
-# --- Configuração ---
+# --- Configuracao ---
 DATA_DIR = Path(__file__).parent.parent / "data"
 FILA_DIR = DATA_DIR / "fila"
 STATIC_DIR = Path(__file__).parent.parent / "static"
-CERT_DIR = DATA_DIR / "certs"
 
 app = FastAPI(title="Catalogacao por Foto")
+
+# URL do servidor (preenchida ao iniciar)
+SERVER_URL = ""
 
 # Estado em memória: fila de itens capturados
 fila_lock = threading.Lock()
@@ -140,11 +140,27 @@ def processar_foto(bytes_foto: bytes) -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """Serve a página principal."""
+    """Serve a página principal com a URL do servidor embutida."""
     html_path = STATIC_DIR / "index.html"
     if html_path.exists():
-        return HTMLResponse(html_path.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>Arquivo static/index.html não encontrado</h1>")
+        html = html_path.read_text(encoding="utf-8")
+        # Substituir placeholder pela URL real do servidor
+        html = html.replace("{{SERVER_URL}}", SERVER_URL)
+        return HTMLResponse(html)
+    return HTMLResponse("<h1>Arquivo static/index.html nao encontrado</h1>")
+
+
+@app.get("/api/qrcode")
+async def qrcode():
+    """Gera QR code com a URL do servidor."""
+    import qrcode
+    import qrcode.image.svg
+
+    factory = qrcode.image.svg.SvgPathImage
+    img = qrcode.make(SERVER_URL, image_factory=factory)
+    buffer = io.BytesIO()
+    img.save(buffer)
+    return Response(content=buffer.getvalue(), media_type="image/svg+xml")
 
 
 @app.post("/api/capturar")
@@ -188,7 +204,7 @@ async def listar_fila():
 
 
 async def asyncio_to_sync(func, *args):
-    """Executa função síncrona em thread pool."""
+    """Executa funcao sincrona em thread pool."""
     import asyncio
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, func, *args)
@@ -196,90 +212,28 @@ async def asyncio_to_sync(func, *args):
 
 # --- Main ---
 
-def gerar_certificado():
-    """Gera certificado autoassinado para HTTPS."""
-    CERT_DIR.mkdir(parents=True, exist_ok=True)
-    cert_path = CERT_DIR / "cert.pem"
-    key_path = CERT_DIR / "key.pem"
-
-    if cert_path.exists() and key_path.exists():
-        return str(cert_path), str(key_path)
-
-    # Gerar com openssl (se disponível) ou com Python
-    try:
-        import subprocess
-        subprocess.run([
-            "openssl", "req", "-x509", "-newkey", "rsa:2048",
-            "-keyout", str(key_path), "-out", str(cert_path),
-            "-days", "365", "-nodes",
-            "-subj", "/CN=localhost"
-        ], check=True, capture_output=True)
-        print(f"Certificado gerado em: {CERT_DIR}")
-        return str(cert_path), str(key_path)
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-
-    # Fallback: gerar com Python
-    from cryptography import x509
-    from cryptography.x509.oid import NameOID
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    import datetime
-
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
-    cert = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(issuer)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.utcnow())
-        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=365))
-        .add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False)
-        .sign(key, hashes.SHA256())
-    )
-
-    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    key_path.write_bytes(key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.TraditionalOpenSSL,
-        serialization.NoEncryption(),
-    ))
-    print(f"Certificado gerado em: {CERT_DIR}")
-    return str(cert_path), str(key_path)
-
 
 def main():
     parser = argparse.ArgumentParser(description="Servidor de captura de ficha CIP")
-    parser.add_argument("--porta", type=int, default=8000, help="Porta do servidor (padrão: 8000)")
-    parser.add_argument("--sem-ssl", action="store_true", help="Rodar sem HTTPS (só localhost)")
+    parser.add_argument("--porta", type=int, default=8000, help="Porta do servidor (padrao: 8000)")
+    parser.add_argument("--host", default="0.0.0.0", help="Host (padrao: 0.0.0.0)")
     args = parser.parse_args()
 
     ip = obter_ip_local()
 
-    # Criar diretórios
+    # Criar diretorios
     DATA_DIR.mkdir(exist_ok=True)
     FILA_DIR.mkdir(exist_ok=True)
     STATIC_DIR.mkdir(exist_ok=True)
 
-    if args.sem_ssl:
-        print(f"\n  Rodando em HTTP (só localhost)")
-        print(f"  Acesse: http://localhost:{args.porta}\n")
-        uvicorn.run(app, host="127.0.0.1", port=args.porta)
-    else:
-        cert_path, key_path = gerar_certificado()
-        print(f"\n  === Catalogacao por Foto ===")
-        print(f"  Rodando em HTTPS")
-        print(f"  No celular, acesse: https://{ip}:{args.porta}")
-        print(f"  (Aceite o aviso do certificado autoassinado)")
-        print(f"  Para parar: Ctrl+C\n")
+    global SERVER_URL
+    SERVER_URL = f"http://{ip}:{args.porta}"
 
-        # Configurar SSL
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(cert_path, key_path)
+    print(f"\n  === Catalogacao por Foto ===")
+    print(f"  No celular, acesse: {SERVER_URL}")
+    print(f"  Para parar: Ctrl+C\n")
 
-        uvicorn.run(app, host="0.0.0.0", port=args.porta, ssl_certfile=cert_path, ssl_keyfile=key_path)
+    uvicorn.run(app, host=args.host, port=args.porta)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ tabelas_extraidas/
 *.csv
 saida/
 output/
-
+data/
 # Python
 __pycache__/
 *.pyc

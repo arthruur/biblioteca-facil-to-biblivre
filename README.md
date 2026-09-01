@@ -1,105 +1,94 @@
 # biblioteca-facil-to-biblivre
 
-Engenharia reversa do formato de backup `.bkp` do software **Biblioteca
-Fácil**, com o objetivo de migrar o acervo e a circulação (leitores,
-empréstimos, reservas) para o **BibLivre 5**.
+Migração **Biblioteca Fácil → Biblivre 5** (14.880 obras / 16.251 exemplares validados) + **MVP de Catalogação por ISBN** com lote, ZXing e export integrado.
 
-> Status: 🚧 em andamento. Ver [docs/ROADMAP.md](docs/ROADMAP.md) para o
-> que já funciona e o que falta.
+> **Status:** Migração validada byte-a-byte (`docs/IMPORTACAO_BIBLIVRE.md`). MVP em `https://<ip>:8000` após `docker compose up` — ver abaixo.
 
-## Por que isso existe
+## 1) MVP Catalogação ISBN — o que entrega
 
-O Biblioteca Fácil não documenta o formato do seu backup, e não existe
-exportação oficial para MARC21/ISO 2709 (o formato que o BibLivre importa).
-Este repositório documenta o processo de descobrir o formato do zero —
-container, compressão e layout de registros — e as ferramentas resultantes
-para extrair os dados.
+Fluxo validado em campo (ex.: `9786559870530` → *2041*, Globo Livros via `BrasilAPI/CBL`):
 
-## O que já foi descoberto
+**Celular:** `Escanear` (ZXing `TRY_HARDER` EAN-13 em tempo real) → **Lote** (galeria que acumula, padrão scanner de documentos, debounce 2s) → clique para ver ficha completa (capa, descrição, ISBN, CDD/Cutter editáveis) e ajustar **Exemplares ×N** → **Foto** (fallback `scanFile`) → **Manual** (ISBN 10/13) → **Enviar lote para fila**
 
-- O `.bkp` é um **container proprietário** que empacota 16 tabelas (pares
-  `.dat`/`.idx`), comprimidas em blocos **zlib**.
-  Ver [docs/FORMATO_BKP.md](docs/FORMATO_BKP.md).
-- Os `.dat` **não são Paradox**, apesar da cara de aplicativo Delphi da
-  época. São um formato próprio — e, felizmente, **auto-descritivo**:
-  cada arquivo traz no cabeçalho um catálogo com nome, tipo, tamanho e
-  offset de todos os seus campos. Com isso, as **16 tabelas estão
-  completamente decodificadas**. Ver [docs/TABELAS.md](docs/TABELAS.md).
+**Fila (`/fila`):** lista Lote + Fila, **Exportar para Biblivre 5** gera `data/export/obras_<ts>.mrc` + `exemplares_<ts>.csv` via `scripts/gerar_marc.py` (`chave_obra` conservadora) e, com senha, insere direto em `single.biblio_records/holdings` (`scripts/inserir_obras.py` / `inserir_exemplares.py` com `Bib.<ano>.<seq>` continuando de `666`). Depois **Administração → Manutenção → Reindexar**.
 
-## Uso rápido
+Fallback robusto: ZXing falha 5× → Tesseract.js (OCR-B abaixo do código, `eng` `psm 7`, valida dígito ISBN-13).
+
+```
+Celular (ZXing) --ISBN--> /api/lote --lookup--> Google Books → BrasilAPI → Open Library
+                          --quantidade--> /api/fila/exportar-biblivre --gerar_marc--> Biblivre 5
+```
+
+## 2) Implantação rápida (recomendado: container)
+
+**Pré-requisitos:** Docker + Docker Compose.
+
+```bash
+# 1. Build + sobe (gera cert auto-assinado em data/certs)
+docker compose up --build
+
+# 2. Abra no celular (mesma rede)
+# https://<IP-DO-PC>:8000  (aceite o certificado)
+# Teste: Escanear → aponte para código de barras → Lote → Enviar → /fila → Exportar
+```
+
+* Imagem `python:3.11-slim` + `tesseract-ocr` + `tesseract-ocr-por` + `libgl1` (`Dockerfile:6`). `TESSERACT_CMD=/usr/bin/tesseract` no Linux (fallback do path Windows).
+* `docker-compose.yml` sobe `app:8000` + `postgres:15` demo (remova `db` e aponte `PGHOST` para o Postgres do Biblivre em produção).
+* Volumes: `./data:/app/data` persiste `fila/*.json` e `export/*.mrc`.
+
+**Sem Docker (dev local):**
+```bash
+pip install -r requirements.txt  # opencv, pymarc, fastapi, uvicorn, qrcode, psycopg2, pytesseract
+# Instale Tesseract + por.traineddata (Windows: tesseract-ocr-w64-setup + por.traineddata em tessdata)
+python scripts/servidor.py  # https://0.0.0.0:8000
+# HTTP apenas em localhost:
+python scripts/servidor.py --sem-ssl --porta 8000
+```
+
+**Produção B2G:** atrás de Nginx com Let's Encrypt (troca cert auto-assinado), `PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD` via env, `restart: unless-stopped`.
+
+## 3) Migração legada (uso rápido)
 
 ```bash
 pip install -r requirements.txt
 
-# 1. Descompacta o .bkp nas tabelas originais
-python scripts/extrair_bkp.py caminho/para/backup.bkp saida/
-
-# 2. Mostra o layout de todas as tabelas
+python scripts/extrair_bkp.py backup.bkp saida/
 python scripts/extrair_tabela.py saida/ --listar
-
-# 3. Exporta uma tabela qualquer para CSV
 python scripts/extrair_tabela.py saida/ T09_ACER.dat acervo.csv
-
-# 4. Gera o CSV consolidado (acervo + autores + editoras + idiomas...)
 python scripts/consolidar.py saida/ acervo_consolidado.csv
-
-# 5. Gera o MARC21/ISO 2709 + o CSV de exemplares
-python scripts/gerar_marc.py acervo_consolidado.csv obras.mrc
-
-# 6. Carrega os registros no banco do BibLivre (base principal)
-#    Sem --executar é só relatório; não escreve nada.
-python scripts/inserir_obras.py obras.mrc --executar
-#    -> agora Reindexe pela tela: Administração → Manutenção → base bibliográfica
-
-# 7. Cria os exemplares (holdings) no banco do BibLivre
+python scripts/gerar_marc.py acervo_consolidado.csv obras.mrc  # + exemplares.csv
+python scripts/inserir_obras.py obras.mrc --executar           # -> Reindexar
 python scripts/inserir_exemplares.py exemplares.csv --executar
-
-# 8. Carrega os leitores (cria os campos que faltam em users_fields)
-#    -> depois reinicie o Tomcat: UserFields/Translations são caches estáticos
-python scripts/inserir_leitores.py saida/ --executar --mapa-out saida/leitores_mapa.csv
-
-# 9. Carrega empréstimos, multas e reservas
+python scripts/inserir_leitores.py saida/ --executar           # -> reinicie Tomcat
 python scripts/inserir_emprestimos.py saida/ --executar
 ```
 
-`obras.mrc` é o MARC21/ISO 2709 do acervo; `exemplares.csv` é 1 linha por
-cópia física. A carga é feita **direto no banco** do BibLivre por dois
-motivos apurados no código-fonte: a importação pela tela não escala para
-~15 mil registros no heap padrão do Tomcat (256 MB) e não tem "mover todos"
-da base de trabalho para a principal; e a importação **não cria exemplares**
-— sem eles o acervo não pode ser emprestado. Todo o procedimento (com a
-validação byte a byte contra a tela) está em
-[docs/IMPORTACAO_BIBLIVRE.md](docs/IMPORTACAO_BIBLIVRE.md).
+Sem `--executar` é dry-run. Detalhe byte-a-byte e por que importação por arquivo não cria holdings em `docs/IMPORTACAO_BIBLIVRE.md`.
 
-## Estrutura
+## 4) Estrutura
 
 ```
 scripts/
-  extrair_bkp.py     descompacta o container .bkp
-  bf_tabela.py       leitor genérico (lê o layout do próprio cabeçalho)
-  extrair_tabela.py  exporta qualquer tabela para CSV
-  consolidar.py      join entre as tabelas → CSV pronto para virar MARC
-  gerar_marc.py      CSV → obras.mrc (ISO 2709) + exemplares.csv
-  inserir_obras.py   obras.mrc → biblio_records, no banco do BibLivre
-  inserir_exemplares.py
-                     exemplares.csv → biblio_holdings, no banco do BibLivre
-  inserir_leitores.py    T04_LEIT → users + users_values (+ campos novos)
-  inserir_emprestimos.py T13_MOVM/T11_MOVI/T15_RESE → lendings,
-                     lending_fines e reservations
-docs/
-  FORMATO_BKP.md          engenharia reversa do container .bkp
-  TABELAS.md              formato do cabeçalho e layout das 16 tabelas
-  IMPORTACAO_BIBLIVRE.md  o que o BibLivre 5 aceita, apurado no código
-  ROADMAP.md              o que falta até a importação no BibLivre
-  CATALOGACAO_POR_FOTO.md projeto da catalogação por foto da ficha CIP
+  extrair_bkp.py, bf_tabela.py, extrair_tabela.py, consolidar.py
+  gerar_marc.py, inserir_obras.py, inserir_exemplares.py, inserir_leitores.py, inserir_emprestimos.py
+  detectar_ficha.py, extrair_isbn.py, gerar_ficha_sintetica.py
+  servidor.py (140 linhas) + catalogacao/ (config, lookup, ficha, fila, export, rede, cert)
+static/ index.html (scanner Lote + modal + Foto/Manual)  fila.html (Exportar)
+docs/  FORMATO_BKP.md  TABELAS.md  IMPORTACAO_BIBLIVRE.md  ROADMAP.md  CATALOGACAO_POR_FOTO.md  NOTA_SESSAO_2026-09-01.md
+Dockerfile  docker-compose.yml
 ```
 
-## Aviso importante
+## 5) Estratégia de conteinerização (estado atual)
 
-Os dados extraídos de um backup real (nomes de leitores, usuários etc.)
-**não devem ser commitados** neste repositório — são dados pessoais. O
-`.gitignore` já exclui `.bkp`, `.csv` e tabelas extraídas por padrão.
+**Decisão:** containerizar **apenas o MVP** (app Python). Biblivre 5 permanece no instalador Windows/Java-Tomcat-Postgres (61 tabelas, restore `.b5bz` destrutivo) — não vale replicar no Compose para produção. Para demo, o `db` Postgres no compose simula o alvo.
 
-## Licença
+* Build leve: `python:3.11-slim` (~350MB com tesseract-por) vs `python:3.11` (~900MB).
+* `tesseract-ocr-por` já na imagem — sem download em runtime; mobile envia ISBN, OCR fica no device (Tesseract.js) exceto ficha CIP (server `por`).
+* Cert auto-assinado gerado em `data/certs` (volume persistido) — produção troca por volume de certs do Nginx.
+* Logs: `ConnectionResetError 10054` no Windows + HTTPS é inofensivo (Proactor fecha keep-alive).
 
-MIT — ver [LICENSE](LICENSE).
+Próximo passo infra: `ghcr.io` + `docker compose pull` na FPC, backup `pg_dump` diário de `single`.
+
+## Aviso
+
+Dados de backup real (`.bkp`, `.csv`, `data/fila/*.json`) são pessoais — `.gitignore` já exclui. Ver `LICENSE` (MIT).

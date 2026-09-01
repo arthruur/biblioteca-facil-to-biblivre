@@ -1,0 +1,12 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.pytest_cache
+data/*.bkp
+data/*.csv
+data/*.mrc
+data/export/*
+data/certs/*
+.venv
+venv

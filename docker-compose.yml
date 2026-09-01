@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./static:/app/static:ro
+    environment:
+      # Biblivre 5 — aponte para o Postgres real quando for inserir direto
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=biblivre4
+      - PGUSER=biblivre
+      - PGPASSWORD=abracadabra
+      - TESSERACT_CMD=/usr/bin/tesseract
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Postgres apenas para demo/teste do MVP sem Biblivre instalado
+  # Em produção aponte PGHOST para o Postgres do Biblivre e remova este serviço
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: biblivre4
+      POSTGRES_USER: biblivre
+      POSTGRES_PASSWORD: abracadabra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U biblivre -d biblivre4"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -177,3 +177,15 @@ Optamos por ISO 2709 (MARC21, codificado em UTF-8) porque existe uma
 biblioteca Python madura (`pymarc`) que cuida de toda a formatação
 binária exigida pelo padrão — reduz a superfície de erro comparado a
 montar o XML MARCXML à mão.
+
+## Projeto derivado: catalogar livro novo por foto
+
+A migração cobre o acervo que já existia. Para o livro que entra depois,
+há um projeto separado — fotografar a **ficha CIP** impressa na página de
+crédito e chegar a um registro pré-preenchido para revisão, reaproveitando
+o `gerar_marc.py` e a carga já validada.
+
+Está em fase de **projeto, não de implementação**: decisões de arquitetura,
+o que é fato apurado no fonte, o que ainda é hipótese e as três métricas
+que a fase 1 precisa medir estão em
+[CATALOGACAO_POR_FOTO.md](CATALOGACAO_POR_FOTO.md).

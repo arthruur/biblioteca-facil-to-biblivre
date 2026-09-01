@@ -91,6 +91,7 @@ docs/
   TABELAS.md              formato do cabeçalho e layout das 16 tabelas
   IMPORTACAO_BIBLIVRE.md  o que o BibLivre 5 aceita, apurado no código
   ROADMAP.md              o que falta até a importação no BibLivre
+  CATALOGACAO_POR_FOTO.md projeto da catalogação por foto da ficha CIP
 ```
 
 ## Aviso importante

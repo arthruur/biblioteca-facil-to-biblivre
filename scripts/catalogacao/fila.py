@@ -19,6 +19,8 @@ def adicionar_fila(dados: dict) -> dict:
         "ano": dados.get("ano", ""),
         "cdd": dados.get("cdd", ""),
         "cutter": dados.get("cutter", ""),
+        "quantidade": int(dados.get("quantidade") or dados.get("exemplares") or 1),
+        "exemplares": int(dados.get("quantidade") or dados.get("exemplares") or 1),
         "confirmado": True,
     }
     with fila_lock:
@@ -34,18 +36,19 @@ def listar_fila() -> dict:
         return {"itens": list(fila), "total": len(fila)}
 
 
-# --- Carrinho: acumula ISBNs antes do envio (padrao scanner de documentos) ---
+# --- Lote (alias carrinho): acumula ISBNs; mesmo ISBN soma exemplares ---
 
 def carrinho_adicionar(isbn: str) -> dict:
-    """Adiciona ISBN ao carrinho com deduplicacao. Faz lookup imediato."""
+    """Adiciona ISBN ao lote. Se ja existe, incrementa quantidade (exemplares)."""
     limpo = isbn.replace("-", "").replace(" ", "").strip()
     with carrinho_lock:
         for item in carrinho:
             if item.get("isbn") == limpo:
-                return {"status": "duplicado", "isbn": limpo, "mensagem": "Ja no carrinho"}
+                item["quantidade"] = int(item.get("quantidade") or 1) + 1
+                item["exemplares"] = item["quantidade"]
+                return {"status": "incrementado", "isbn": limpo, "item": item, "total": len(carrinho), "quantidade": item["quantidade"]}
         dados = buscar_metadados(limpo)
-        # Normaliza: mesmo se nao_encontrado, guarda para revisao
-        entry = {"isbn": limpo, **dados, "adicionado_em": datetime.now().isoformat()}
+        entry = {"isbn": limpo, **dados, "quantidade": 1, "exemplares": 1, "adicionado_em": datetime.now().isoformat()}
         carrinho.append(entry)
         return {"status": "ok", "item": entry, "total": len(carrinho)}
 
@@ -53,6 +56,18 @@ def carrinho_adicionar(isbn: str) -> dict:
 def carrinho_listar() -> dict:
     with carrinho_lock:
         return {"itens": list(carrinho), "total": len(carrinho)}
+
+
+def carrinho_atualizar_quantidade(isbn: str, quantidade: int) -> dict:
+    limpo = isbn.replace("-", "").strip()
+    q = max(1, int(quantidade))
+    with carrinho_lock:
+        for item in carrinho:
+            if item.get("isbn") == limpo:
+                item["quantidade"] = q
+                item["exemplares"] = q
+                return {"status": "ok", "isbn": limpo, "quantidade": q, "item": item}
+        return {"status": "nao_encontrado", "isbn": limpo}
 
 
 def carrinho_remover(isbn: str) -> dict:

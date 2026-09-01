@@ -18,9 +18,9 @@ h2{font-size:14px;color:#3498db;text-transform:uppercase;letter-spacing:1px;marg
 .card-meta{font-size:12px;color:#aaa}
 .card-isbn{font-family:monospace;font-size:11px;color:#2ecc71}
 .badge{font-size:10px;background:rgba(52,152,219,.15);color:#3498db;padding:2px 6px;border-radius:4px}
-#export-bar{position:sticky;bottom:0;background:#0f2040;border-top:2px solid #3498db;padding:12px;display:flex;gap:8px;justify-content:center}
-#export-bar button{padding:12px 20px;border:none;border-radius:10px;font-weight:600;cursor:pointer}
-#btn-export{background:#2ecc71;color:#fff}
+#export-bar{position:sticky;bottom:0;background:#0f2040;border-top:2px solid #3498db;padding:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#export-bar button{padding:14px 20px;border:none;border-radius:10px;font-weight:600;cursor:pointer;min-width:140px}
+#btn-export{background:#2ecc71;color:#fff;flex:1;max-width:320px}
 #btn-export:disabled{background:#555}
 #btn-limpar{background:#555;color:#ccc}
 #empty{color:#666;text-align:center;padding:40px 20px}
@@ -54,16 +54,21 @@ async function carregar(){
     const cdiv=document.getElementById('carrinho');
     cdiv.innerHTML=cr.itens.length? cr.itens.map(i=>card(i)).join('') : '<div id="empty">Lote vazio — escaneie na página inicial</div>';
     const fdiv=document.getElementById('fila');
-    fdiv.innerHTML=fr.itens.length? fr.itens.map(i=>card(i)).join('') : '<div id="empty">Fila vazia</div>';
-    document.getElementById('btn-export').disabled=(cr.total===0 && fr.total===0);
+    fdiv.innerHTML=fr.itens.length? fr.itens.map(i=>card(i)).join('') : '<div id="empty">Fila vazia — envie o lote primeiro</div>';
+    const total=(cr.total||0)+(fr.total||0);
+    const btn=document.getElementById('btn-export');
+    btn.disabled=total===0;
+    btn.textContent= total>0 ? `Exportar para Biblivre 5 (${total})` : 'Exportar para Biblivre 5';
 }
 function card(i){
+    const q=i.quantidade||i.exemplares||1;
+    const badgeQ=q>1?` <span class="badge" style="background:#f39c12;color:#fff">×${q} ex</span>`:'';
     return `<div class="card">
         <img src="${i.capa||''}" onerror="this.style.visibility='hidden'">
         <div class="card-info">
             <div class="card-titulo">${i.titulo||'—'}</div>
             <div class="card-meta">${i.autor||'—'} • ${i.editora||''} ${i.ano||''}</div>
-            <div class="card-isbn">${i.isbn||''} <span class="badge">${i.fonte||''}</span></div>
+            <div class="card-isbn">${i.isbn||''} <span class="badge">${i.fonte||''}</span>${badgeQ}</div>
         </div>
     </div>`;
 }

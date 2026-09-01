@@ -26,6 +26,7 @@ from catalogacao.export import exportar_itens
 from catalogacao.fila import (
     adicionar_fila,
     carrinho_adicionar,
+    carrinho_atualizar_quantidade,
     carrinho_enviar,
     carrinho_limpar,
     carrinho_listar,
@@ -140,6 +141,17 @@ async def lote_get():
 @app.get("/api/carrinho")
 async def carrinho_get():
     return carrinho_listar()
+
+
+@app.put("/api/lote/{isbn}")
+async def lote_put(isbn: str, dados: dict):
+    q = int(dados.get("quantidade") or dados.get("exemplares") or 1)
+    return await _to_thread(carrinho_atualizar_quantidade, isbn, q)
+
+
+@app.put("/api/carrinho/{isbn}")
+async def carrinho_put(isbn: str, dados: dict):
+    return await _to_thread(carrinho_atualizar_quantidade, isbn, int(dados.get("quantidade") or 1))
 
 
 @app.delete("/api/lote/{isbn}")

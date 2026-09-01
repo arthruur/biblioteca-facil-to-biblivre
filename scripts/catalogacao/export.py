@@ -80,7 +80,14 @@ def exportar_itens(itens: list[dict], executar: bool = False, db_args: dict | No
     except Exception:
         pass
 
-    linhas = [_item_para_linha(it, base + i) for i, it in enumerate(itens)]
+    # Expandir quantidade: mesmo ISBN com N exemplares vira N linhas (mesma obra, N holdings)
+    linhas: list[dict] = []
+    n = base
+    for it in itens:
+        qtd = int(it.get("quantidade") or it.get("exemplares") or 1)
+        for _ in range(max(1, qtd)):
+            linhas.append(_item_para_linha(it, n))
+            n += 1
 
     # Agrupar por obra (mesma chave do gerar_marc) — cada ISBN distinto vira obra
     import gerar_marc as _gm  # type: ignore
@@ -186,7 +193,7 @@ def exportar_itens(itens: list[dict], executar: bool = False, db_args: dict | No
                 # passa senha via env para nao expor em ps, se nao houver db_args usa PGPASSWORD ja existente
                 if senha:
                     env["PGPASSWORD"] = senha
-                cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "inserir_exemplares.py"), str(csv_path), "--executar"]
+                cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "inserir_exemplares.py"), str(csv_path), "--executar", "--permitir-existentes"]
                 if senha and "--senha" in open(str(Path(__file__).resolve().parents[1] / "inserir_exemplares.py"), encoding="utf-8").read():
                     cmd += ["--senha", senha]
                 subprocess.run(cmd, check=False, env=env)

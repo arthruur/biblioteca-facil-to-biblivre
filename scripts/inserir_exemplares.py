@@ -216,12 +216,13 @@ def montar_exemplar(linha, loc_biblio, tombo, biblioteca, tipo_aquisicao):
     return rec, location_d
 
 
-def gerar_tombos(linhas, prefixo, ano_fixo):
+def gerar_tombos(linhas, prefixo, ano_fixo, contador_inicial=None):
     """
     Um tombo `<prefixo>.<ano>.<contador>` por linha, com contador por ano —
     mesmo formato de HoldingBO.getNextAccessionNumber.
+    Se contador_inicial for dado, continua de onde parou (para lotes incrementais).
     """
-    contador = Counter()
+    contador = Counter(contador_inicial or {})
     tombos = []
     anos_invalidos = []
 
@@ -335,8 +336,17 @@ def main():
             cur.execute("SELECT accession_number FROM biblio_holdings")
             tombos_existentes = {t for (t,) in cur.fetchall()}
 
+            # continua contador por ano a partir do existente (lotes incrementais)
+            contador_inicial = Counter()
+            for t in tombos_existentes:
+                m = re.match(rf"{re.escape(prefixo)}\.(\d{{4}})\.(\d+)", t)
+                if m:
+                    ano_e, num = int(m.group(1)), int(m.group(2))
+                    if num > contador_inicial[ano_e]:
+                        contador_inicial[ano_e] = num
+
         tombos, por_ano, anos_invalidos = gerar_tombos(
-            linhas, prefixo, args.ano_tombo)
+            linhas, prefixo, args.ano_tombo, contador_inicial)
 
         colisoes = sorted(set(tombos) & tombos_existentes)
         if colisoes:

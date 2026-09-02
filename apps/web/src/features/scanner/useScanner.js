@@ -47,6 +47,10 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
   const ultimaLeitura = useRef(0); const ultimoOcr = useRef(0); const ocrRodando = useRef(false)
   const ultimoCandidatoRef = useRef(null); const candidatoEstavelInicioRef = useRef(0); const ultimoFullScanRef = useRef(0)
   const pausadoRef = useRef(false); const passoPedidoRef = useRef(false)
+  // Cada abertura de câmera tem sua geração: `abrirCamera` é assíncrono e a tela
+  // pode desmontar (ou o StrictMode remontar) no meio. Sem isso, a abertura que
+  // chega atrasada instala a si mesma sobre a atual e deixa um stream aceso.
+  const geracaoRef = useRef(0)
   const etapasRef = useRef(ETAPAS_PADRAO); const maxCaixasRef = useRef(3)
   const desmonitorarQuadroRef = useRef(null)
   const aoLerRef = useRef(aoLer); aoLerRef.current = aoLer
@@ -94,6 +98,7 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
   }, [entregar])
 
   const parar = useCallback(async () => {
+    geracaoRef.current += 1
     ativoRef.current = false; clearTimeout(lacoRef.current); lacoRef.current = null
     leitorRef.current?.stop?.().catch(() => {})
     desmonitorarQuadroRef.current?.()
@@ -109,11 +114,15 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
 
   const iniciar = useCallback(async () => {
     if (ativoRef.current) return
+    const geracao = geracaoRef.current + 1
+    geracaoRef.current = geracao
+    const minha = () => geracaoRef.current === geracao && ativoRef.current
     setErroCamera(''); ativoRef.current = true; anunciar('Abrindo a câmera…')
     try {
       const formatos = await formatosNativos()
       if (formatos) {
         const { stream, video, track } = await abrirCamera(ELEMENTO)
+        if (!minha()) { fecharCamera(stream, video, ELEMENTO); return }
         streamRef.current = stream; videoRef.current = video; trackRef.current = track
         const caps = await ajustarCamera(track)
         setRecursos(caps); setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null); setMotor('nativo')
@@ -121,6 +130,7 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
         rodarLaco(criarDetectorNativo(formatos))
       } else {
         const { instancia, video } = await iniciarLeitorReserva(ELEMENTO, RESTRICOES_VIDEO, (t) => entregar(t, 'codigo'))
+        if (!minha()) { instancia?.stop?.().catch(() => {}); return }
         leitorRef.current = instancia; videoRef.current = video
         // O motor de reserva abre a câmera por dentro: a faixa é recuperada do
         // próprio <video> para que lanterna, zoom e foco também existam aqui.
@@ -133,6 +143,7 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
         monitorarQuadro(video)
         setMotor('zxing')
       }
+      if (!minha()) return
       setEscaneando(true); anunciar('Aponte para o código de barras')
     } catch (e) {
       parar(); setErroCamera(formatarErroCamera(e))

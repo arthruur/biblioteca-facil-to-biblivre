@@ -125,8 +125,10 @@ def _montar_frontend(app: FastAPI) -> None:
     """
     Serve o bundle do Vite, com fallback de SPA.
 
-    `/` e `/fila` são rotas do cliente, não do servidor: as duas devolvem o
-    mesmo index.html e o React decide o que renderizar.
+    `/`, `/fila` e `/scanner-debug` são rotas do cliente, não do servidor: as
+    três devolvem o mesmo index.html e o React decide o que renderizar. A lista
+    é explícita de propósito — um catch-all engoliria erro de digitação em
+    `/api/...` e devolveria HTML onde o celular espera JSON.
     """
     index = WEB_DIST / "index.html"
 
@@ -136,6 +138,7 @@ def _montar_frontend(app: FastAPI) -> None:
 
     @app.get("/", include_in_schema=False)
     @app.get("/fila", include_in_schema=False)
+    @app.get("/scanner-debug", include_in_schema=False)
     async def spa():
         if not index.exists():
             return HTMLResponse(_sem_build(), status_code=503)

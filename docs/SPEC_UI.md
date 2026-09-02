@@ -126,6 +126,60 @@ Quando o ISBN já está no acervo, o modal abre com um aviso verde no topo:
 - servidor fora do ar no meio de um lote (o lote em memória do navegador
   sobrevive; o envio é que falha)
 
+### A bandeja começa recolhida
+
+A tela abre com o visor grande e o lote reduzido a uma linha de resumo
+("3 títulos · 5 ex") com um `+` para abrir a galeria de cards. Motivo: o gesto
+que a tela serve é apontar a câmera, e a galeria só interessa na conferência,
+não entre um bipe e o outro. Recolhida, a barra do lote ganha um **Enviar**
+compacto — recolher nunca pode esconder o envio de um lote que existe. O rodapé
+com a entrada manual de ISBN e as mensagens de erro continua visível nos dois
+estados.
+
+### Lanterna
+
+O visor tem um botão de lanterna sempre presente enquanto a câmera está aberta
+— inclusive quando `getCapabilities()` não anuncia `torch`, porque muitos
+aparelhos anunciam o recurso como lista (`[false, true]`), só o expõem em
+`getSettings()`, ou simplesmente mentem. A tentativa é barata e o resultado é
+conferido lendo `torch` de volta: se a lanterna não acendeu de verdade, a barra
+de status diz "A lanterna não respondeu neste aparelho" em vez de deixar um
+botão aceso mentindo.
+
+---
+
+## 3.1 Bancada do scanner — `/scanner-debug`
+
+Tela de conferência, fora do fluxo e fora da barra de navegação: a mesma câmera
+da tela de bipar, sem lote e sem envio. Existe porque "o scanner não lê" não é
+sintoma acionável — o laço tem quatro etapas em sequência e cada uma falha por
+motivo próprio:
+
+| # | Etapa | Falha típica |
+|---|---|---|
+| 1 | **Quadro** — o `<video>` entrega pixels (`videoWidth`, `readyState`) | permissão, contexto inseguro, aba em segundo plano |
+| 2 | **Candidatos** — ROI acha o quadrado das barras num canvas de 400px | código pequeno, torto, ou contraste baixo |
+| 3 | **Decodificação** — `BarcodeDetector` lê o recorte (ou o quadro cheio, na salvaguarda) | foco, resolução, formato fora do EAN-13 |
+| 4 | **Classificação** — o texto lido é ISBN, EAN de preço ou lixo | código de preço na contracapa |
+
+A tela mostra, ao vivo: contador por etapa, passos por segundo, resolução do
+quadro, densidade do melhor candidato, os últimos códigos **brutos** com o
+veredito da classificação e uma frase apontando a primeira etapa que travou.
+
+Garantias que ela precisa manter:
+
+- **etapas 2 e 3 desligáveis em separado** — é o teste que responde se a ROI
+  está atrapalhando ou salvando;
+- **congelar e andar de passo em passo**, sem fechar a câmera;
+- **espelhar o recorte** que foi para o decodificador — quadradinho no lugar
+  certo com recorte borrado é foco, não detecção;
+- **não gravar nada**: o que é lido só aparece na lista da própria tela.
+
+Os quadradinhos das detecções são projetados no recorte real do vídeo (o visor
+desenha a câmera com `object-fit: cover`, então coordenada do quadro não é
+porcentagem do elemento). Sem essa projeção eles pousam ao lado do código, e
+quem está depurando culpa o scanner por um erro de desenho.
+
 ---
 
 ## 4. Tela do PC — `/fila`

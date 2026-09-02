@@ -5,7 +5,9 @@ import {
   ajustarCamera,
   alternarLanterna,
   aplicarZoom,
+  detectarLanterna,
   fecharCamera,
+  obterTrackDoVideo,
 } from '../camera.js'
 
 describe('core/camera', () => {
@@ -89,5 +91,53 @@ describe('core/camera', () => {
     assert.equal(videoTrackParada, true)
     assert.equal(mockVideo.srcObject, null)
   })
-})
 
+  test('detectarLanterna aceita os três jeitos de anunciar torch', () => {
+    assert.equal(detectarLanterna({ getCapabilities: () => ({ torch: true }) }), true)
+    assert.equal(
+      detectarLanterna({ getCapabilities: () => ({ torch: [false, true] }) }),
+      true,
+      'Android costuma anunciar torch como lista'
+    )
+    assert.equal(
+      detectarLanterna({ getCapabilities: () => ({}), getSettings: () => ({ torch: false }) }),
+      true,
+      'sem capabilities, torch em settings já basta'
+    )
+    assert.equal(detectarLanterna({ getCapabilities: () => ({ torch: false }) }), false)
+    assert.equal(detectarLanterna({}), false)
+    assert.equal(detectarLanterna(null), false)
+  })
+
+  test('alternarLanterna devolve false quando o aparelho aceita e não acende', async () => {
+    const mentiroso = {
+      async applyConstraints() {},
+      getSettings: () => ({ torch: false }),
+    }
+    assert.equal(await alternarLanterna(mentiroso, true), false)
+
+    const honesto = {
+      torch: false,
+      async applyConstraints(c) { this.torch = c.advanced[0].torch },
+      getSettings() { return { torch: this.torch } },
+    }
+    assert.equal(await alternarLanterna(honesto, true), true)
+    assert.equal(honesto.torch, true)
+    assert.equal(await alternarLanterna(honesto, false), true)
+    assert.equal(honesto.torch, false)
+  })
+
+  test('alternarLanterna devolve false quando a restrição é recusada', async () => {
+    const recusa = { async applyConstraints() { throw new Error('OverconstrainedError') } }
+    assert.equal(await alternarLanterna(recusa, true), false)
+  })
+
+  test('obterTrackDoVideo recupera a faixa que o motor de reserva abriu', () => {
+    const faixa = { id: 'traseira' }
+    const video = { srcObject: { getVideoTracks: () => [faixa] } }
+    assert.equal(obterTrackDoVideo(video), faixa)
+    assert.equal(obterTrackDoVideo({ srcObject: { getVideoTracks: () => [] } }), null)
+    assert.equal(obterTrackDoVideo({}), null)
+    assert.equal(obterTrackDoVideo(null), null)
+  })
+})

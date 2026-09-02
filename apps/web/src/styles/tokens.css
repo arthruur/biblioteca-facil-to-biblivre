@@ -1,0 +1,173 @@
+/*
+ * Design tokens.
+ *
+ * Duas telas, duas posturas físicas (docs/SPEC_UI.md §1): de pé na estante com
+ * o celular, e sentado no PC revisando. O sistema é um só; o que muda é a
+ * densidade — daí `--toque-min`, que só a tela do celular usa.
+ *
+ * As cores de destino são o vocabulário mais importante da interface e não são
+ * decorativas: roxo = nasce ficha nova, verde = só exemplar, âmbar = não deu
+ * para verificar. O usuário aprende essas três cores no primeiro lote e depois
+ * lê a tela inteira de relance por elas.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- Escala tipográfica --- */
+  --fonte: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fonte-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --txt-xs: 0.6875rem;   /* 11px — metadado, fonte do lookup */
+  --txt-sm: 0.8125rem;   /* 13px — corpo secundário, células de tabela */
+  --txt-base: 0.9375rem; /* 15px — corpo */
+  --txt-md: 1.0625rem;   /* 17px — título de card */
+  --txt-lg: 1.375rem;    /* 22px — número dos indicadores */
+  --txt-xl: 2rem;        /* 32px — número grande */
+
+  --peso-normal: 400;
+  --peso-medio: 500;
+  --peso-forte: 600;
+  --peso-max: 700;
+
+  /* --- Espaçamento: escala de 4px --- */
+  --e1: 0.25rem;
+  --e2: 0.5rem;
+  --e3: 0.75rem;
+  --e4: 1rem;
+  --e5: 1.5rem;
+  --e6: 2rem;
+  --e7: 3rem;
+
+  --raio-sm: 6px;
+  --raio: 10px;
+  --raio-lg: 14px;
+  --raio-full: 999px;
+
+  /* Alvo mínimo de toque no celular. Quem está de pé segurando um livro não
+     acerta um botão de 32px. */
+  --toque-min: 48px;
+
+  --transicao: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- Paleta base (tema claro) --- */
+  --fundo: #f7f8fa;
+  --superficie: #ffffff;
+  --superficie-2: #f0f2f5;
+  --superficie-3: #e4e7ec;
+  --borda: #dcdfe5;
+  --borda-forte: #b9bfc9;
+
+  --texto: #16181d;
+  --texto-2: #565d6b;
+  --texto-3: #868d99;
+
+  --acento: #2f5fd8;
+  --acento-suave: #eaf0fe;
+  --acento-texto: #ffffff;
+
+  /* Destino no BibLivre — o coração do vocabulário visual */
+  --nova: #6d3fd4;          /* obra nova: nasce ficha */
+  --nova-suave: #f0eafc;
+  --nova-borda: #d5c4f5;
+
+  --existente: #17795e;     /* já no acervo: só exemplar */
+  --existente-suave: #e6f5f0;
+  --existente-borda: #a8ddcb;
+
+  --alerta: #a86609;        /* não verificado / precisa de atenção */
+  --alerta-suave: #fdf3e2;
+  --alerta-borda: #f0d5a4;
+
+  --erro: #c0392b;
+  --erro-suave: #fdeceb;
+  --erro-borda: #f3c0bb;
+
+  --sombra-sm: 0 1px 2px rgba(16, 18, 23, 0.06);
+  --sombra: 0 2px 8px rgba(16, 18, 23, 0.08);
+  --sombra-lg: 0 8px 28px rgba(16, 18, 23, 0.14);
+  --sombra-modal: 0 24px 64px rgba(16, 18, 23, 0.28);
+
+  /* O visor da câmera é preto em qualquer tema: é vídeo, não interface. */
+  --visor: #0b0d12;
+  --visor-texto: #e8eaee;
+  --visor-texto-2: #9aa2b1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) {
+    --fundo: #101319;
+    --superficie: #171b23;
+    --superficie-2: #1e232d;
+    --superficie-3: #272d39;
+    --borda: #2c323e;
+    --borda-forte: #454d5c;
+
+    --texto: #e9ecf1;
+    --texto-2: #a5adbb;
+    --texto-3: #767e8c;
+
+    --acento: #6d95f5;
+    --acento-suave: #1a2542;
+    --acento-texto: #0d1017;
+
+    --nova: #ab8bf0;
+    --nova-suave: #241a3d;
+    --nova-borda: #40315f;
+
+    --existente: #4bc59d;
+    --existente-suave: #102c25;
+    --existente-borda: #1f4b3e;
+
+    --alerta: #e3a850;
+    --alerta-suave: #2e2413;
+    --alerta-borda: #52401f;
+
+    --erro: #f0776a;
+    --erro-suave: #331917;
+    --erro-borda: #5c2b27;
+
+    --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --sombra: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --sombra-lg: 0 8px 28px rgba(0, 0, 0, 0.55);
+    --sombra-modal: 0 24px 64px rgba(0, 0, 0, 0.7);
+  }
+}
+
+:root[data-tema='escuro'] {
+  --fundo: #101319;
+  --superficie: #171b23;
+  --superficie-2: #1e232d;
+  --superficie-3: #272d39;
+  --borda: #2c323e;
+  --borda-forte: #454d5c;
+
+  --texto: #e9ecf1;
+  --texto-2: #a5adbb;
+  --texto-3: #767e8c;
+
+  --acento: #6d95f5;
+  --acento-suave: #1a2542;
+  --acento-texto: #0d1017;
+
+  --nova: #ab8bf0;
+  --nova-suave: #241a3d;
+  --nova-borda: #40315f;
+
+  --existente: #4bc59d;
+  --existente-suave: #102c25;
+  --existente-borda: #1f4b3e;
+
+  --alerta: #e3a850;
+  --alerta-suave: #2e2413;
+  --alerta-borda: #52401f;
+
+  --erro: #f0776a;
+  --erro-suave: #331917;
+  --erro-borda: #5c2b27;
+
+  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sombra: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --sombra-lg: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --sombra-modal: 0 24px 64px rgba(0, 0, 0, 0.7);
+}

@@ -1,0 +1,90 @@
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html,
+body,
+#raiz {
+  height: 100%;
+}
+
+body {
+  font-family: var(--fonte);
+  font-size: var(--txt-base);
+  line-height: 1.5;
+  color: var(--texto);
+  background: var(--fundo);
+  -webkit-font-smoothing: antialiased;
+  /* O celular fica em modo retrato com a mão ocupada segurando o livro: um
+     "puxar para atualizar" acidental no meio de um lote perderia o ritmo. */
+  overscroll-behavior-y: contain;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+a {
+  color: var(--acento);
+}
+
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  border-radius: var(--raio-sm);
+}
+
+/* Quem pediu menos movimento não deveria ver o card do lote "pular" a cada
+   bipe — mas o feedback de que o bipe funcionou continua, pela vibração e
+   pela mudança de estado. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- utilitários mínimos --- */
+
+.mono {
+  font-family: var(--fonte-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.so-leitor-de-tela {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.rolagem-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}

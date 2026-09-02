@@ -1,18 +1,28 @@
 """
-A aplicação FastAPI: monta os routers e serve as telas.
+A aplicação FastAPI: monta os routers e serve o frontend buildado.
 
 Este arquivo não tem lógica de domínio — só composição. Toda regra mora nos
 pacotes (`biblio.biblivre`, `biblio.catalogacao`), que também são o que os CLIs
 de migração usam. Se aparecer regra de negócio aqui, ela está no lugar errado.
 """
 
+import os
+from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from biblio.catalogacao import config
 from biblio.catalogacao.fila import carregar_do_disco
 
 from .routers import acervo, catalogacao, fila, sistema
+
+# O bundle do Vite. Em dev o front roda no dev server (porta 5173) e fala com
+# esta API por proxy, então a pasta pode não existir — a API sobe do mesmo jeito.
+# No container o pacote não fica dentro do repositório, daí o override por env.
+WEB_DIST = Path(os.environ.get("BIBLIO_WEB_DIST")
+                or (config.ROOT / "apps" / "web" / "dist"))
 
 DESCRICAO = """
 API do sistema de gestão de acervo.
@@ -47,28 +57,39 @@ def create_app() -> FastAPI:
     app.include_router(acervo.router, prefix="/api")
     app.include_router(sistema.router, prefix="/api")
 
-    _montar_telas(app)
+    _montar_frontend(app)
     return app
 
 
-def _pagina(nome: str, substituir: dict | None = None) -> HTMLResponse:
-    arq = config.ROOT / "static" / nome
-    if not arq.exists():
-        return HTMLResponse(f"<h1>{nome} nao encontrado</h1>", status_code=404)
-    html = arq.read_text(encoding="utf-8")
-    for chave, valor in (substituir or {}).items():
-        html = html.replace(chave, valor)
-    return HTMLResponse(html)
+def _montar_frontend(app: FastAPI) -> None:
+    """
+    Serve o bundle do Vite, com fallback de SPA.
+
+    `/` e `/fila` são rotas do cliente, não do servidor: as duas devolvem o
+    mesmo index.html e o React decide o que renderizar.
+    """
+    index = WEB_DIST / "index.html"
+
+    if (WEB_DIST / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"),
+                  name="assets")
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/fila", include_in_schema=False)
+    async def spa():
+        if not index.exists():
+            return HTMLResponse(_sem_build(), status_code=503)
+        return FileResponse(index)
 
 
-def _montar_telas(app: FastAPI) -> None:
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    async def index():
-        return _pagina("index.html", {"{{SERVER_URL}}": config.SERVER_URL})
-
-    @app.get("/fila", response_class=HTMLResponse, include_in_schema=False)
-    async def fila_page():
-        return _pagina("fila.html")
+def _sem_build() -> str:
+    return """
+    <h1>Frontend não buildado</h1>
+    <p>A API está no ar — veja <a href="/docs">/docs</a>.</p>
+    <p>Para as telas, rode:</p>
+    <pre>cd apps/web &amp;&amp; npm install &amp;&amp; npm run build</pre>
+    <p>Ou, em desenvolvimento, <code>npm run dev</code> (porta 5173, com HMR).</p>
+    """
 
 
 def preparar() -> int:

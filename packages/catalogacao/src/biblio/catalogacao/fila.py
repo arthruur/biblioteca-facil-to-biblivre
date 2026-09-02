@@ -17,6 +17,8 @@ import re
 import threading
 from datetime import datetime
 
+from biblio.biblivre import acervo as _acervo
+
 from .config import FILA_DIR, carrinho, carrinho_lock, fila, fila_lock
 from .lookup import buscar_metadados
 
@@ -54,9 +56,7 @@ def _gravar(item: dict) -> None:
 def _consultar_acervo(isbn: str) -> dict | None:
     """Bloco "acervo" do item — silencioso se nao ha banco configurado."""
     try:
-        from .acervo import buscar
-
-        achado = buscar(isbn)
+        achado = _acervo.buscar(isbn)
     except Exception:
         return None
     if not achado:
@@ -241,9 +241,7 @@ def acao_em_lote(ids: list[str], acao: str) -> dict:
 def reconsultar_acervo() -> dict:
     """Reavalia todos os itens da fila contra o acervo (apos conectar o banco)."""
     try:
-        from .acervo import indice
-
-        indice(forcar=True)
+        _acervo.indice(forcar=True)
     except Exception as e:
         return {"status": "erro", "mensagem": str(e)}
     with fila_lock:

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biblio-biblivre-client"
+version = "0.1.0"
+description = "Cliente do BibLivre 5: obras, exemplares, leitores e circulacao no PostgreSQL"
+requires-python = ">=3.11"
+dependencies = [
+    "pymarc>=5.0",
+    "psycopg2-binary>=2.9",
+    "biblio-legado",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

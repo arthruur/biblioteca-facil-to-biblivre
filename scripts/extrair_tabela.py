@@ -1,29 +1,27 @@
 """
-Exporta qualquer tabela do Biblioteca Fácil para CSV, usando o layout
-declarado no próprio cabeçalho do `.dat` (ver scripts/bf_tabela.py).
+Exporta qualquer tabela do Biblioteca Fácil para CSV.
 
-Substitui os antigos `extrair_acervo.py` e `extrair_autores.py`, que
-dependiam de offsets descobertos à mão — e que, por causa disso, rotulavam
-o campo T09_SUBTITULO como se fosse o título.
-
-Uso:
     # lista as tabelas disponíveis e o layout de cada uma
-    python scripts/extrair_tabela.py pasta_das_tabelas --listar
+    python scripts/extrair_tabela.py saida/ --listar
 
     # exporta uma tabela
-    python scripts/extrair_tabela.py pasta_das_tabelas T09_ACER.dat acervo.csv
+    python scripts/extrair_tabela.py saida/ T09_ACER.dat acervo.csv
+
+O layout vem do cabeçalho do próprio `.dat` — nada de offset caçado à mão. Ver
+docs/TABELAS.md e `biblio.legado.tabela`.
 """
 
 import argparse
-import csv
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import bf_tabela as bf  # noqa: E402
+from biblio.legado import tabela
+
+from _comum import console_utf8
 
 
 def main():
+    console_utf8()
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("pasta", help="pasta com os .dat extraídos do .bkp")
     p.add_argument("tabela", nargs="?", help="ex.: T09_ACER.dat")
@@ -35,30 +33,18 @@ def main():
     args = p.parse_args()
 
     if args.listar or not args.tabela:
-        for tab in bf.carregar_todas(args.pasta).values():
+        for tab in tabela.carregar_todas(args.pasta).values():
             print(tab.resumo())
             print()
         return
 
-    tab = bf.carregar(args.pasta, args.tabela)
+    tab = tabela.carregar(args.pasta, args.tabela)
     if not tab.validar():
         print(f"aviso: layout de {args.tabela} não passou na validação",
               file=sys.stderr)
 
     saida = Path(args.saida or f"{Path(args.tabela).stem.lower()}.csv")
-    campos_data = {c.nome for c in tab.campos if c.tipo == bf.TIPO_DATE}
-    colunas = [c.nome for c in tab.campos]
-
-    n = 0
-    with open(saida, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=colunas)
-        w.writeheader()
-        for linha in tab.registros():
-            if args.datas_iso:
-                for nome in campos_data:
-                    linha[nome] = bf.data_para_iso(linha[nome])
-            w.writerow(linha)
-            n += 1
+    n = tabela.exportar_csv(tab, saida, datas_iso=args.datas_iso)
 
     print(f"{n:,} registros de {args.tabela} ({tab.descricao})")
     print(f"CSV gerado em: {saida.resolve()}")

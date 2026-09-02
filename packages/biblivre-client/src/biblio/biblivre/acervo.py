@@ -1,9 +1,8 @@
 """
-Consulta ao acervo ja existente no BibLivre 5.
+Consulta ao acervo ja existente no BibLivre 5: **este ISBN ja esta catalogado?**
 
-Serve a uma pergunta so: **este ISBN ja esta catalogado?** Se estiver, o livro
-escaneado nao vira registro bibliografico novo — vira exemplar a mais do
-registro que ja existe.
+Se estiver, o livro escaneado nao vira registro bibliografico novo — vira
+exemplar a mais do registro que ja existe.
 
 Por que um indice em memoria e nao um SELECT por ISBN
 -----------------------------------------------------
@@ -18,13 +17,14 @@ O casamento e por ISBN normalizado, com equivalencia ISBN-10 <-> ISBN-13: um
 livro gravado em 1998 com ISBN-10 casa com o codigo de barras EAN-13 de hoje.
 """
 
-import io
 import os
 import re
 import threading
 import time
 
-from .config import db_config
+from . import exemplares as _exemplares
+from . import marc as _marc
+from .conexao import conectar, db_config, testar_conexao  # noqa: F401  (reexport)
 
 # TTL do indice. Curto o bastante para refletir edicoes feitas pela tela do
 # BibLivre durante a sessao, longo o bastante para o scanner nao pagar a
@@ -72,71 +72,17 @@ def variantes(isbn: str) -> set[str]:
     return saida
 
 
-# --- conexao ---
-
-def conectar(sobrepor: dict | None = None):
-    """Abre conexao com o Postgres do BibLivre. Lanca em caso de falha."""
-    import psycopg2
-
-    cfg = {**db_config(), **(sobrepor or {})}
-    senha = cfg.get("senha") or os.environ.get("PGPASSWORD") or ""
-    if not senha:
-        raise RuntimeError("Senha do Postgres nao configurada (POST /api/db ou PGPASSWORD)")
-    con = psycopg2.connect(
-        host=cfg["host"], port=cfg["port"], dbname=cfg["dbname"],
-        user=cfg["user"], password=senha, connect_timeout=5,
-    )
-    con.autocommit = False
-    schema = cfg.get("schema") or "single"
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
-        raise RuntimeError(f"schema invalido: {schema!r}")
-    with con.cursor() as cur:
-        cur.execute(f'SET search_path TO "{schema}", public')
-    return con
-
-
-def testar_conexao(sobrepor: dict | None = None) -> dict:
-    """Valida credenciais e devolve contagens. Nao levanta excecao."""
-    try:
-        con = conectar(sobrepor)
-    except Exception as e:
-        return {"conectado": False, "erro": str(e)}
-    try:
-        with con.cursor() as cur:
-            cur.execute("SELECT count(*) FROM biblio_records WHERE database = 'main'")
-            (obras,) = cur.fetchone()
-            cur.execute("SELECT count(*) FROM biblio_holdings")
-            (exemplares,) = cur.fetchone()
-        return {"conectado": True, "erro": "", "obras": obras, "exemplares": exemplares}
-    except Exception as e:
-        return {"conectado": False, "erro": str(e)}
-    finally:
-        try:
-            con.close()
-        except Exception:
-            pass
-
-
 # --- indice ISBN -> registro ---
 
 def _varrer(con) -> dict[str, dict]:
-    from pymarc import MARCReader
-
     with con.cursor() as cur:
-        cur.execute("SELECT record_id, count(*) FROM biblio_holdings GROUP BY record_id")
-        holdings = dict(cur.fetchall())
+        holdings = _exemplares.contagem_global(cur)
         cur.execute("SELECT id, iso2709 FROM biblio_records WHERE database = 'main'")
         linhas = cur.fetchall()
 
     indice: dict[str, dict] = {}
     for rec_id, iso in linhas:
-        if not iso:
-            continue
-        try:
-            reg = next(MARCReader(io.BytesIO(iso.encode("utf-8")),
-                                  to_unicode=True, force_utf8=True), None)
-        except Exception:
-            continue
+        reg = _marc.do_iso2709(iso)
         if reg is None:
             continue
         campos_isbn = [f for f in reg.get_fields("020")]

@@ -1,16 +1,14 @@
 """Pipeline de ficha CIP: deteccao + OCR + extracao de ISBN/CDD/Cutter."""
 
-import sys
 import tempfile
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-# permitir import relativo quando rodado como pacote
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from detectar_ficha import encontrar_ficha, nitidez, preparar_para_ocr
-from extrair_isbn import extrair_isbn_do_texto
+from .config import aplicar_tesseract
+from .deteccao import encontrar_ficha, nitidez, preparar_para_ocr
+from .isbn import extrair_isbn_do_texto
 
 
 def processar_foto(bytes_foto: bytes) -> dict:
@@ -33,9 +31,9 @@ def processar_foto(bytes_foto: bytes) -> dict:
         tmp_path = tmp.name
     try:
         import pytesseract
-        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
         from PIL import Image
 
+        aplicar_tesseract(pytesseract)
         img_pil = Image.open(tmp_path)
         texto_ocr = pytesseract.image_to_string(img_pil, lang="por", config="--psm 6")
     except Exception as e:

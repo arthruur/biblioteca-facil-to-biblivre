@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biblio-catalogacao"
+version = "0.1.0"
+description = "Catalogacao por ISBN: lookup, lote, fila de revisao e export para o BibLivre"
+requires-python = ">=3.11"
+dependencies = [
+    "biblio-biblivre-client",
+    "pymarc>=5.0",
+]
+
+# `ficha` (OCR da ficha CIP) so e importado sob demanda: quem so usa o
+# codigo de barras nao precisa de OpenCV nem Tesseract instalados.
+[project.optional-dependencies]
+ocr = [
+    "opencv-python>=4.8",
+    "pytesseract>=0.3.10",
+    "pillow>=10.0",
+]
+https = ["cryptography>=41.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

@@ -1,5 +1,5 @@
 """
-Leitor genérico das tabelas do Biblioteca Fácil.
+Leitor genérico das tabelas do Biblioteca Fácil (`biblio.legado.tabela`).
 
 POR QUE ISSO SUBSTITUI A CAÇA MANUAL DE OFFSETS
 ------------------------------------------------
@@ -50,6 +50,7 @@ No Acervo: 25 + 807 == 832 ✅. Se essa igualdade fechar, o layout está
 certo — é o melhor teste de sanidade disponível.
 """
 
+import csv
 import struct
 from pathlib import Path
 
@@ -228,10 +229,25 @@ def carregar_todas(pasta) -> dict:
     }
 
 
-if __name__ == "__main__":
-    import sys
+def exportar_csv(tab: "Tabela", saida, datas_iso: bool = False) -> int:
+    """
+    Despeja uma tabela num CSV, uma coluna por campo declarado no cabeçalho.
 
-    pasta = sys.argv[1] if len(sys.argv) > 1 else "saida"
-    for nome, tab in carregar_todas(pasta).items():
-        print(tab.resumo())
-        print()
+    `datas_iso` converte os campos do tipo date (int32 de dias) para
+    AAAA-MM-DD; sem isso o número cru é preservado.
+    """
+    saida = Path(saida)
+    campos_data = {c.nome for c in tab.campos if c.tipo == TIPO_DATE}
+    colunas = [c.nome for c in tab.campos]
+
+    n = 0
+    with open(saida, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=colunas)
+        w.writeheader()
+        for linha in tab.registros():
+            if datas_iso:
+                for nome in campos_data:
+                    linha[nome] = data_para_iso(linha[nome])
+            w.writerow(linha)
+            n += 1
+    return n

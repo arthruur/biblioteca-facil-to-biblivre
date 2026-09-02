@@ -1,23 +1,22 @@
-# extrair_bkp.py, bf_tabela.py e extrair_tabela.py usam apenas a biblioteca
-# padrão (struct, zlib, re, csv). As dependências abaixo são para o resto:
+# Monorepo: cada pacote declara as próprias dependências no seu pyproject.toml.
+# Instalar em modo editável é o que faz `from biblio.biblivre import obras`
+# funcionar de qualquer lugar, sem sys.path.insert em script nenhum.
+#
+#   pip install -r requirements.txt
+#
+# Ordem importa: os de baixo dependem dos de cima.
 
-# consolidar.py — join entre as tabelas
-pandas>=2.0
+-e ./packages/bf-legado
+-e ./packages/biblivre-client
+-e ./packages/catalogacao
+-e ./apps/api
 
-# gerar_marc.py e inserir_exemplares.py — MARC21/ISO 2709 (ver docs/ROADMAP.md)
-pymarc>=5.0
-
-# inserir_exemplares.py — insere os exemplares direto no banco do BibLivre.
-# O instalador do BibLivre traz o PostgreSQL, mas não expõe o psql no PATH,
-# por isso o passo é feito por aqui e não por linha de comando do psql.
-psycopg2-binary>=2.9
-
-# detectar_ficha.py — detecção e retificação da ficha CIP via OpenCV
+# OCR da ficha CIP (livro sem código de barras). Opcional: quem só usa o
+# leitor de código de barras não precisa de OpenCV nem Tesseract — o endpoint
+# /api/capturar responde 501 em vez de derrubar o servidor.
 opencv-python>=4.8
 pytesseract>=0.3.10
+pillow>=10.0
 
-# servidor.py — servidor web para captura via câmera do celular
-fastapi>=0.100
-uvicorn>=0.20
-python-multipart>=0.0.6
-qrcode>=7.0
+# Migração de acervo legado (leitura do .bkp do Biblioteca Fácil).
+pandas>=2.0

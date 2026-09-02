@@ -14,16 +14,13 @@ marcando de qual caminho cada linha veio.
 """
 
 import csv
-import sys
 from datetime import datetime
 from pathlib import Path
 
-from pymarc import MARCWriter
+from biblio.biblivre import acervo, exemplares, marc, obras
+from biblio.biblivre.marc import chave_obra, montar_registro
 
-from .config import DATA_DIR
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from gerar_marc import chave_obra, montar_registro  # type: ignore
+from .config import EXPORT_DIR
 
 CABECALHO_CSV = [
     "caminho", "id_origem", "numacervo", "record_id", "ordem_exemplar", "tombo",
@@ -88,13 +85,11 @@ def classificar(itens: list[dict], usar_banco: bool = True) -> tuple[list[dict],
     buscar = None
     if usar_banco:
         try:
-            from .acervo import buscar as _buscar, indice
-
             # Indice vazio = banco indisponivel (ou acervo vazio). Nos dois casos
             # nao ha o que comparar, e vale mais respeitar a marca que o item ja
             # traz do que declarar tudo "novo" por falta de conexao.
-            if indice(forcar=True):
-                buscar = _buscar
+            if acervo.indice(forcar=True):
+                buscar = acervo.buscar
         except Exception:
             buscar = None
 
@@ -126,7 +121,7 @@ def exportar_itens(itens: list[dict], executar: bool = False,
     if not itens:
         return {"status": "vazio", "mensagem": "Nada para exportar"}
 
-    export_dir = DATA_DIR / "export"
+    export_dir = EXPORT_DIR
     export_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -153,11 +148,7 @@ def exportar_itens(itens: list[dict], executar: bool = False,
     mrc_path = export_dir / f"obras_{ts}.mrc"
     csv_path = export_dir / f"exemplares_{ts}.csv"
 
-    with open(mrc_path, "wb") as f_mrc:
-        writer = MARCWriter(f_mrc)
-        for grupo in grupos_ordenados:
-            writer.write(montar_registro(grupo))
-        writer.close()
+    marc.escrever_mrc((montar_registro(g) for g in grupos_ordenados), mrc_path)
 
     exemplares_novos = len(linhas_novas)
     exemplares_existentes = sum(
@@ -224,27 +215,17 @@ def exportar_itens(itens: list[dict], executar: bool = False,
         resultado["erro_insercao"] = str(e)
         resultado["ids"] = []
         resultado["mensagem"] += (f" Falha ao gravar: {e}. MRC/CSV ja estao em disco — "
-                                  "da para rodar inserir_obras.py a mao.")
+                                  "da para rodar o CLI de obras a mao.")
     return resultado
 
 
 def _gravar(grupos_ordenados, origem_por_item, existentes, mrc_path, db_args) -> dict:
     """Insere obras e exemplares numa transacao so."""
-    from pymarc import MARCReader
-
-    from inserir_obras import (  # type: ignore
-        DATABASE, INSERT_SQL, MATERIAL, USUARIO_PADRAO,
-        set_cf001, set_cf005, set_cf008,
-    )
-    from . import acervo
-    from .holdings import inserir_exemplares
-
     cfg = {**(db_args or {})}
     schema = cfg.get("schema") or "single"
     con = acervo.conectar(cfg)
     try:
-        with open(mrc_path, "rb") as f:
-            registros = list(MARCReader(f, to_unicode=True, force_utf8=True))
+        registros = marc.ler_mrc(mrc_path)
         if len(registros) != len(grupos_ordenados):
             raise RuntimeError(
                 f"MRC tem {len(registros)} registro(s) para {len(grupos_ordenados)} grupo(s)")
@@ -252,27 +233,11 @@ def _gravar(grupos_ordenados, origem_por_item, existentes, mrc_path, db_args) ->
         record_id_por_numacervo: dict[int, int] = {}
         inseridos = 0
         if registros:
-            with con.cursor() as cur:
-                cur.execute("SELECT nextval('biblio_records_id_seq') FROM generate_series(1, %s)",
-                            (len(registros),))
-                ids_novos = [r[0] for r in cur.fetchall()]
-
-            agora = datetime.now()
-            valores = []
-            for rec_id, rec, grupo in zip(ids_novos, registros, grupos_ordenados):
-                set_cf001(rec, rec_id)
-                set_cf005(rec, agora)
-                set_cf008(rec, agora)
-                valores.append((rec_id, rec.as_marc().decode("utf-8"),
-                                MATERIAL, DATABASE, USUARIO_PADRAO))
+            ids_novos = obras.inserir(con, registros)
+            inseridos = len(ids_novos)
+            for rec_id, grupo in zip(ids_novos, grupos_ordenados):
                 for linha in grupo:
                     record_id_por_numacervo[int(linha["numacervo"])] = rec_id
-
-            from psycopg2.extras import execute_batch
-
-            with con.cursor() as cur:
-                execute_batch(cur, INSERT_SQL, valores, page_size=500)
-            inseridos = len(valores)
 
         # Exemplares: obras novas (record_id recem-criado) + obras que ja existiam
         pedidos = []
@@ -297,7 +262,7 @@ def _gravar(grupos_ordenados, origem_por_item, existentes, mrc_path, db_args) ->
                 "volume": item.get("volume") or "",
             })
 
-        info_ex = inserir_exemplares(con, pedidos, schema=schema)
+        info_ex = exemplares.inserir_para_obras(con, pedidos, schema=schema)
         con.commit()
     except Exception:
         con.rollback()
@@ -316,7 +281,8 @@ def _gravar(grupos_ordenados, origem_por_item, existentes, mrc_path, db_args) ->
     if existentes:
         partes.append(f"{len(existentes)} obra(s) reaproveitada(s) do acervo")
     partes.append(f"{info_ex['inseridos']} exemplar(es) em biblio_holdings")
-    aviso = (" Rode Administracao -> Manutencao -> Reindexar para as obras novas aparecerem na busca."
+    aviso = (" Rode Administracao -> Manutencao -> Reindexar para as obras novas "
+             "aparecerem na busca."
              if inseridos else " Nenhuma obra nova: reindex nao e necessario.")
 
     return {

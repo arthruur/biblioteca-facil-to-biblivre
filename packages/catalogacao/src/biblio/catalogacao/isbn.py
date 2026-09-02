@@ -13,6 +13,8 @@ import sys
 import cv2
 import pytesseract
 
+from .config import aplicar_tesseract
+
 
 def limpar_isbn(texto: str) -> str:
     """Remove espacos, hifens e pontuacao de um ISBN."""
@@ -98,37 +100,5 @@ def extrair_da_imagem(caminho_imagem: str) -> str:
     # Upscale 3x para OCR
     up = cv2.resize(gray, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
 
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    aplicar_tesseract(pytesseract)
     return pytesseract.image_to_string(up, lang="por", config="--psm 6")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Extrai e valida ISBN de ficha CIP")
-    parser.add_argument("texto", nargs="?", help="Texto contendo ISBN (ou caminho de imagem com --arquivo)")
-    parser.add_argument("--arquivo", action="store_true", help="Interprime o argumento como caminho de imagem")
-    args = parser.parse_args()
-
-    if args.arquivo and args.texto:
-        texto = extrair_da_imagem(args.texto)
-        print("=== Texto OCR ===")
-        print(texto)
-        print("=================")
-    elif args.texto:
-        texto = args.texto
-    else:
-        print("Uso: python extrair_isbn.py <texto_ou_caminho> [--arquivo]", file=sys.stderr)
-        sys.exit(1)
-
-    isbn_encontrados = extrair_isbn_do_texto(texto)
-
-    if not isbn_encontrados:
-        print("Nenhum ISBN encontrado.", file=sys.stderr)
-        sys.exit(1)
-
-    for item in isbn_encontrados:
-        status = "VALIDO" if item["valido"] else "INVALIDO"
-        print(f"ISBN-{item['tipo']}: {item['isbn']} [{status}]")
-
-
-if __name__ == "__main__":
-    main()

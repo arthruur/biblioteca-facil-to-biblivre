@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biblio-api"
+version = "0.1.0"
+description = "API HTTP do sistema de acervo (catalogacao por ISBN + BibLivre)"
+requires-python = ">=3.11"
+dependencies = [
+    "biblio-catalogacao",
+    "biblio-biblivre-client",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "python-multipart>=0.0.6",
+    "qrcode>=7.0",
+    "cryptography>=41.0",
+]
+
+[project.scripts]
+biblio-servidor = "biblio.api.servidor:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

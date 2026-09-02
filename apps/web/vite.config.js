@@ -18,6 +18,10 @@ const CERTS = path.join(RAIZ, 'data', 'certs')
  * HTTP: dá para trabalhar no layout pelo desktop, só não dá para bipar.
  */
 function certificado() {
+  // `scripts/dev.py --sem-ssl` sobe a API em HTTP; o dev server precisa
+  // acompanhar, senao o proxy de /api tenta HTTPS contra um backend HTTP.
+  if (process.env.BIBLIO_SEM_SSL === '1') return false
+
   const cert = path.join(CERTS, 'cert.pem')
   const key = path.join(CERTS, 'key.pem')
   if (fs.existsSync(cert) && fs.existsSync(key)) {

@@ -25,5 +25,9 @@ venv/
 node_modules/
 apps/web/dist/
 
+# Configuração local: contém a senha do Postgres.
+.env
+!.env.example
+
 # Instalação editável dos pacotes do monorepo
 *.egg-info/

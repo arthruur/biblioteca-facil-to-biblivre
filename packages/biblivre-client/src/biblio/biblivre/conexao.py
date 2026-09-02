@@ -22,6 +22,14 @@ import os
 import re
 import threading
 
+from .ambiente import carregar_env
+
+# Antes de montar `_db`: o `.env` da raiz precisa estar no ambiente na hora em
+# que as variaveis sao lidas, senao o processo local sobe sem senha e a
+# checagem de ISBN ja catalogado fica desligada em silencio. O que ja estava no
+# ambiente (compose, shell, secret) tem precedencia — ver `ambiente.py`.
+carregar_env()
+
 SCHEMA_PADRAO = "single"
 SCHEMA_GLOBAL = "global"
 

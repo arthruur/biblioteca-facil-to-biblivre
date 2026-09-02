@@ -45,7 +45,58 @@ para quem chamou, porque obras e exemplares precisam fechar na mesma transação
 
 ## 2) Rodar
 
-**Container (recomendado):**
+### Desenvolvimento (sem Docker)
+
+O PostgreSQL do BibLivre já roda na máquina — o container nunca foi o banco,
+só um empacotamento do servidor. Em desenvolvimento ele só acrescenta um
+rebuild entre você e o efeito da linha que acabou de escrever.
+
+```bash
+pip install -r requirements.txt      # instala os 4 pacotes em modo editável
+cp .env.example .env                 # host/senha do Postgres do BibLivre
+python scripts/dev.py                # sobe API + Vite num terminal só
+```
+
+```
+[api]  https://<IP-DO-PC>:8000   uvicorn --reload   reinicia ao salvar .py
+[web]  https://<IP-DO-PC>:5173   vite              HMR no JSX/CSS
+```
+
+**Trabalhe pela 5173**: o Vite faz proxy de `/api` para o backend, então o
+frontend recarrega em milissegundos, sem `npm run build`. A 8000 continua
+servindo o bundle buildado quando ele existe — é o que a biblioteca usa.
+
+| | |
+|---|---|
+| `python scripts/dev.py` | API com reload + Vite, Ctrl+C encerra os dois |
+| `--so-api` | sem o dev server do Vite |
+| `--sem-ssl` | HTTP em localhost (a câmera do celular não funciona) |
+| `python scripts/servidor.py --reload` | só o backend, se preferir dois terminais |
+| `python tests/verificar.py` | fumaça: sem banco, sem rede, sem câmera |
+
+O `.env` da raiz é lido tanto pelo `docker compose` quanto pelo servidor local
+(`biblio.biblivre.ambiente`), e **nunca sobrescreve** variável que já esteja no
+ambiente. Sem senha do Postgres o app funciona igual, mas trata todo livro como
+obra nova — e a tela diz isso, em vez de degradar em silêncio.
+
+Duas coisas que o modo reload muda de propósito:
+
+- a **subida mora no ciclo de vida da aplicação** (`biblio.api.main:ciclo`), não
+  no processo que a lança — com reload quem serve é um subprocesso, e a fila
+  reidratada no pai ficaria no pai;
+- o **índice de ISBN é montado sob demanda** (`BIBLIO_SEM_INDICE=1`), no
+  primeiro bipe. Pagar a varredura da `biblio_records` a cada save não se
+  justifica.
+
+HTTPS não é preciosismo: `getUserMedia` só funciona em contexto seguro, então
+sem TLS não há câmera — e sem câmera não há scanner. O certificado é
+autoassinado, nasce na primeira execução em `data/certs`, e o Vite reusa o
+mesmo.
+
+### Instalação na biblioteca (container)
+
+É onde o Docker paga: embute Tesseract, OpenCV e o bundle já buildado numa
+imagem só, sem depender do que está instalado na máquina.
 
 ```bash
 docker compose up --build
@@ -54,34 +105,15 @@ docker compose up --build
 # https://<IP-DO-PC>:8000/docs   OpenAPI
 ```
 
-O compose fala com o PostgreSQL do BibLivre que já roda na máquina, via
-`host.docker.internal` — o container sobe com o dedup por ISBN ligado. Numa
-instalação com host, porta ou senha diferentes do default, sobrescreva por
+O compose fala com o PostgreSQL do host via `host.docker.internal`. Numa
+instalação com host, porta ou senha diferentes do default, sobrescreva no
 `.env` (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`).
 
-**Local:**
+Sem container e sem reload (o mesmo que o container roda):
 
 ```bash
-pip install -r requirements.txt     # instala os 4 pacotes em modo editável
 cd apps/web && npm install && npm run build && cd ../..
-python scripts/servidor.py          # ou: biblio-servidor
-```
-
-**Desenvolvendo o frontend** (HMR, reusa o certificado que o backend gera):
-
-```bash
-python scripts/servidor.py          # backend na 8000
-cd apps/web && npm run dev          # frontend na 5173, com proxy para /api
-```
-
-HTTPS não é preciosismo: `getUserMedia` só funciona em contexto seguro, então
-sem TLS não há câmera — e sem câmera não há scanner. O certificado é
-autoassinado e nasce na primeira execução.
-
-**Verificar que está tudo de pé:**
-
-```bash
-python tests/verificar.py
+python scripts/servidor.py           # ou: biblio-servidor
 ```
 
 ---

@@ -20,3 +20,8 @@ pillow>=10.0
 
 # Migração de acervo legado (leitura do .bkp do Biblioteca Fácil).
 pandas>=2.0
+
+# Reload do servidor em desenvolvimento (`scripts/dev.py`). Sem watchfiles o
+# uvicorn cai no StatReload, que faz polling de mtime e ignora os filtros de
+# arquivo — funciona, mas reinicia mais devagar e observa mais do que precisa.
+watchfiles>=0.21

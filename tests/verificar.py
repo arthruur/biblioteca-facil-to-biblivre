@@ -24,6 +24,14 @@ import tempfile
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
+
+# Antes de qualquer import de `biblio.*`: sem isto o `.env` da maquina entra no
+# ambiente, a checagem de ISBN liga sozinha e os casos de "obra nova" passam a
+# consultar o acervo real — o teste deixaria de ser reproduzivel.
+os.environ["BIBLIO_SEM_ENV"] = "1"
+for _chave in ("PGPASSWORD", "BIBLIVRE_DB_SENHA"):
+    os.environ.pop(_chave, None)
+
 os.environ["BIBLIO_DATA_DIR"] = tempfile.mkdtemp(prefix="biblio_teste_")
 DADOS = Path(os.environ["BIBLIO_DATA_DIR"])
 

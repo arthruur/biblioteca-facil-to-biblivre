@@ -7,14 +7,17 @@ de migração usam. Se aparecer regra de negócio aqui, ela está no lugar errad
 """
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from biblio.biblivre import acervo as _acervo
+from biblio.biblivre import conexao
 from biblio.catalogacao import config
-from biblio.catalogacao.fila import carregar_do_disco
+from biblio.catalogacao.fila import carregar_do_disco, reconsultar_acervo
 
 from .routers import acervo, catalogacao, fila, sistema
 
@@ -38,11 +41,67 @@ HTTP: ela mora em `biblio.legado` + `biblio.biblivre` e roda pelos CLIs em
 """
 
 
+@asynccontextmanager
+async def ciclo(app: FastAPI):
+    """
+    O que precisa acontecer **no processo que serve**, nao no que o lanca.
+
+    Estava tudo em `servidor.py:main()`, e isso funcionava enquanto havia um
+    processo so. Com `--reload` o uvicorn passa a rodar a aplicacao num
+    subprocesso, que nao herda memoria nenhuma: a fila reidratada no pai ficava
+    no pai, e a tela de revisao abria vazia com os JSON intactos no disco.
+    Daqui para frente a subida mora no ciclo de vida da aplicacao, que roda
+    igual nos dois modos.
+    """
+    # Em modo reload o pai nao consegue passar isto por atribuicao.
+    if not config.SERVER_URL:
+        config.SERVER_URL = os.environ.get("BIBLIO_SERVER_URL", "")
+
+    pendentes = preparar()
+    print(f"\n  Fila carregada do disco: {pendentes} item(ns)")
+
+    # O indice de ISBN custa uma varredura da `biblio_records` inteira (~15 mil
+    # registros, alguns segundos). Pagar isso a cada save em desenvolvimento
+    # nao se justifica: com BIBLIO_SEM_INDICE=1 ele e montado sob demanda, no
+    # primeiro bipe, pelo TTL que `acervo.indice()` ja tem.
+    if os.environ.get("BIBLIO_SEM_INDICE") == "1":
+        print("  Índice de ISBN: sob demanda (BIBLIO_SEM_INDICE=1)")
+    else:
+        conectar_acervo()
+
+    yield
+
+
+def conectar_acervo() -> None:
+    """
+    Liga a checagem de ISBN já catalogado, se houver senha.
+
+    Sem banco o app funciona igual, mas trata todo livro como obra nova — e a
+    tela avisa disso em vez de degradar em silêncio.
+    """
+    if not (conexao.db_config().get("senha") or os.environ.get("PGPASSWORD")):
+        print("  Sem senha do Postgres: checagem de ISBN já catalogado desligada "
+              "(configure na tela de revisão, use --db-senha ou o .env)")
+        return
+
+    teste = conexao.testar_conexao()
+    if not teste.get("conectado"):
+        print(f"  Acervo indisponível ({teste.get('erro')}) — a checagem de "
+              "ISBN já catalogado fica desligada até configurar na tela")
+        return
+
+    total = len(_acervo.indice(forcar=True))
+    print(f"  Acervo conectado: {teste['obras']:,} obras, "
+          f"{teste['exemplares']:,} exemplares — {total:,} ISBNs indexados")
+    reconsultar_acervo()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Biblio — API de acervo",
         version="0.1.0",
         description=DESCRICAO,
+        lifespan=ciclo,
         openapi_tags=[
             {"name": "catalogacao", "description": "Captura por código de barras."},
             {"name": "fila", "description": "Revisão e gravação no BibLivre."},

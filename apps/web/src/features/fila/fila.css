@@ -473,19 +473,79 @@ button.indicador[aria-pressed='true'] {
 @media (max-width: 900px) {
   .fila__conteudo {
     padding: var(--e3);
-    padding-bottom: 140px;
+    padding-bottom: 160px;
   }
   .fila__topo {
     padding: var(--e3);
-  }
-  .col-capa,
-  .col-acoes {
-    display: none;
   }
   .rodape {
     flex-direction: column;
     align-items: stretch;
     gap: var(--e2);
     padding: var(--e3);
+  }
+}
+
+/* --- Mobile cards (novo) --- */
+.fila-cards { display: none; }
+.nav-inferior { display: none; }
+@media (max-width: 767px) {
+  .indicadores { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .indicador { padding: 10px; }
+  .indicador__numero { font-size: 1.05rem; }
+  .filtros { gap: 8px; }
+  .filtros__busca { flex: 1 1 100%; }
+  .filtros__grupo { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+  .filtros__grupo::-webkit-scrollbar { display:none; }
+  .tabela-wrap { display: none; }
+  .fila-cards { display: flex; flex-direction: column; gap: 10px; }
+  .fila-card {
+    background: var(--superficie);
+    border: 1px solid var(--borda);
+    border-radius: 16px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 12px;
+    position: relative;
+  }
+  .fila-card--selecionado { border-color: var(--acento); background: var(--acento-suave); }
+  .fila-card--exportado { opacity: 0.6; }
+  .fila-card__capa {
+    width: 52px; height: 76px; border-radius: 8px; object-fit: cover; background: var(--superficie-3); border:1px solid var(--borda);
+  }
+  .fila-card__capa--vazia { display:grid; place-items:center; font-size:22px; opacity:0.5; }
+  .fila-card__topo { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .fila-card__titulo { font-weight:700; font-size:var(--txt-sm); line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .fila-card__titulo--vazio { font-style:italic; color:var(--alerta); font-weight:400; }
+  .fila-card__meta { font-size:11px; color:var(--texto-2); margin-top:2px; }
+  .fila-card__isbn { font-family:var(--fonte-mono); font-size:11px; color:var(--texto-3); }
+  .fila-card__rodape { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; }
+  .fila-card__acoes { display:flex; gap:6px; }
+  .fila-card__acao {
+    width: 32px; height: 32px; border-radius:999px; display:grid; place-items:center;
+    background: var(--superficie-2); border:1px solid var(--borda); font-size:13px;
+  }
+  .fila-card__acoes .check {
+    position:absolute; top:10px; right:10px;
+  }
+  .fila__conteudo { padding-bottom: 180px; }
+  .rodape { bottom: 56px; border-top: 1px solid var(--borda); }
+  .nav-inferior {
+    position: fixed; left:0; right:0; bottom:0; z-index:45;
+    display:flex; align-items:center; justify-content:space-around;
+    background: var(--superficie);
+    border-top:1px solid var(--borda);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  }
+  .nav-inferior a, .nav-inferior button {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+    font-size:10px; font-weight:600; color:var(--texto-3); padding:6px;
+    border-radius:12px;
+  }
+  .nav-inferior .ativo { color:var(--acento); background: var(--acento-suave); }
+  .nav-inferior .badge {
+    background: var(--acento); color:#fff; font-size:10px; font-weight:700;
+    padding:1px 5px; border-radius:999px; margin-left:4px;
   }
 }

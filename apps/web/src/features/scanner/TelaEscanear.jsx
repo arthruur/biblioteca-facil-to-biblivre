@@ -11,6 +11,7 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
   const [tomRecado, setTomRecado] = useState('')
   const [abertoIsbn, setAbertoIsbn] = useState(null)
   const [manual, setManual] = useState('')
+  const [gavetaExpandida, setGavetaExpandida] = useState(false)
   const arquivoRef = useRef(null)
   const trilhaRef = useRef(null)
 
@@ -25,14 +26,12 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
       const r = await lote.adicionar(isbn)
       if (!r) return
       scanner.anunciar(
-        r.jaTinha ? `Mais um exemplar de ${isbn}` : `Adicionado ${isbn}`,
+        r.jaTinha ? `+1 exemplar · ${isbn}` : `Adicionado · ${isbn}`,
         'ok'
       )
     },
   })
 
-  // A galeria acompanha o último bipe: quem está de pé não deveria precisar
-  // rolar para confirmar que o livro entrou.
   useEffect(() => {
     const t = trilhaRef.current
     if (t) t.scrollLeft = t.scrollWidth
@@ -45,7 +44,7 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
       const d = await lote.enviar()
       if (d) {
         avisar(
-          `${d.enviados} ${d.enviados === 1 ? 'título enviado' : 'títulos enviados'} para a fila de revisão`,
+          `${d.enviados} ${d.enviados === 1 ? 'título enviado' : 'títulos enviados'} para a fila`,
           'ok'
         )
       }
@@ -68,33 +67,47 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
     avisar(`Adicionado ${isbn}`, 'ok')
   }
 
+  const total = lote.totalExemplares
+  const temLote = lote.itens.length > 0
+
   return (
     <div className="escanear">
       <header className="escanear__topo">
         <div className="escanear__marca">
           <span className="escanear__titulo">Escanear</span>
-          <span className="escanear__sub">catalogação por ISBN</span>
+          <span className="escanear__sub">Balcão · ISBN</span>
         </div>
         <div style={{ display: 'flex', gap: 'var(--e2)', alignItems: 'center' }}>
           <Pilula tom={conexao.tom} title={conexao.detalhe}>
             {conexao.rotulo}
           </Pilula>
-          <Botao variante="fantasma" tamanho="pequeno" onClick={aoIrParaFila}>
+          <Botao
+            variante="fantasma"
+            tamanho="pequeno"
+            onClick={aoIrParaFila}
+            className="controles__so-desktop"
+          >
             Fila →
           </Botao>
+          {/* mobile badge */}
+          <button
+            onClick={aoIrParaFila}
+            className="gaveta__badge"
+            style={{ display: temLote ? 'inline-flex' : 'none' }}
+            aria-label={`Ir para fila com ${lote.itens.length} títulos`}
+          >
+            {lote.itens.length} na fila
+          </button>
         </div>
       </header>
 
       <div className="escanear__corpo">
-        <Visor scanner={scanner} />
+        <Visor scanner={scanner} onExpandir={() => setGavetaExpandida((v) => !v)} />
 
         <aside className="escanear__lateral controles__so-desktop">
           {info?.server_url && (
             <div className="qr">
-              <p
-                className="galeria__rotulo"
-                style={{ marginBottom: 'var(--e2)' }}
-              >
+              <p className="galeria__rotulo" style={{ marginBottom: 'var(--e2)' }}>
                 Abra no celular
               </p>
               <div className="qr__caixa">
@@ -104,21 +117,70 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
             </div>
           )}
           <p style={{ fontSize: 'var(--txt-sm)', color: 'var(--texto-2)' }}>
-            O scanner precisa de HTTPS para acessar a câmera. Ao abrir no
-            celular, aceite o certificado uma vez.
+            O scanner precisa de HTTPS. Ao abrir no celular, aceite o certificado uma vez.
           </p>
+          {temLote && (
+            <div style={{ marginTop: 'var(--e4)' }}>
+              <p className="galeria__rotulo">No lote</p>
+              <p style={{ fontSize: 'var(--txt-sm)', color: 'var(--texto-2)' }}>
+                {lote.itens.length} títulos · {total} exemplares
+              </p>
+            </div>
+          )}
         </aside>
       </div>
 
-      <Galeria
-        itens={lote.itens}
-        total={lote.totalExemplares}
-        trilhaRef={trilhaRef}
-        aoAbrir={setAbertoIsbn}
-      />
+      {/* Gaveta: bottom sheet no mobile, galeria no desktop */}
+      {temLote ? (
+        <Gaveta
+          itens={lote.itens}
+          total={total}
+          trilhaRef={trilhaRef}
+          aoAbrir={setAbertoIsbn}
+          expandida={gavetaExpandida}
+          aoToggle={() => setGavetaExpandida((v) => !v)}
+        />
+      ) : (
+        <div
+          className="gaveta"
+          style={{ padding: '14px var(--e4)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, color: 'var(--texto-3)', fontSize: 'var(--txt-sm)' }}
+        >
+          <span aria-hidden>📚</span> Nenhum livro no lote — bipar enche aqui
+        </div>
+      )}
 
       <div className="controles">
-        <div className="controles__linha">
+        {/* FAB bar — só mobile (escondida via CSS no desktop) */}
+        <div className="fab-bar">
+          {scanner.escaneando ? (
+            <button className="fab fab--parar" onClick={scanner.parar} aria-label="Fechar câmera">
+              ✕
+            </button>
+          ) : (
+            <button className="fab" onClick={scanner.iniciar} aria-label="Abrir câmera">
+              ◎
+            </button>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '11px', color: 'var(--texto-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {temLote ? `${lote.itens.length} títulos · ${total} ex` : 'Lote vazio'}
+            </div>
+            <div style={{ fontSize: 'var(--txt-xs)', color: 'var(--texto-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {recado || (scanner.escaneando ? 'Aponte para as barras' : 'Toque no botão para escanear')}
+            </div>
+          </div>
+          <button
+            className={`fab-acao ${!temLote ? 'fab-acao--sec' : ''}`}
+            onClick={enviar}
+            disabled={!temLote || lote.enviando}
+            style={{ flex: '0 0 auto', minWidth: 124 }}
+          >
+            {lote.enviando ? 'Enviando…' : `Enviar →`}
+          </button>
+        </div>
+
+        {/* Desktop controls */}
+        <div className="controles__linha controles__so-desktop">
           {scanner.escaneando ? (
             <Botao variante="secundario" tamanho="toque" onClick={scanner.parar}>
               Fechar câmera
@@ -131,7 +193,6 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
           <Botao
             variante="secundario"
             tamanho="toque"
-            className="controles__so-desktop"
             onClick={() => arquivoRef.current?.click()}
           >
             Usar foto
@@ -164,12 +225,12 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
           </Botao>
         </div>
 
-        <p className={`controles__recado controles__recado--${tomRecado}`} role="status">
+        <p className={`controles__recado controles__recado--${tomRecado} controles__so-desktop`} role="status">
           {recado}
         </p>
 
-        {lote.itens.length > 0 && (
-          <div className="controles__linha">
+        {temLote && (
+          <div className="controles__linha controles__so-desktop">
             <Botao variante="fantasma" onClick={lote.limpar} style={{ flex: '0 0 auto' }}>
               Limpar
             </Botao>
@@ -181,7 +242,7 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
             >
               {lote.enviando
                 ? 'Enviando…'
-                : `Enviar para a fila (${lote.itens.length} tít, ${lote.totalExemplares} ex)`}
+                : `Enviar para a fila (${lote.itens.length} tít, ${total} ex)`}
             </Botao>
           </div>
         )}
@@ -235,8 +296,10 @@ function Visor({ scanner }) {
             📷
           </span>
           <p className="visor__repouso-texto">
-            Toque em <strong>Escanear</strong> e aponte para o código de barras
-            na contracapa. A câmera fica aberta entre um livro e outro.
+            Toque no botão circular e aponte para o código de barras da contracapa.
+          </p>
+          <p style={{ fontSize: 'var(--txt-xs)', opacity: 0.8, marginTop: 8 }}>
+            Toque no visor para focar
           </p>
         </div>
       )}
@@ -251,24 +314,19 @@ function Visor({ scanner }) {
               {scanner.recursos.lanterna && (
                 <button
                   type="button"
-                  className={`visor__botao${
-                    scanner.lanternaLigada ? ' visor__botao--ativo' : ''
-                  }`}
+                  className={`visor__botao${scanner.lanternaLigada ? ' visor__botao--ativo' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
                     scanner.alternarLanterna()
                   }}
                   aria-pressed={scanner.lanternaLigada}
                 >
-                  <span aria-hidden="true">◉</span> Lanterna
+                  ◉ Lanterna
                 </button>
               )}
               {scanner.recursos.zoom && (
-                <label
-                  className="visor__zoom"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <span aria-hidden="true">🔍</span>
+                <label className="visor__zoom" onClick={(e) => e.stopPropagation()}>
+                  🔍
                   <input
                     type="range"
                     min={scanner.recursos.zoom.min}
@@ -291,9 +349,8 @@ function Visor({ scanner }) {
                 scanner.tentarOcr?.()
               }}
               disabled={scanner.ocrAtivo}
-              title="Tentar ler os números impressos (fallback)"
             >
-              {scanner.ocrAtivo ? 'Lendo números…' : 'Tentar pelos números'}
+              {scanner.ocrAtivo ? 'Lendo…' : 'Tentar números'}
             </button>
           )}
         </div>
@@ -312,19 +369,22 @@ function Visor({ scanner }) {
   )
 }
 
-function Galeria({ itens, total, trilhaRef, aoAbrir }) {
-  if (!itens.length) return null
-
+function Gaveta({ itens, total, trilhaRef, aoAbrir, expandida, aoToggle }) {
   return (
-    <section className="galeria" aria-label="Lote">
-      <div className="galeria__cabecalho">
-        <span className="galeria__rotulo">No lote</span>
-        <span className="galeria__contagem">
-          {itens.length} {itens.length === 1 ? 'título' : 'títulos'}
-          {total > itens.length && ` · ${total} exemplares`}
+    <section className={`gaveta ${expandida ? 'gaveta--expandida' : ''}`} aria-label="Lote">
+      <div className="gaveta__puxador" aria-hidden />
+      <div className="gaveta__cabecalho">
+        <span className="gaveta__titulo">
+          No lote <span className="gaveta__badge">{itens.length}</span>
+          <span style={{ fontWeight: 400, color: 'var(--texto-2)', fontSize: 'var(--txt-xs)' }}>
+            {total > itens.length ? `· ${total} ex` : ''}
+          </span>
         </span>
+        <button className="gaveta__acao" onClick={aoToggle} aria-expanded={expandida}>
+          {expandida ? 'Recolher ↑' : 'Ver todos →'}
+        </button>
       </div>
-      <div className="galeria__trilha" ref={trilhaRef}>
+      <div className="gaveta__trilha" ref={trilhaRef}>
         {itens.map((item) => (
           <CardLote key={item.isbn} item={item} aoAbrir={aoAbrir} />
         ))}
@@ -336,39 +396,29 @@ function Galeria({ itens, total, trilhaRef, aoAbrir }) {
 function CardLote({ item, aoAbrir }) {
   const qtd = Number(item.quantidade) || 1
   const noAcervo = item.acervo?.existe
-  const classes = [
-    'card-lote',
-    noAcervo && 'card-lote--existente',
-    item.buscando && 'card-lote--buscando',
-  ]
+  const buscando = item.buscando
+  const classes = ['card-lote', noAcervo && 'card-lote--existente', buscando && 'card-lote--buscando']
     .filter(Boolean)
     .join(' ')
+  const selo = noAcervo ? (
+    <span className="card-lote__selo card-lote__selo--ex">+ exemplar</span>
+  ) : item.titulo ? (
+    <span className="card-lote__selo card-lote__selo--nova">nova</span>
+  ) : null
 
   return (
-    <button
-      className={classes}
-      onClick={() => aoAbrir(item.isbn)}
-      aria-label={`${item.titulo || item.isbn}, ${qtd} exemplar(es). Abrir ficha.`}
-    >
+    <button className={classes} onClick={() => aoAbrir(item.isbn)} aria-label={`${item.titulo || item.isbn}, ${qtd} exemplar(es).`}>
       <div className="card-lote__linha">
         <span className="card-lote__isbn">{item.isbn}</span>
         {qtd > 1 && <span className="card-lote__vezes">×{qtd}</span>}
       </div>
-      <p
-        className={`card-lote__titulo${
-          item.titulo ? '' : ' card-lote__titulo--vazio'
-        }`}
-      >
-        {item.titulo || (item.buscando ? 'buscando…' : 'sem metadados')}
+      <p className={`card-lote__titulo${item.titulo ? '' : ' card-lote__titulo--vazio'}`}>
+        {item.titulo || (buscando ? 'buscando…' : 'sem metadados')}
       </p>
       {item.autor && <p className="card-lote__autor">{item.autor}</p>}
-      {noAcervo && (
-        <p className="card-lote__acervo">
-          ✓ já no acervo · {item.acervo.exemplares} ex
-        </p>
-      )}
       <p className="card-lote__rodape">
-        {item.offline ? 'sem conexão' : item.fonte || ''}
+        {selo}
+        <span>{item.offline ? 'offline' : item.fonte || '—'}</span>
       </p>
     </button>
   )

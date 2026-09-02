@@ -306,60 +306,81 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
             </EstadoVazio>
           </div>
         ) : (
-          <div className="tabela-wrap">
-            <table className="tabela">
-              <thead>
-                <tr>
-                  <th className="col-check">
-                    <input
-                      type="checkbox"
-                      checked={
-                        visiveis.length > 0 &&
-                        selecionados.length === visiveis.length
-                      }
-                      onChange={(e) =>
-                        setSelecao(
-                          e.target.checked
-                            ? new Set(visiveis.map((i) => i.id))
-                            : new Set()
+          <>
+            <div className="tabela-wrap">
+              <table className="tabela">
+                <thead>
+                  <tr>
+                    <th className="col-check">
+                      <input
+                        type="checkbox"
+                        checked={
+                          visiveis.length > 0 &&
+                          selecionados.length === visiveis.length
+                        }
+                        onChange={(e) =>
+                          setSelecao(
+                            e.target.checked
+                              ? new Set(visiveis.map((i) => i.id))
+                              : new Set()
+                          )
+                        }
+                        aria-label="Selecionar todos os visíveis"
+                      />
+                    </th>
+                    <th className="col-capa" />
+                    <th>Obra</th>
+                    <th>ISBN</th>
+                    <th>Destino no BibLivre</th>
+                    <th className="col-ex">Exemplares</th>
+                    <th className="col-situacao">Situação</th>
+                    <th className="col-acoes" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiveis.map((item) => (
+                    <LinhaItem
+                      key={item.id}
+                      item={item}
+                      conectado={conexao.conectado}
+                      selecionado={selecao.has(item.id)}
+                      editando={editando === item.id}
+                      aoSelecionar={alternarSelecao}
+                      aoEditar={setEditando}
+                      aoSalvar={salvarCampos}
+                      aoMudarQuantidade={mudarQuantidade}
+                      aoAlternarRevisado={(i) =>
+                        acaoEmLote(
+                          i.status === 'revisado' ? 'pendente' : 'revisado',
+                          [i.id]
                         )
                       }
-                      aria-label="Selecionar todos os visíveis"
+                      aoRemover={(i) => acaoEmLote('remover', [i.id])}
                     />
-                  </th>
-                  <th className="col-capa" />
-                  <th>Obra</th>
-                  <th>ISBN</th>
-                  <th>Destino no BibLivre</th>
-                  <th className="col-ex">Exemplares</th>
-                  <th className="col-situacao">Situação</th>
-                  <th className="col-acoes" />
-                </tr>
-              </thead>
-              <tbody>
-                {visiveis.map((item) => (
-                  <LinhaItem
-                    key={item.id}
-                    item={item}
-                    conectado={conexao.conectado}
-                    selecionado={selecao.has(item.id)}
-                    editando={editando === item.id}
-                    aoSelecionar={alternarSelecao}
-                    aoEditar={setEditando}
-                    aoSalvar={salvarCampos}
-                    aoMudarQuantidade={mudarQuantidade}
-                    aoAlternarRevisado={(i) =>
-                      acaoEmLote(
-                        i.status === 'revisado' ? 'pendente' : 'revisado',
-                        [i.id]
-                      )
-                    }
-                    aoRemover={(i) => acaoEmLote('remover', [i.id])}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="fila-cards">
+              {visiveis.map((item) => (
+                <FilaCardMobile
+                  key={item.id}
+                  item={item}
+                  selecionado={selecao.has(item.id)}
+                  aoSelecionar={() => alternarSelecao(item.id)}
+                  aoEditar={() => setEditando(item.id)}
+                  aoMudarQuantidade={(q) => mudarQuantidade(item.id, q)}
+                  aoRemover={() => acaoEmLote('remover', [item.id])}
+                  aoAlternarRevisado={() =>
+                    acaoEmLote(
+                      item.status === 'revisado' ? 'pendente' : 'revisado',
+                      [item.id]
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -425,6 +446,18 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
         </Botao>
       </footer>
 
+      <nav className="nav-inferior" aria-label="Navegação">
+        <button onClick={aoIrParaEscanear}>
+          <span aria-hidden>◎</span> Escanear
+        </button>
+        <button className="ativo">
+          <span aria-hidden>☰</span> Fila <span className="badge">{stats?.total ?? 0}</span>
+        </button>
+        <button onClick={() => setModal('export')} disabled={!alvoExport.length}>
+          <span aria-hidden>⬆</span> Exportar
+        </button>
+      </nav>
+
       {modal === 'banco' && (
         <ModalBanco
           estadoInicial={conexao.bruto}
@@ -446,6 +479,58 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
           aoConfirmar={exportar}
         />
       )}
+    </div>
+  )
+}
+
+function FilaCardMobile({ item, selecionado, aoSelecionar, aoEditar, aoMudarQuantidade, aoRemover, aoAlternarRevisado }) {
+  const destinoTom = !item.acervo ? 'alerta' : item.acervo.existe ? 'existente' : 'nova'
+  const destinoLabel = !item.acervo
+    ? 'não verificado'
+    : item.acervo.existe
+      ? `+${item.quantidade} ex · #${item.acervo.record_id}`
+      : 'obra nova'
+  return (
+    <div className={`fila-card ${selecionado ? 'fila-card--selecionado' : ''} ${item.status === 'exportado' ? 'fila-card--exportado' : ''}`}>
+      <div style={{ position: 'relative' }}>
+        {item.capa ? (
+          <img src={item.capa} alt="" className="fila-card__capa" loading="lazy" />
+        ) : (
+          <div className="fila-card__capa fila-card__capa--vazia">📕</div>
+        )}
+        <input
+          type="checkbox"
+          checked={selecionado}
+          onChange={aoSelecionar}
+          aria-label="Selecionar"
+          style={{ position: 'absolute', top: -6, left: -6, width: 18, height: 18 }}
+        />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div className="fila-card__topo">
+          <span className={`selo selo--${destinoTom}`} style={{ fontSize: 11 }}>{destinoLabel}</span>
+          <span style={{ fontSize: 11, color: 'var(--texto-3)' }}>{item.status}</span>
+        </div>
+        <p className={`fila-card__titulo ${!item.titulo ? 'fila-card__titulo--vazio' : ''}`}>
+          {item.titulo || '— sem metadados —'}
+        </p>
+        <p className="fila-card__meta">
+          {[item.autor, item.ano].filter(Boolean).join(' · ') || '—'}
+        </p>
+        <p className="fila-card__isbn">{item.isbn} · {item.fonte || '—'}</p>
+        <div className="fila-card__rodape">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="fila-card__acao" onClick={() => aoMudarQuantidade(Math.max(1, (Number(item.quantidade)||1)-1))} aria-label="menos">−</button>
+            <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{item.quantidade} ex</span>
+            <button className="fila-card__acao" onClick={() => aoMudarQuantidade((Number(item.quantidade)||1)+1)} aria-label="mais">+</button>
+          </div>
+          <div className="fila-card__acoes">
+            <button className="fila-card__acao" onClick={aoEditar} aria-label="Editar">✎</button>
+            <button className="fila-card__acao" onClick={aoAlternarRevisado} aria-label="Alternar revisado">{item.status === 'revisado' ? '↺' : '✓'}</button>
+            <button className="fila-card__acao" onClick={aoRemover} aria-label="Remover">🗑</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

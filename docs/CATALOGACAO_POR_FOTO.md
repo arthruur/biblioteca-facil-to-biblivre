@@ -146,7 +146,7 @@ O caminho intuitivo — gerar `.mrc` e importar por Catalogação → Importar �
 
 ### E a inserção por SQL também não serve para o fluxo unitário
 
-`scripts/inserir_obras.py` resolve o lote, mas **não passa pelo
+`biblio.biblivre.obras` resolve o lote, mas **não passa pelo
 indexador** — o conserto é `Administração → Manutenção → Reindexar`, que
 relê `biblio_records` inteiro em lotes de 30. Aceitável uma vez, para
 14.866 registros. Inviável a cada livro novo.
@@ -203,6 +203,6 @@ Python + FastAPI, OpenCV (retificação e gate de nitidez), Tesseract
 (`-l por`), `pymarc` para o MARC, front simples para a fila de revisão.
 
 **O seam de reuso:** o parser deve cuspir **a mesma linha do CSV
-consolidado** que o `scripts/gerar_marc.py` já consome. Com isso, geração
+consolidado** que o `biblio.biblivre.marc` já consome. Com isso, geração
 de MARC e carga são reuso puro — e é essa fronteira que mantém o pipeline
 portável para outro sistema, trocando só a etapa final de entrega.

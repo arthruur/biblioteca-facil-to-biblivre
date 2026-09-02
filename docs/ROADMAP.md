@@ -7,7 +7,7 @@
       catálogo com nome, tipo, tamanho e offset de todos os seus campos.
       Isso tornou desnecessária a caça manual de offsets e resolveu de uma
       vez o mapeamento das 16 tabelas. Ver [TABELAS.md](TABELAS.md).
-- [x] Leitor genérico (`scripts/bf_tabela.py`) — as 16 tabelas passam no
+- [x] Leitor genérico (`biblio.legado.tabela`) — as 16 tabelas passam no
       teste de sanidade de layout
 - [x] Mapear ISBN, Tombo, Páginas, CDU (e todo o resto do Acervo)
 - [x] Vínculo Autor↔Livro: é a `T10_AUAC`, "Cadastro de Autores nas
@@ -18,16 +18,16 @@
 - [x] Levantar como o BibLivre 5 aceita dados, lendo o código-fonte —
       ver [IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md)
 - [x] Decidir o tratamento de exemplares (ver abaixo)
-- [x] `scripts/gerar_marc.py` — gera `obras.mrc` (14.866 registros
+- [x] `biblio.biblivre.marc` — gera `obras.mrc` (14.866 registros
       bibliográficos, ISO 2709/UTF-8) e `exemplares.csv` (16.251 linhas)
-- [x] `scripts/inserir_obras.py` — carrega `obras.mrc` direto em
+- [x] `biblio.biblivre.obras` — carrega `obras.mrc` direto em
       `biblio_records`, já na base principal, reproduzindo
       `BiblioRecordBO.save` (id da sequence, `001` de 7 dígitos, `005`,
       `008`, `material='book'`). Validado byte a byte contra 25 registros
       importados pela tela. Nasceu porque a importação pela tela não escala
       para 14.866 registros no heap de 256 MB do Tomcat e não tem "mover
       todos" — ver [IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md).
-- [x] `scripts/inserir_exemplares.py` — o passo dos exemplares: casa cada
+- [x] `biblio.biblivre.exemplares` — o passo dos exemplares: casa cada
       linha do `exemplares.csv` com `biblio_records.id` pelo `035 $a`,
       gera o tombo no formato do próprio BibLivre
       (`<prefixo>.<ano>.<contador>`) e insere em `biblio_holdings`.
@@ -55,17 +55,6 @@
       altera `biblio_holdings.availability`: "emprestado" é derivado de
       `return_date IS NULL`.
 
-## 🚧 Próximos passos
-
-Falta executar a carga de circulação e empacotar. O `.b5bz` é um dump
-PostgreSQL e carrega tudo junto — montá-lo à mão exigiria reproduzir 61
-tabelas de schema válido, então deixamos o BibLivre gerá-lo. Ver
-[IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md).
-
-- [x] Conferir na interface: busca no catálogo, aba Exemplares de uma obra,
-      etiqueta de teste e um empréstimo de teste (feito e devolvido)
-- [x] Apagar o usuário e o empréstimo de teste (o `users.id` 1 é o primeiro
-      leitor da origem)
 - [x] **Carga de circulação executada (2026-08-19):** 2.743 leitores em
       `users` (2.488 active, 255 inactive) e 39.580 valores em
       `users_values`; 9 campos criados em `users_fields` com as traduções;
@@ -74,20 +63,35 @@ tabelas de schema válido, então deixamos o BibLivre gerá-lo. Ver
       empréstimos com leitor ou exemplar inexistente, 0 exemplares com dois
       empréstimos em aberto, 0 chaves de `users_values` sem campo, 0 reservas
       sem registro, sequences em 2.743 e 19.592.
-- [ ] **Reiniciar o Tomcat** — `Restart-Service Tomcat7` num PowerShell como
-      administrador (o serviço não aceita parada sem elevação). Sem isso os 9
-      campos novos não aparecem no formulário: `UserFields` e `Translations`
-      são caches estáticos.
-- [ ] Conferir na interface: ficha de um leitor, lista de atrasos de quem tem
-      pendência, relatório de devoluções em atraso
-- [ ] Gerar o `.b5bz` (Administração → Backup → Full) — o backup só do acervo,
-      gerado antes da circulação, vira ponto de retorno
-- [ ] Restaurar o `.b5bz` na máquina final (o restore **apaga** o schema de
-      destino — ok em máquina limpa, perigoso sobre dados existentes)
+- [x] Reiniciar o Tomcat, conferir leitor/atrasos na interface e gerar o
+      `.b5bz` com a circulação. **A migração está completa e validada**: o
+      processo roda de ponta a ponta.
 
 Reindexar exemplares **não** entra na lista: exemplar não tem tabela de
 índice no BibLivre, e a busca por tombo é subconsulta ao vivo em
 `biblio_holdings`. Ver [IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md).
+
+- [x] **Reorganização em monorepo (2026-09-01/02).** Os scripts soltos viraram
+      pacotes com o namespace `biblio`: `biblio.legado` (lê o `.bkp`),
+      `biblio.biblivre` (fala com o PostgreSQL do BibLivre) e
+      `biblio.catalogacao` (ISBN, lote, fila, export). A API HTTP (`apps/api`)
+      e os CLIs (`scripts/`) passaram a ser duas cascas finas sobre os mesmos
+      módulos — antes cada script tinha a própria cópia de `conectar()` e do
+      MARC do exemplar. As telas viraram um app React (`apps/web`).
+      `python tests/verificar.py` cobre as rotas, a persistência da fila e o
+      formato do MARC gerado.
+
+## 🚧 Próximos passos
+
+O pipeline de migração deixou de ser trabalho pendente e virou **feature de
+produto**: é o caminho de onboarding de uma biblioteca nova que venha de
+sistema legado. O que segue em aberto é do lado da catalogação:
+
+- [ ] Reindex automático depois de gravar obra nova (hoje é aviso na tela)
+- [ ] Medir em campo quanto o dedup por ISBN de fato pega — o teste com a fila
+      real pegou 19 de 26
+- [ ] OCR de ficha CIP para livro sem código de barras (fase de projeto, ver
+      [CATALOGACAO_POR_FOTO.md](CATALOGACAO_POR_FOTO.md))
 
 ## Decisão tomada: 1 registro bibliográfico por obra
 
@@ -194,7 +198,7 @@ ainda é hipótese e as três métricas que a fase 1 precisa medir estão em
 
 ### O que a catalogação por ISBN já resolve
 
-- [x] **Dedup por ISBN contra o acervo** (`scripts/catalogacao/acervo.py`) — o
+- [x] **Dedup por ISBN contra o acervo** (`biblio.biblivre.acervo`) — o
       ISBN lido é confrontado com o 020 $a de `biblio_records` antes de gerar
       MARC. Livro que já existe entra como **exemplar** do registro que já está
       lá, não como ficha nova. O casamento aceita ISBN-10 e ISBN-13 como o
@@ -202,17 +206,17 @@ ainda é hipótese e as três métricas que a fase 1 precisa medir estão em
       5 min, invalidado a cada gravação) porque o ISBN mora dentro do blob
       `iso2709`: não há coluna nem índice, e buscar um a um seria varredura de
       tabela a cada bipe.
-- [x] **Fila persistida e revisável** (`scripts/catalogacao/fila.py`,
-      `static/fila.html`) — os itens já viviam em `data/fila/*.json`, mas o
+- [x] **Fila persistida e revisável** (`biblio.catalogacao.fila`,
+      `apps/web` (tela de revisão)) — os itens já viviam em `data/fila/*.json`, mas o
       servidor nunca os relia: reiniciar o processo dava fila vazia com os
       arquivos intactos no disco. Agora carregam na subida, têm `id` e ciclo
       de vida (`pendente → revisado → exportado`, ou `ignorado`), e o
       dashboard do PC edita, filtra, agrupa e exporta em lote.
 - [x] **Exemplares no mesmo lugar da migração**
-      (`scripts/catalogacao/holdings.py`) — reusa `montar_exemplar`,
+      (`biblio.biblivre.exemplares`) — reusa `montar_exemplar`,
       `gerar_tombos` e `ler_prefixo_tombo` de `inserir_exemplares.py` em vez de
       chamar o script por subprocesso. Obras e exemplares fecham na **mesma
       transação**: não existe mais obra gravada com exemplar faltando.
 
-Ainda em aberto: reindex automático (hoje é aviso na tela), e medir em campo
-quanto o dedup por ISBN de fato pega — o teste com a fila real pegou 19 de 26.
+O que ainda está em aberto na catalogação está em **Próximos passos**, no
+começo deste arquivo.

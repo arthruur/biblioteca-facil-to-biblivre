@@ -21,8 +21,8 @@ Operacionalizar a proposta de catalogação automática por ISBN (codigo de barr
 
 **Export integrado ao pipeline existente**
 - `scripts/catalogacao/export.py:49` `exportar_itens()` reaproveita `scripts/gerar_marc.py:172` `montar_registro()` + `chave_obra()` (agrupamento conservador por conteúdo) para gerar `data/export/obras_<ts>.mrc` + `exemplares_<ts>.csv` (`numacervo` base 900000).
-- `scripts/servidor.py:89` `POST /api/fila/exportar-biblivre {executar, db:{senha}}` — com `executar:false` só gera arquivos; com `true` insere direto via `scripts/inserir_obras.py` (`001/005/008`, `biblio_records`) e `scripts/inserir_exemplares.py` (`biblio_holdings`).
-- **Senha no frontend**: `static/fila.html` checkbox + input `password` (`#senha-box`). `export.py:117` exige `db.senha`; se ausente retorna `senha_requerida` sem `getpass` (antes bloqueava o Uvicorn com `Senha de biblivre@localhost:` + `UnicodeDecodeError 0xe7`). Exemplares agora herdam `PGPASSWORD`/`--senha` no subprocess (`export.py:183`).
+- `scripts/servidor.py:89` `POST /api/fila/exportar-biblivre {executar, db:{senha}}` — com `executar:false` só gera arquivos; com `true` insere direto via `biblio.biblivre.obras` (`001/005/008`, `biblio_records`) e `biblio.biblivre.exemplares` (`biblio_holdings`).
+- **Senha no frontend**: `apps/web` (tela de revisão) checkbox + input `password` (`#senha-box`). `export.py:117` exige `db.senha`; se ausente retorna `senha_requerida` sem `getpass` (antes bloqueava o Uvicorn com `Senha de biblivre@localhost:` + `UnicodeDecodeError 0xe7`). Exemplares agora herdam `PGPASSWORD`/`--senha` no subprocess (`export.py:183`).
 - Listagem `/fila` mostra Lote + Fila e botão **Exportar para Biblivre 5** com download de JSON de conferência.
 
 **Lookup**

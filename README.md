@@ -1,109 +1,169 @@
 # biblioteca-facil-to-biblivre
 
-Migração **Biblioteca Fácil → Biblivre 5** (14.880 obras / 16.251 exemplares validados) + **MVP de Catalogação por ISBN** com lote, ZXing e export integrado.
+Ferramentas de gestão de acervo para bibliotecas que rodam **BibLivre 5**.
 
-> **Status:** Migração validada byte-a-byte (`docs/IMPORTACAO_BIBLIVRE.md`). MVP em `https://<ip>:8000` após `docker compose up` — ver abaixo.
+Duas coisas que se apoiam no mesmo núcleo:
 
-## 1) MVP Catalogação ISBN — o que entrega
+1. **Catalogação por ISBN** — bipar o código de barras no celular, revisar no PC
+   e gravar no BibLivre, sem duplicar o que a biblioteca já tem.
+2. **Migração de acervo legado** — trazer um acervo inteiro do *Biblioteca
+   Fácil* para o BibLivre 5. Executado e validado em campo: 14.880 obras,
+   16.251 exemplares, 2.743 leitores e 19.592 empréstimos.
 
-Fluxo validado em campo (ex.: `9786559870530` → *2041*, Globo Livros via `BrasilAPI/CBL`):
+> **Status:** migração completa e validada (`docs/IMPORTACAO_BIBLIVRE.md`).
+> Catalogação por ISBN em uso. Ver `docs/ROADMAP.md`.
 
-**Celular:** `Escanear` (ZXing `TRY_HARDER` EAN-13 em tempo real) → **Lote** (galeria que acumula, padrão scanner de documentos, debounce 2s) → clique para ver ficha completa (capa, descrição, ISBN, CDD/Cutter editáveis) e ajustar **Exemplares ×N** → **Foto** (fallback `scanFile`) → **Manual** (ISBN 10/13) → **Enviar lote para fila**
+---
 
-**Dedup por ISBN:** antes de gerar qualquer MARC, cada ISBN é confrontado com o acervo já catalogado (`scripts/catalogacao/acervo.py` indexa 020 $a de `biblio_records` — ~10.5 mil ISBNs em <1s, com equivalência ISBN-10 ↔ ISBN-13). Livro que já existe **não vira ficha nova**: entra como exemplar a mais no `record_id` que já está lá. Sem isso, reescanear o acervo duplicaria o catálogo.
+## 1) Como está organizado
 
-**Fila (`/fila`) — dashboard de revisão:** persiste em `data/fila/*.json` e sobrevive a reinício. Indicadores (a exportar / pendentes / revisados / obras novas / já no acervo / precisam de atenção), busca, filtro por situação, ordenação, edição embutida de 12 campos, ações em lote (revisado/pendente/ignorar/remover), stepper de exemplares e export dos selecionados. **Exportar** gera `data/export/obras_<ts>.mrc` + `exemplares_<ts>.csv` via `scripts/gerar_marc.py` (`chave_obra` conservadora) e, com senha, grava em `single.biblio_records/holdings` numa transação só (`Bib.<ano>.<seq>` continuando do maior existente). Reindexar só é pedido quando nasceu obra nova.
+```
+apps/
+  api/          FastAPI — só monta os routers, sem regra de negócio
+  web/          React + Vite — as duas telas
+packages/
+  bf-legado/         biblio.legado      lê o .bkp do Biblioteca Fácil
+  biblivre-client/   biblio.biblivre    fala com o PostgreSQL do BibLivre
+  catalogacao/       biblio.catalogacao ISBN, lote, fila, export
+scripts/        CLIs finos por cima dos pacotes (dry-run por padrão)
+tests/          verificação de fumaça, sem banco e sem rede
+docs/           formato do .bkp, tabelas, importação, spec de UI
+```
 
-Ver [docs/SPEC_UI.md](docs/SPEC_UI.md) para a spec das telas.
+O namespace Python é `biblio`, e a regra que atravessa os pacotes é: **nada
+neles commita**. Toda função de gravação recebe a conexão e devolve o commit
+para quem chamou, porque obras e exemplares precisam fechar na mesma transação
+— não existe "gravou metade".
 
-Fallback robusto: ZXing falha 5× → Tesseract.js (OCR-B abaixo do código, `eng` `psm 7`, valida dígito ISBN-13).
+| Pacote | Responde por |
+|---|---|
+| `biblio.legado` | `bkp`, `tabela`, `consolidar` — o formato proprietário do sistema antigo |
+| `biblio.biblivre` | `conexao`, `marc`, `obras`, `exemplares`, `acervo`, `leitores`, `circulacao` |
+| `biblio.catalogacao` | `lookup`, `fila`, `export`, `ficha` (OCR), `config`, `cert` |
+
+---
+
+## 2) Rodar
+
+**Container (recomendado):**
+
+```bash
+docker compose up --build
+# https://<IP-DO-PC>:8000        celular — escanear (aceite o certificado)
+# https://<IP-DO-PC>:8000/fila   PC — revisar e exportar
+# https://<IP-DO-PC>:8000/docs   OpenAPI
+```
+
+**Local:**
+
+```bash
+pip install -r requirements.txt     # instala os 4 pacotes em modo editável
+cd apps/web && npm install && npm run build && cd ../..
+python scripts/servidor.py          # ou: biblio-servidor
+```
+
+**Desenvolvendo o frontend** (HMR, reusa o certificado que o backend gera):
+
+```bash
+python scripts/servidor.py          # backend na 8000
+cd apps/web && npm run dev          # frontend na 5173, com proxy para /api
+```
+
+HTTPS não é preciosismo: `getUserMedia` só funciona em contexto seguro, então
+sem TLS não há câmera — e sem câmera não há scanner. O certificado é
+autoassinado e nasce na primeira execução.
+
+**Verificar que está tudo de pé:**
+
+```bash
+python tests/verificar.py
+```
+
+---
+
+## 3) Catalogação por ISBN
+
+**Celular (`/`)** — scanner contínuo (ZXing, EAN-13), lote que acumula sem
+pedir decisão nenhuma, ficha completa ao toque, quantidade de exemplares.
+Código riscado cai num OCR da faixa de números logo abaixo das barras, validado
+pelo dígito verificador.
+
+**PC (`/fila`)** — sete indicadores, busca, filtro por situação, edição
+embutida de 12 campos, ações em lote e export.
+
+**A regra que sustenta o produto — dedup por ISBN:** antes de gerar qualquer
+MARC, o ISBN é confrontado com o acervo já catalogado
+(`biblio.biblivre.acervo` indexa o 020 $a de `biblio_records`, ~10.5 mil ISBNs
+em menos de 1s, casando ISBN-10 com ISBN-13). Livro que já existe **não vira
+ficha nova**: entra como exemplar a mais no `record_id` que já está lá. Sem
+isso, reescanear a estante duplicaria o catálogo.
 
 ```
 Celular (ZXing) --ISBN--> /api/lote --lookup--> Google Books → BrasilAPI → Open Library
                                     --acervo--> ISBN já catalogado?
                                                  ├── não → obra nova  (biblio_records + N holdings)
                                                  └── sim → só exemplar (N holdings no record_id existente)
-PC /fila (revisão) --------> /api/fila/exportar-biblivre --> Biblivre 5
+PC /fila (revisão) --------> /api/fila/exportar-biblivre --> BibLivre 5
 ```
 
-Para ligar a checagem de duplicata é preciso dar ao servidor acesso ao Postgres do Biblivre — pela tela `/fila`, por `--db-senha`, ou por `PGPASSWORD`/`BIBLIVRE_DB_SENHA`:
+Para ligar a checagem é preciso dar ao servidor acesso ao Postgres do BibLivre
+— pela tela `/fila`, por `--db-senha`, ou por `PGPASSWORD` / `BIBLIVRE_DB_SENHA`:
 
 ```bash
 python scripts/servidor.py --db-senha SUA_SENHA
 ```
 
-Sem isso o app funciona igual, mas trata todo livro como obra nova — e a tela avisa disso em vez de degradar em silêncio.
+Sem isso o app funciona igual, mas trata todo livro como obra nova — **e a tela
+avisa disso** em vez de degradar em silêncio. A senha vive só na memória do
+processo; nunca vai para disco.
 
-## 2) Implantação rápida (recomendado: container)
+Ver [docs/SPEC_UI.md](docs/SPEC_UI.md) para os estados que as telas cobrem e o
+contrato das rotas.
 
-**Pré-requisitos:** Docker + Docker Compose.
+---
 
-```bash
-# 1. Build + sobe (gera cert auto-assinado em data/certs)
-docker compose up --build
-
-# 2. Abra no celular (mesma rede)
-# https://<IP-DO-PC>:8000  (aceite o certificado)
-# Teste: Escanear → aponte para código de barras → Lote → Enviar → /fila → Exportar
-```
-
-* Imagem `python:3.11-slim` + `tesseract-ocr` + `tesseract-ocr-por` + `libgl1` (`Dockerfile:6`). `TESSERACT_CMD=/usr/bin/tesseract` no Linux (fallback do path Windows).
-* `docker-compose.yml` sobe `app:8000` + `postgres:15` demo (remova `db` e aponte `PGHOST` para o Postgres do Biblivre em produção).
-* Volumes: `./data:/app/data` persiste `fila/*.json` e `export/*.mrc`.
-
-**Sem Docker (dev local):**
-```bash
-pip install -r requirements.txt  # opencv, pymarc, fastapi, uvicorn, qrcode, psycopg2, pytesseract
-# Instale Tesseract + por.traineddata (Windows: tesseract-ocr-w64-setup + por.traineddata em tessdata)
-python scripts/servidor.py  # https://0.0.0.0:8000
-# HTTP apenas em localhost:
-python scripts/servidor.py --sem-ssl --porta 8000
-```
-
-**Produção B2G:** atrás de Nginx com Let's Encrypt (troca cert auto-assinado), `PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD` via env, `restart: unless-stopped`.
-
-## 3) Migração legada (uso rápido)
+## 4) Migração de acervo legado
 
 ```bash
-pip install -r requirements.txt
-
 python scripts/extrair_bkp.py backup.bkp saida/
 python scripts/extrair_tabela.py saida/ --listar
-python scripts/extrair_tabela.py saida/ T09_ACER.dat acervo.csv
 python scripts/consolidar.py saida/ acervo_consolidado.csv
-python scripts/gerar_marc.py acervo_consolidado.csv obras.mrc  # + exemplares.csv
-python scripts/inserir_obras.py obras.mrc --executar           # -> Reindexar
+python scripts/gerar_marc.py acervo_consolidado.csv obras.mrc   # + exemplares.csv
+python scripts/inserir_obras.py obras.mrc --executar            # → Reindexar
 python scripts/inserir_exemplares.py exemplares.csv --executar
-python scripts/inserir_leitores.py saida/ --executar           # -> reinicie Tomcat
+python scripts/inserir_leitores.py saida/ --executar            # → reinicie o Tomcat
 python scripts/inserir_emprestimos.py saida/ --executar
 ```
 
-Sem `--executar` é dry-run. Detalhe byte-a-byte e por que importação por arquivo não cria holdings em `docs/IMPORTACAO_BIBLIVRE.md`.
+Sem `--executar` é dry-run: o script relata exatamente o que faria e não escreve
+nada. Os CLIs são casca fina — a lógica está em `biblio.legado` e
+`biblio.biblivre`, e é a mesma que a API usa.
 
-## 4) Estrutura
+Duas decisões que moldaram tudo, detalhadas em
+[docs/IMPORTACAO_BIBLIVRE.md](docs/IMPORTACAO_BIBLIVRE.md):
 
-```
-scripts/
-  extrair_bkp.py, bf_tabela.py, extrair_tabela.py, consolidar.py
-  gerar_marc.py, inserir_obras.py, inserir_exemplares.py, inserir_leitores.py, inserir_emprestimos.py
-  detectar_ficha.py, extrair_isbn.py, gerar_ficha_sintetica.py
-  servidor.py (140 linhas) + catalogacao/ (config, lookup, ficha, fila, export, rede, cert)
-static/ index.html (scanner Lote + modal + Foto/Manual)  fila.html (Exportar)
-docs/  FORMATO_BKP.md  TABELAS.md  IMPORTACAO_BIBLIVRE.md  ROADMAP.md  CATALOGACAO_POR_FOTO.md  NOTA_SESSAO_2026-09-01.md
-Dockerfile  docker-compose.yml
-```
+- **Um registro bibliográfico por obra, não por exemplar.** A importação por
+  arquivo do BibLivre só cria registros bibliográficos, nunca exemplares, e
+  empréstimo é feito contra exemplar. Importar 1:1 não criaria exemplar nenhum.
+- **O agrupamento é por conteúdo, nunca por ISBN.** No acervo antigo o ISBN era
+  digitado à mão: três livros diferentes da mesma editora dividiam o mesmo
+  número. ISBN entra no registro (020), mas não na chave.
 
-## 5) Estratégia de conteinerização (estado atual)
+---
 
-**Decisão:** containerizar **apenas o MVP** (app Python). Biblivre 5 permanece no instalador Windows/Java-Tomcat-Postgres (61 tabelas, restore `.b5bz` destrutivo) — não vale replicar no Compose para produção. Para demo, o `db` Postgres no compose simula o alvo.
+## 5) Produção
 
-* Build leve: `python:3.11-slim` (~350MB com tesseract-por) vs `python:3.11` (~900MB).
-* `tesseract-ocr-por` já na imagem — sem download em runtime; mobile envia ISBN, OCR fica no device (Tesseract.js) exceto ficha CIP (server `por`).
-* Cert auto-assinado gerado em `data/certs` (volume persistido) — produção troca por volume de certs do Nginx.
-* Logs: `ConnectionResetError 10054` no Windows + HTTPS é inofensivo (Proactor fecha keep-alive).
+Atrás de Nginx com Let's Encrypt (trocando o certificado autoassinado),
+`PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD` por ambiente e
+`restart: unless-stopped`. O volume `./data` guarda a fila de revisão, os
+exports e o certificado — é trabalho de gente pendente e não pode morrer com o
+container.
 
-Próximo passo infra: `ghcr.io` + `docker compose pull` na FPC, backup `pg_dump` diário de `single`.
+O BibLivre 5 continua no instalador Windows/Java-Tomcat-Postgres: são 61
+tabelas e um restore `.b5bz` destrutivo, não vale replicar no Compose. O serviço
+`db` do compose é só para subir o MVP sem um BibLivre ao lado.
 
 ## Aviso
 
-Dados de backup real (`.bkp`, `.csv`, `data/fila/*.json`) são pessoais — `.gitignore` já exclui. Ver `LICENSE` (MIT).
+Backups reais (`.bkp`, `.csv`, `data/fila/*.json`) contêm dados pessoais de
+leitores — o `.gitignore` já os exclui. Ver [LICENSE](LICENSE) (MIT).

@@ -1,10 +1,10 @@
 # Spec de UI/UX — Catalogação por ISBN
 
-Documento de referência para prototipar as telas servidas por
-`scripts/servidor.py`. Descreve o que cada tela precisa mostrar, em que estado
-ela pode estar e por quê — não o CSS que a implementação atual usa.
+Contrato das duas telas. Descreve o que cada uma precisa mostrar, em que
+estado ela pode estar e por quê — não o CSS que a implementação usa.
 
-Quem for redesenhar pode ignorar a aparência de hoje inteira; o que não pode
+As telas vivem em `apps/web` (React); as rotas que elas consomem, em
+`apps/api`. Quem for redesenhar pode trocar a aparência inteira; o que não pode
 mudar sem quebrar o produto são os **estados**, os **destinos** e as
 **garantias** listadas aqui.
 
@@ -121,7 +121,8 @@ Quando o ISBN já está no acervo, o modal abre com um aviso verde no topo:
 
 ### Estados de erro que o protótipo precisa cobrir
 - câmera negada pelo navegador
-- código riscado/amassado que não decodifica (há fallback OCR após 5 falhas)
+- código riscado/amassado que não decodifica (após 8 leituras falhas seguidas
+  entra o OCR da faixa de números, validado pelo dígito verificador)
 - servidor fora do ar no meio de um lote (o lote em memória do navegador
   sobrevive; o envio é que falha)
 

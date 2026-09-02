@@ -8,37 +8,20 @@ services:
       # É trabalho de gente pendente: não pode morrer com o container.
       - ./data:/app/data
     environment:
-      # Em produção aponte para o Postgres do BibLivre e remova o serviço `db`.
-      - PGHOST=db
-      - PGPORT=5432
-      - PGDATABASE=biblivre4
-      - PGUSER=biblivre
-      # A senha aqui é só do Postgres de demonstração. Em produção use um
-      # arquivo .env ou secret — nunca a senha real do BibLivre no compose.
-      - PGPASSWORD=abracadabra
-      - BIBLIVRE_DB_SCHEMA=single
-    depends_on:
-      db:
-        condition: service_healthy
+      # Aponta para o PostgreSQL do BibLivre 5 que roda na máquina hospedeira
+      # (instalador Windows/Java-Tomcat-Postgres). Sem isso a checagem de ISBN
+      # já catalogado fica desligada e todo livro bipado vira obra nova.
+      - PGHOST=${PGHOST:-host.docker.internal}
+      - PGPORT=${PGPORT:-5432}
+      - PGDATABASE=${PGDATABASE:-biblivre4}
+      - PGUSER=${PGUSER:-biblivre}
+      # `abracadabra` é o default público do BibLivre (está no context.xml do
+      # projeto). Numa instalação com senha própria, defina PGPASSWORD num
+      # arquivo .env ou secret — nunca edite a senha real aqui.
+      - PGPASSWORD=${PGPASSWORD:-abracadabra}
+      - BIBLIVRE_DB_SCHEMA=${BIBLIVRE_DB_SCHEMA:-single}
+    extra_hosts:
+      # No Docker Desktop `host.docker.internal` já resolve; no Docker de Linux
+      # não, e sem esta linha o container não enxergaria o Postgres do host.
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-  # Postgres vazio, só para subir o MVP sem um BibLivre instalado ao lado.
-  # Não tem o schema do BibLivre: a checagem de ISBN vai reportar acervo
-  # indisponível, que é exatamente o estado de alerta que a tela sabe mostrar.
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: biblivre4
-      POSTGRES_USER: biblivre
-      POSTGRES_PASSWORD: abracadabra
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U biblivre -d biblivre4"]
-      interval: 5s
-      retries: 10
-
-volumes:
-  pgdata:

@@ -54,6 +54,11 @@ docker compose up --build
 # https://<IP-DO-PC>:8000/docs   OpenAPI
 ```
 
+O compose fala com o PostgreSQL do BibLivre que já roda na máquina, via
+`host.docker.internal` — o container sobe com o dedup por ISBN ligado. Numa
+instalação com host, porta ou senha diferentes do default, sobrescreva por
+`.env` (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`).
+
 **Local:**
 
 ```bash
@@ -106,8 +111,9 @@ Celular (ZXing) --ISBN--> /api/lote --lookup--> Google Books → BrasilAPI → O
 PC /fila (revisão) --------> /api/fila/exportar-biblivre --> BibLivre 5
 ```
 
-Para ligar a checagem é preciso dar ao servidor acesso ao Postgres do BibLivre
-— pela tela `/fila`, por `--db-senha`, ou por `PGPASSWORD` / `BIBLIVRE_DB_SENHA`:
+Para ligar a checagem é preciso dar ao servidor acesso ao Postgres do BibLivre.
+No compose isso já vem configurado; rodando local, é pela tela `/fila`, por
+`--db-senha`, ou por `PGPASSWORD` / `BIBLIVRE_DB_SENHA`:
 
 ```bash
 python scripts/servidor.py --db-senha SUA_SENHA
@@ -160,8 +166,10 @@ exports e o certificado — é trabalho de gente pendente e não pode morrer com
 container.
 
 O BibLivre 5 continua no instalador Windows/Java-Tomcat-Postgres: são 61
-tabelas e um restore `.b5bz` destrutivo, não vale replicar no Compose. O serviço
-`db` do compose é só para subir o MVP sem um BibLivre ao lado.
+tabelas e um restore `.b5bz` destrutivo, não vale replicar no Compose. Por isso
+o compose sobe só o app e conecta no Postgres que já existe — não há banco de
+demonstração: um Postgres vazio ao lado só serviria para desligar o dedup em
+silêncio e disputar a porta 5432 com o BibLivre real.
 
 ## Aviso
 

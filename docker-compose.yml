@@ -4,23 +4,27 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      # Persiste a fila de revisão (data/fila), os exports e o certificado.
+      # É trabalho de gente pendente: não pode morrer com o container.
       - ./data:/app/data
-      - ./static:/app/static:ro
     environment:
-      # Biblivre 5 — aponte para o Postgres real quando for inserir direto
+      # Em produção aponte para o Postgres do BibLivre e remova o serviço `db`.
       - PGHOST=db
       - PGPORT=5432
       - PGDATABASE=biblivre4
       - PGUSER=biblivre
+      # A senha aqui é só do Postgres de demonstração. Em produção use um
+      # arquivo .env ou secret — nunca a senha real do BibLivre no compose.
       - PGPASSWORD=abracadabra
-      - TESSERACT_CMD=/usr/bin/tesseract
+      - BIBLIVRE_DB_SCHEMA=single
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
 
-  # Postgres apenas para demo/teste do MVP sem Biblivre instalado
-  # Em produção aponte PGHOST para o Postgres do Biblivre e remova este serviço
+  # Postgres vazio, só para subir o MVP sem um BibLivre instalado ao lado.
+  # Não tem o schema do BibLivre: a checagem de ISBN vai reportar acervo
+  # indisponível, que é exatamente o estado de alerta que a tela sabe mostrar.
   db:
     image: postgres:15-alpine
     environment:

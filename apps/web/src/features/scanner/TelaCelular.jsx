@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Botao,
   Cantos,
-  IconeInverterCamera,
   IconeLanterna,
   IconeRemover,
   Modal,
@@ -41,6 +40,7 @@ export function TelaCelular({ conexao, dispositivo }) {
   const [envioFalhou, setEnvioFalhou] = useState('')
   const [enviado, setEnviado] = useState('')
   const [batizando, setBatizando] = useState(false)
+  const [loteRecolhido, setLoteRecolhido] = useState(false)
   const trilhaRef = useRef(null)
 
   const lote = useLote({
@@ -106,7 +106,7 @@ export function TelaCelular({ conexao, dispositivo }) {
   const temLote = lote.itens.length > 0
 
   return (
-    <div className="cel">
+    <div className={`cel ${loteRecolhido ? 'cel--camera-cheia' : ''}`}>
       <header className="cel__topo">
         <h1 className="cel__titulo">Escanear</h1>
         <button
@@ -133,12 +133,37 @@ export function TelaCelular({ conexao, dispositivo }) {
       {/* Bandeja */}
       <section className="cel__lote">
         <div className="cel__lote-topo">
-          <span className="microrrotulo">Lote</span>
-          <span className="cel__lote-resumo">
-            {temLote
-              ? `${lote.itens.length} ${lote.itens.length === 1 ? 'título' : 'títulos'} · ${total} ex`
-              : 'vazio'}
-          </span>
+          <div className="cel__lote-info">
+            <span className="microrrotulo">Lote</span>
+            <span className="cel__lote-resumo">
+              {temLote
+                ? `${lote.itens.length} ${lote.itens.length === 1 ? 'título' : 'títulos'} · ${total} ex`
+                : 'vazio'}
+            </span>
+          </div>
+          <div className="cel__lote-acoes">
+            {loteRecolhido && temLote && (
+              <button
+                type="button"
+                className="cel__btn-enviar-compacto"
+                onClick={enviar}
+                disabled={lote.enviando}
+                title="Enviar lote para a fila"
+              >
+                {lote.enviando ? '…' : `Enviar (${lote.itens.length})`}
+              </button>
+            )}
+            <button
+              type="button"
+              className="cel__btn-collapse"
+              onClick={() => setLoteRecolhido((v) => !v)}
+              title={loteRecolhido ? 'Expandir lote' : 'Recolher lote para tela cheia'}
+              aria-expanded={!loteRecolhido}
+              aria-label={loteRecolhido ? 'Expandir lote' : 'Recolher lote'}
+            >
+              {loteRecolhido ? '+' : '−'}
+            </button>
+          </div>
         </div>
 
         {temLote ? (
@@ -270,38 +295,43 @@ function VisorCelular({ scanner, ultimoIsbn }) {
 
       {!scanner.escaneando ? (
         <div className="cel__repouso">
-          <div className="cel__repouso-quadro" aria-hidden="true" />
           <Botao variante="primario" tamanho="toque" onClick={scanner.iniciar}>
             Abrir a câmera
           </Botao>
         </div>
       ) : (
         <>
-          <span className="cel__etiqueta mono" aria-hidden="true">
-            {scanner.modoCamera === 'user' ? 'Câmera frontal' : 'Câmera traseira'} · EAN-13 · {motor}
-          </span>
-          {/* Enquadramento automático: caixas reais do BarcodeDetector */}
+          {/* Bouncing boxes dinâmicas */}
           <div className="cel__overlay" aria-hidden="true">
-            {scanner.deteccoes?.map((d, i) => (
-              <div
-                key={d.id || `${d.raw}-${i}`}
-                className={`cel__frame cel__frame--${d.tipo} ${d.dentroAlvo ? 'cel__frame--central' : ''} ${d.pulsando ? 'cel__frame--pulsando' : ''}`}
-                style={{
-                  left: `${d.x * 100}%`,
-                  top: `${d.y * 100}%`,
-                  width: `${d.w * 100}%`,
-                  height: `${d.h * 100}%`,
-                }}
-              >
-                <span
-                  className={`cel__frame-label mono ${d.tipo === 'candidato' ? 'cel__frame-label--candidato' : ''}`}
+            {scanner.deteccoes?.length > 0 ? (
+              scanner.deteccoes.map((d, i) => (
+                <div
+                  key={d.id || `${d.raw}-${i}`}
+                  className={`cel__frame cel__frame--${d.tipo} ${d.dentroAlvo ? 'cel__frame--central' : ''} ${d.pulsando ? 'cel__frame--pulsando' : ''}`}
+                  style={{
+                    left: `${d.x * 100}%`,
+                    top: `${d.y * 100}%`,
+                    width: `${d.w * 100}%`,
+                    height: `${d.h * 100}%`,
+                  }}
                 >
-                  {d.raw ? d.raw.slice(-4) : '···'}
+                  <span className="cel__frame-canto cel__frame-canto--se" />
+                  <span className="cel__frame-canto cel__frame-canto--sd" />
+                  <span className="cel__frame-canto cel__frame-canto--ie" />
+                  <span className="cel__frame-canto cel__frame-canto--id" />
+                  {d.raw ? (
+                    <span className="cel__frame-label mono">
+                      {d.raw.slice(-4)}
+                    </span>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              scanner.escaneando && (
+                <span className="cel__hint-discreto">
+                  Aponte para o código de barras
                 </span>
-              </div>
-            ))}
-            {!scanner.deteccoes?.length && scanner.escaneando && (
-              <div className="cel__overlay-hint">Centralize o código na tela</div>
+              )
             )}
           </div>
 
@@ -320,18 +350,6 @@ function VisorCelular({ scanner, ultimoIsbn }) {
                 <IconeLanterna tamanho={13} />
               </button>
             )}
-            <button
-              type="button"
-              className="cel__botao"
-              onClick={(e) => {
-                e.stopPropagation()
-                scanner.alternarCamera?.()
-              }}
-              title={scanner.modoCamera === 'user' ? 'Mudar para câmera traseira' : 'Mudar para câmera frontal'}
-              aria-label="Alternar câmera"
-            >
-              <IconeInverterCamera tamanho={16} />
-            </button>
             {!scanner.ocrAutoAtivo && (
               <button
                 type="button"

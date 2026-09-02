@@ -2,11 +2,12 @@
  * @fileoverview Hook React orquestrador do leitor de código de barras.
  *
  * PROPOSITO:
- * Centraliza o estado da interface (escaneando, zoom, lanterna, caixas visuais)
- * e conecta os módulos de hardware (camera), visão (scannerLoop) e OCR.
+ * Centraliza o estado reativo da interface (status, erros, motor, recursos)
+ * e conecta o ciclo de vida da câmera (`core/camera.js`), o laço nativo
+ * (`core/scannerLoop.js`) e o fallback para OCR (`core/ocr.js`).
  *
  * INTERFACE:
- * - useScanner(props: { aoLer: (isbn: string, meta: object) => void }): object
+ * - useScanner({ aoLer: Function }): object
  *
  * FLUXO:
  * Consumido por `TelaCelular.jsx`. Orquestra módulos de `core/` e `utils/`.
@@ -17,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { tocarBeepSucesso, vibrar } from './core/audio.js'
-import { abrirCamera, ajustarCamera, alternarLanterna, aplicarZoom, dispararPulsoFoco, fecharCamera } from './core/camera.js'
+import { abrirCamera, ajustarCamera, alternarLanterna, aplicarZoom, dispararPulsoFoco, fecharCamera, RESTRICOES_VIDEO } from './core/camera.js'
 import { criarDetectorNativo, executarLeituraFoto, formatosNativos, iniciarLeitorReserva } from './core/decodificador.js'
 import { ALVO } from './core/geometria.js'
 import { encerrarWorkerOcr, executarTentativaOcr } from './core/ocr.js'
@@ -34,7 +35,6 @@ export function useScanner({ aoLer }) {
   const [recursos, setRecursos] = useState({ lanterna: false, zoom: null })
   const [lanternaLigada, setLanternaLigada] = useState(false); const [zoom, setZoom] = useState(null)
   const [deteccoes, setDeteccoes] = useState([]); const [ocrAtivo, setOcrAtivo] = useState(false)
-  const [modoCamera, setModoCamera] = useState('environment'); const modoCameraRef = useRef('environment')
 
   const videoRef = useRef(null); const trackRef = useRef(null); const streamRef = useRef(null)
   const leitorRef = useRef(null); const lacoRef = useRef(null); const ativoRef = useRef(false)
@@ -63,8 +63,8 @@ export function useScanner({ aoLer }) {
     })
   }, [entregar])
 
-  const parar = useCallback(() => {
-    ativoRef.current = false; clearTimeout(lacoRef.current)
+  const parar = useCallback(async () => {
+    ativoRef.current = false; clearTimeout(lacoRef.current); lacoRef.current = null
     leitorRef.current?.stop?.().catch(() => {})
     fecharCamera(streamRef.current, videoRef.current, ELEMENTO)
     streamRef.current = null; videoRef.current = null; trackRef.current = null; leitorRef.current = null
@@ -74,19 +74,20 @@ export function useScanner({ aoLer }) {
     anunciar('Câmera fechada')
   }, [anunciar])
 
-  const iniciar = useCallback(async (modo = modoCameraRef.current) => {
+  const iniciar = useCallback(async () => {
     if (ativoRef.current) return
     setErroCamera(''); ativoRef.current = true; anunciar('Abrindo a câmera…')
     try {
       const formatos = await formatosNativos()
       if (formatos) {
-        const { stream, video, track } = await abrirCamera(ELEMENTO, modo)
+        const { stream, video, track } = await abrirCamera(ELEMENTO)
         streamRef.current = stream; videoRef.current = video; trackRef.current = track
         const caps = await ajustarCamera(track)
         setRecursos(caps); setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null); setMotor('nativo')
         rodarLaco(criarDetectorNativo(formatos))
       } else {
-        leitorRef.current = await iniciarLeitorReserva(ELEMENTO, { facingMode: modo }, (t) => entregar(t, 'codigo'))
+        const { instancia, video } = await iniciarLeitorReserva(ELEMENTO, RESTRICOES_VIDEO, (t) => entregar(t, 'codigo'))
+        leitorRef.current = instancia; videoRef.current = video
         setMotor('zxing')
       }
       setEscaneando(true); anunciar('Aponte para o código de barras')
@@ -95,17 +96,20 @@ export function useScanner({ aoLer }) {
     }
   }, [anunciar, entregar, parar, rodarLaco])
 
-  const alternarCamera = useCallback(() => {
-    const prox = modoCameraRef.current === 'environment' ? 'user' : 'environment'
-    modoCameraRef.current = prox; setModoCamera(prox)
-    parar()
-    setTimeout(() => iniciar(prox), 120)
-  }, [parar, iniciar])
-
   const tentarOcr = useCallback(() => {
+    const video = videoRef.current || document.querySelector(`#${ELEMENTO} video`)
+    if (!video?.videoWidth) {
+      anunciar('Aguarde a câmera iniciar antes de ler os números', 'info')
+      return
+    }
     executarTentativaOcr({
-      video: videoRef.current, regiao: ultimoCandidatoRef.current,
-      ocrRodandoRef: ocrRodando, ultimoOcrRef: ultimoOcr, setOcrAtivo, anunciar, entregar,
+      video,
+      regiao: null,
+      ocrRodandoRef: ocrRodando,
+      ultimoOcrRef: ultimoOcr,
+      setOcrAtivo,
+      anunciar,
+      entregar,
     })
   }, [anunciar, entregar])
 
@@ -129,9 +133,9 @@ export function useScanner({ aoLer }) {
   }, [])
 
   return {
-    elementoId: ELEMENTO, escaneando, status, tomStatus, erroCamera, motor, modoCamera,
+    elementoId: ELEMENTO, escaneando, status, tomStatus, erroCamera, motor,
     recursos, lanternaLigada, zoom, ocrAtivo, ocrAutoAtivo: false, deteccoes,
-    iniciar, parar, alternarCamera, lerArquivo, tentarOcr, dispararFoco: dispararFocoHook,
+    iniciar, parar, lerArquivo, tentarOcr, dispararFoco: dispararFocoHook,
     alternarLanterna: alternarLanternaHook, mudarZoom: mudarZoomHook, anunciar,
   }
 }

@@ -101,7 +101,8 @@ export async function iniciarLeitorReserva(elementoId, restricoesVideo, aoLer) {
     (texto) => aoLer(texto),
     () => {}
   )
-  return instancia
+  const video = document.querySelector(`#${elementoId} video`)
+  return { instancia, video }
 }
 
 async function decodificarFotoReserva(arquivo) {

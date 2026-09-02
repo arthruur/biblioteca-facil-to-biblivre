@@ -10,7 +10,7 @@ import {
 
 describe('core/camera', () => {
   test('RESTRICOES_VIDEO define câmera traseira e 1080p', () => {
-    assert.equal(RESTRICOES_VIDEO.facingMode.exact, 'environment')
+    assert.equal(RESTRICOES_VIDEO.facingMode.ideal, 'environment')
     assert.equal(RESTRICOES_VIDEO.width.ideal, 1920)
   })
 
@@ -90,3 +90,4 @@ describe('core/camera', () => {
     assert.equal(mockVideo.srcObject, null)
   })
 })
+

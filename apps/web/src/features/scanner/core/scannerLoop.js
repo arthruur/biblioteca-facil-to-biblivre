@@ -41,24 +41,14 @@ async function tentarDecodificarRecorte(video, regiao, detector, aoLerCodigo, ag
 
 async function processarCandidatos({ video, detector, candidatos, ctx, agora }) {
   const melhor = candidatos[0]
-  const anterior = ctx.ultimoCandidatoRef.current
-
-  if (anterior && Math.abs(anterior.x - melhor.x) < 0.08 && Math.abs(anterior.y - melhor.y) < 0.08) {
-    if (!ctx.candidatoEstavelInicioRef.current) ctx.candidatoEstavelInicioRef.current = Date.now()
-  } else {
-    ctx.candidatoEstavelInicioRef.current = Date.now()
-  }
   ctx.ultimoCandidatoRef.current = melhor
 
-  ctx.aoAtualizarDeteccoes((previas) =>
-    candidatos.slice(0, 3).map((c, i) => {
-      const p = previas?.find((prev) => Math.abs(prev.x - c.x) < 0.07 && Math.abs(prev.y - c.y) < 0.07)
-      return {
-        x: c.x, y: c.y, w: c.largura, h: c.altura,
-        dentroAlvo: true, tipo: 'candidato', raw: p?.raw || '', pulsando: true,
-        id: p?.id || `cand-${agora}-${i}`,
-      }
-    })
+  ctx.aoAtualizarDeteccoes(
+    candidatos.slice(0, 3).map((c, i) => ({
+      x: c.x, y: c.y, w: c.largura, h: c.altura,
+      dentroAlvo: true, tipo: 'candidato', pulsando: true,
+      id: `cand-${i}`,
+    }))
   )
 
   let leu = await tentarDecodificarRecorte(video, melhor, detector, ctx.aoLerCodigo, agora)
@@ -69,8 +59,34 @@ async function processarCandidatos({ video, detector, candidatos, ctx, agora }) 
   return { proxima: leu ? INTERVALO_PAUSA : INTERVALO_ATIVO, leu }
 }
 
+function extrairRegiao(item, videoW, videoH) {
+  const b = item?.boundingBox
+  if (b && b.width > 0) {
+    return {
+      x: b.x / videoW,
+      y: b.y / videoH,
+      largura: b.width / videoW,
+      altura: b.height / videoH,
+    }
+  }
+  const cp = item?.cornerPoints
+  if (cp && cp.length >= 4) {
+    const xs = cp.map((p) => p.x)
+    const ys = cp.map((p) => p.y)
+    const minX = Math.min(...xs), maxX = Math.max(...xs)
+    const minY = Math.min(...ys), maxY = Math.max(...ys)
+    return {
+      x: minX / videoW,
+      y: minY / videoH,
+      largura: Math.max(0.1, (maxX - minX) / videoW),
+      altura: Math.max(0.1, (maxY - minY) / videoH),
+    }
+  }
+  return { x: 0.15, y: 0.35, largura: 0.70, altura: 0.30 }
+}
+
 async function executarSalvaguarda({ video, detector, alvo, ctx, agora }) {
-  if (Date.now() - ctx.ultimoFullScanRef.current <= INTERVALO_SALVAGUARDA) {
+  if (Date.now() - ctx.ultimoFullScanRef.current <= 150) {
     return { proxima: INTERVALO_OCIOSO, leu: false }
   }
   ctx.ultimoFullScanRef.current = Date.now()
@@ -80,8 +96,12 @@ async function executarSalvaguarda({ video, detector, alvo, ctx, agora }) {
   const escolhido = maiorDentroDoAlvo(achados, video.videoWidth, video.videoHeight, alvo)
   if (!escolhido?.rawValue) return { proxima: INTERVALO_OCIOSO, leu: false }
 
-  const b = escolhido.boundingBox
-  const regiao = b ? { x: b.x / video.videoWidth, y: b.y / video.videoHeight, largura: b.width / video.videoWidth, altura: b.height / video.videoHeight } : null
+  const regiao = extrairRegiao(escolhido, video.videoWidth, video.videoHeight)
+  ctx.aoAtualizarDeteccoes([{
+    x: regiao.x, y: regiao.y, w: regiao.largura, h: regiao.altura,
+    dentroAlvo: true, tipo: 'candidato', pulsando: true, raw: escolhido.rawValue,
+    id: 'nativo-0',
+  }])
   const leu = ctx.aoLerCodigo(escolhido.rawValue, regiao, agora)
   return { proxima: leu ? INTERVALO_PAUSA : INTERVALO_OCIOSO, leu }
 }
@@ -140,28 +160,27 @@ export function iniciarLacoNativo({
       aoAtualizarDeteccoes: setDeteccoes,
       aoLimparDeteccoesDebounced: () =>
         setTimeout(() => {
-          if (Date.now() - refs.ultimaLeitura.current > 400 && !refs.ultimoCandidatoRef.current) {
+          if (Date.now() - refs.ultimaLeitura.current > 450 && !refs.ultimoCandidatoRef.current) {
             setDeteccoes([])
           }
-        }, 200),
+        }, 350),
       aoLerCodigo: (raw, regiao, agora) => {
-        if (!entregar(raw, 'codigo')) return false
+        const caixa = regiao || { x: 0.15, y: 0.35, largura: 0.70, altura: 0.30 }
         const { tipo } = classificarCodigo(raw)
-        if (regiao) {
-          setDeteccoes([
-            {
-              x: regiao.x,
-              y: regiao.y,
-              w: regiao.largura,
-              h: regiao.altura,
-              dentroAlvo: true,
-              tipo: tipo || 'isbn',
-              pulsando: false,
-              raw,
-              id: `isbn-${agora}`,
-            },
-          ])
-        }
+        setDeteccoes([
+          {
+            x: caixa.x,
+            y: caixa.y,
+            w: caixa.largura,
+            h: caixa.altura,
+            dentroAlvo: true,
+            tipo: tipo || 'isbn',
+            pulsando: false,
+            raw,
+            id: 'codigo-lido',
+          },
+        ])
+        if (!entregar(raw, 'codigo')) return false
         return true
       },
     })

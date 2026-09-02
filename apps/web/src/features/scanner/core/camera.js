@@ -7,7 +7,7 @@
  *
  * INTERFACE:
  * - RESTRICOES_VIDEO: MediaStreamConstraints
- * - abrirCamera(elementoId: string, restricoes?: object): Promise<{ stream: MediaStream, video: HTMLVideoElement, track: MediaStreamTrack }>
+ * - abrirCamera(elementoId: string, restricoes?: object): Promise<{ stream, video, track }>
  * - ajustarCamera(track: MediaStreamTrack): Promise<{ lanterna: boolean, zoom: object | null }>
  * - alternarLanterna(track: MediaStreamTrack, ligar: boolean): Promise<boolean>
  * - aplicarZoom(track: MediaStreamTrack, valor: number): Promise<void>
@@ -15,44 +15,28 @@
  * - fecharCamera(stream: MediaStream | null, video: HTMLVideoElement | null, elementoId?: string): void
  *
  * FLUXO:
- * Invocado por `useScanner.js` na inicialização (`iniciar`), ajuste de controles
- * (lanterna/zoom) e no desmonte (`parar`).
+ * Invocado por `useScanner.js` na inicialização (`iniciar`), ajuste de controles e desmonte.
  *
  * LIMITACOES:
  * Funciona exclusivamente em contextos seguros (HTTPS ou localhost).
- * A disponibilidade de foco macro, lanterna e zoom depende das capacidades do hardware.
  */
 
 export const RESTRICOES_VIDEO = Object.freeze({
-  facingMode: { exact: 'environment' },
+  facingMode: { ideal: 'environment' },
   width: { ideal: 1920 },
   height: { ideal: 1080 },
   frameRate: { ideal: 30 },
 })
 
 /**
- * Cria o elemento de vídeo, anexa o stream da câmera e inicia a reprodução.
+ * Cria o elemento de vídeo, anexa o stream da câmera traseira e inicia a reprodução.
  *
  * @param {string} elementoId - ID do container HTML do visor
- * @param {string | object} [modoCamera='environment']
+ * @param {object} [restricoes=RESTRICOES_VIDEO]
  * @returns {Promise<{ stream: MediaStream, video: HTMLVideoElement, track: MediaStreamTrack }>}
  */
-export async function abrirCamera(elementoId, modoCamera = 'environment') {
-  const base = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
-  let stream = null
-
-  try {
-    const videoConstraint = typeof modoCamera === 'string'
-      ? { facingMode: { exact: modoCamera }, ...base }
-      : (modoCamera || RESTRICOES_VIDEO)
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraint })
-  } catch {
-    const videoConstraint = typeof modoCamera === 'string'
-      ? { facingMode: { ideal: modoCamera }, ...base }
-      : RESTRICOES_VIDEO
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraint })
-  }
-
+export async function abrirCamera(elementoId, restricoes = RESTRICOES_VIDEO) {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: restricoes })
   const video = document.createElement('video')
   video.autoplay = true
   video.muted = true
@@ -73,12 +57,10 @@ export async function abrirCamera(elementoId, modoCamera = 'environment') {
  * Aplica foco contínuo e extrai recursos da câmera (lanterna e zoom).
  *
  * @param {MediaStreamTrack} track
- * @returns {Promise<{ lanterna: boolean, zoom: { min: number, max: number, passo: number } | null }>}
  */
 export async function ajustarCamera(track) {
   if (!track) return { lanterna: false, zoom: null }
   const caps = track.getCapabilities?.() ?? {}
-
   const advanced = []
   if (caps.focusMode?.includes('continuous')) advanced.push({ focusMode: 'continuous' })
   if (caps.exposureMode?.includes('continuous')) advanced.push({ exposureMode: 'continuous' })
@@ -92,19 +74,15 @@ export async function ajustarCamera(track) {
         if (caps.focusMode?.includes('continuous')) {
           await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
         }
-      } catch { /* segue com padrão */ }
+      } catch {}
     }
   }
 
   const z = caps.zoom
   const zoomDisponivel = z && typeof z === 'object' && z.max > z.min
-    ? { min: z.min, max: z.max, passo: z.step || 0.1 }
-    : null
+    ? { min: z.min, max: z.max, passo: z.step || 0.1 } : null
 
-  return {
-    lanterna: caps.torch === true,
-    zoom: zoomDisponivel,
-  }
+  return { lanterna: caps.torch === true, zoom: zoomDisponivel }
 }
 
 /**
@@ -112,7 +90,6 @@ export async function ajustarCamera(track) {
  *
  * @param {MediaStreamTrack} track
  * @param {boolean} ligar
- * @returns {Promise<boolean>} Sucesso da operação
  */
 export async function alternarLanterna(track, ligar) {
   if (!track) return false
@@ -134,9 +111,7 @@ export async function aplicarZoom(track, valor) {
   if (!track) return
   try {
     await track.applyConstraints({ advanced: [{ zoom: valor }] })
-  } catch {
-    /* fora de faixa */
-  }
+  } catch {}
 }
 
 /**
@@ -147,7 +122,6 @@ export async function aplicarZoom(track, valor) {
 export async function dispararPulsoFoco(track) {
   const caps = track?.getCapabilities?.()
   if (!track || !caps?.focusMode) return
-
   try {
     if (caps.focusMode.includes('single-shot')) {
       await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
@@ -157,9 +131,7 @@ export async function dispararPulsoFoco(track) {
       await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: meio }] }).catch(() => {})
       setTimeout(() => track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}), 600)
     }
-  } catch {
-    /* ignora suporte ausente */
-  }
+  } catch {}
 }
 
 /**
@@ -175,7 +147,5 @@ export function fecharCamera(stream, video, elementoId) {
     video.srcObject.getTracks().forEach((t) => t.stop())
     video.srcObject = null
   }
-  if (elementoId) {
-    document.getElementById(elementoId)?.replaceChildren()
-  }
+  if (elementoId) document.getElementById(elementoId)?.replaceChildren()
 }

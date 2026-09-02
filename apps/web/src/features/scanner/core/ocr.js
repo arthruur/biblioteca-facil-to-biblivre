@@ -177,17 +177,18 @@ export async function executarTentativaOcr({
   if (ocrRodandoRef.current || !video?.videoWidth) return
   ocrRodandoRef.current = true
   setOcrAtivo(true)
-  anunciar('Lendo os números…', 'info')
+  anunciar('Sem leitura pelas barras — lendo os números…', 'info')
   try {
     const isbn = await lerNumerosDoQuadro(video, regiao)
     if (isbn) {
       anunciar(`Lido pelos números: ${isbn}`, 'ok')
       entregar(isbn, 'ocr')
     } else {
-      anunciar('Não deu para ler os números', 'erro')
+      anunciar('Não foi possível ler os números — aproxime mais', 'erro')
     }
-  } catch {
-    anunciar('Não deu para ler os números', 'erro')
+  } catch (e) {
+    console.error('Falha no OCR:', e)
+    anunciar('O leitor de números falhou neste aparelho', 'erro')
   } finally {
     ocrRodandoRef.current = false
     setOcrAtivo(false)

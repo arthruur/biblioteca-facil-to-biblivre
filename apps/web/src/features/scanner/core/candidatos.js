@@ -19,7 +19,7 @@
  * Códigos com giro maior que 45 graus podem exigir a salvaguarda de tela cheia.
  */
 
-const MAX_DIMENSAO = 320
+const MAX_DIMENSAO = 400
 
 let canvasAnalise = null
 let ctxAnalise = null
@@ -60,7 +60,7 @@ function calcularTransicoesLinha(bw, linhas, colunas) {
     let count = 0
     const offset = y * colunas
     for (let x = 1; x < colunas; x++) {
-      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 24) count++
+      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 14) count++
     }
     transicoes[y] = count
   }
@@ -72,12 +72,12 @@ function limitesHorizontais(bw, y1, y2, colunas, altura) {
   for (let y = y1; y < y2; y++) {
     const offset = y * colunas
     for (let x = 1; x < colunas; x++) {
-      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 24) colTrans[x]++
+      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 14) colTrans[x]++
     }
   }
   let x1 = -1
   let x2 = -1
-  const minV = Math.max(2, Math.round(altura * 0.15))
+  const minV = Math.max(2, Math.round(altura * 0.12))
   for (let x = 0; x < colunas; x++) {
     if (colTrans[x] > minV) {
       if (x1 === -1) x1 = x
@@ -131,7 +131,7 @@ export function encontrarCandidatos(video, alvo) {
 
   const bw = converterCinza(ctx.getImageData(0, 0, colunas, linhas).data, colunas * linhas)
   const transLinha = calcularTransicoesLinha(bw, linhas, colunas)
-  const LIMIAR = Math.max(16, Math.round(colunas * 0.10))
+  const LIMIAR = Math.max(8, Math.round(colunas * 0.035))
   const candidatos = []
   let fInicio = -1
 
@@ -140,9 +140,9 @@ export function encontrarCandidatos(video, alvo) {
     if (alto && fInicio === -1) fInicio = y
     else if (!alto && fInicio !== -1) {
       const hFaixa = y - fInicio
-      if (hFaixa >= Math.max(6, Math.round(linhas * 0.05))) {
+      if (hFaixa >= Math.max(3, Math.round(linhas * 0.02))) {
         const { x1, x2 } = limitesHorizontais(bw, fInicio, y, colunas, hFaixa)
-        if (x1 !== -1 && (x2 - x1) >= Math.max(20, Math.round(colunas * 0.15))) {
+        if (x1 !== -1 && (x2 - x1) >= Math.max(14, Math.round(colunas * 0.05))) {
           candidatos.push(expandirQuadrado(x1, x2, fInicio, y, colunas, linhas, transLinha[(fInicio + y) >> 1]))
         }
       }
@@ -152,10 +152,11 @@ export function encontrarCandidatos(video, alvo) {
 
   candidatos.sort((a, b) => b.densidade - a.densidade)
   if (!alvo) return candidatos
-  return candidatos.filter((c) => {
+  return candidatos.map((c) => {
     const cx = c.x + c.largura / 2
     const cy = c.y + c.altura / 2
-    return Math.abs(cx - 0.5) <= (alvo.largura / 2) + 0.10 && Math.abs(cy - 0.5) <= (alvo.altura / 2) + 0.10
+    const dentro = Math.abs(cx - 0.5) <= (alvo.largura / 2) + 0.10 && Math.abs(cy - 0.5) <= (alvo.altura / 2) + 0.10
+    return { ...c, dentroAlvo: dentro }
   })
 }
 

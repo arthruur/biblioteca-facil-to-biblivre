@@ -15,11 +15,37 @@ class ErroApi extends Error {
   }
 }
 
+/**
+ * Identidade do aparelho.
+ *
+ * Vai em `X-Dispositivo` nas rotas do lote, e e o que separa a bandeja deste
+ * celular da do celular ao lado (ver packages/catalogacao/.../lotes.py). Quem
+ * define e `useDispositivo`, na subida da tela; enquanto ninguem definir, as
+ * chamadas saem sem cabecalho e caem no lote do balcao.
+ */
+let _dispositivo = null
+
+export function definirDispositivo(id) {
+  _dispositivo = id ? { id } : null
+}
+
+function cabecalhosDispositivo() {
+  if (!_dispositivo) return {}
+  // So o id, que e um uuid — ASCII e seguro num cabecalho. O nome ("Celular da
+  // Ana") tem acento e espaco, e viaja pelo corpo de `lotes.renomear`, nao
+  // aqui: cabecalho HTTP obrigaria a percent-encode e o painel receberia
+  // "Celular%20da%20Ana".
+  return { 'X-Dispositivo': _dispositivo.id }
+}
+
 async function pedir(caminho, opcoes = {}) {
   let resposta
   try {
     resposta = await fetch(`/api${caminho}`, {
-      headers: opcoes.corpo ? { 'Content-Type': 'application/json' } : undefined,
+      headers: {
+        ...(opcoes.corpo ? { 'Content-Type': 'application/json' } : {}),
+        ...(opcoes.comDispositivo ? cabecalhosDispositivo() : {}),
+      },
       method: opcoes.metodo || 'GET',
       body: opcoes.corpo ? JSON.stringify(opcoes.corpo) : undefined,
       signal: opcoes.signal,
@@ -47,10 +73,15 @@ async function pedir(caminho, opcoes = {}) {
   return dados
 }
 
-const json = (caminho) => pedir(caminho)
-const post = (caminho, corpo) => pedir(caminho, { metodo: 'POST', corpo })
-const put = (caminho, corpo) => pedir(caminho, { metodo: 'PUT', corpo })
-const del = (caminho) => pedir(caminho, { metodo: 'DELETE' })
+const json = (caminho, opcoes) => pedir(caminho, opcoes)
+const post = (caminho, corpo, opcoes) =>
+  pedir(caminho, { ...opcoes, metodo: 'POST', corpo })
+const put = (caminho, corpo, opcoes) =>
+  pedir(caminho, { ...opcoes, metodo: 'PUT', corpo })
+const del = (caminho, opcoes) => pedir(caminho, { ...opcoes, metodo: 'DELETE' })
+
+// O lote e sempre "o meu lote": estas chamadas levam a identidade do aparelho.
+const meu = { comDispositivo: true }
 
 export const api = {
   ErroApi,
@@ -60,13 +91,29 @@ export const api = {
   },
 
   lote: {
-    listar: () => json('/lote'),
-    adicionar: (isbn) => post('/lote', { isbn }),
+    listar: () => json('/lote', meu),
+    adicionar: (isbn) => post('/lote', { isbn }, meu),
     quantidade: (isbn, quantidade) =>
-      put(`/lote/${encodeURIComponent(isbn)}`, { quantidade }),
-    remover: (isbn) => del(`/lote/${encodeURIComponent(isbn)}`),
-    limpar: () => del('/lote'),
-    enviar: () => post('/lote/enviar'),
+      put(`/lote/${encodeURIComponent(isbn)}`, { quantidade }, meu),
+    remover: (isbn) => del(`/lote/${encodeURIComponent(isbn)}`, meu),
+    limpar: () => del('/lote', meu),
+    enviar: () => post('/lote/enviar', null, meu),
+  },
+
+  /**
+   * O painel do PC: as N bandejas.
+   *
+   * Sem cabecalho de dispositivo de proposito — o PC nao e um dos aparelhos
+   * bipando, ele olha todos.
+   */
+  lotes: {
+    painel: (signal) => json('/lotes', { signal }),
+    versao: (signal) => json('/lotes/versao', { signal }),
+    renomear: (id, nome) => put(`/lotes/${encodeURIComponent(id)}`, { nome }),
+    esquecer: (id) => del(`/lotes/${encodeURIComponent(id)}`),
+    limpar: (id) => del(`/lotes/${encodeURIComponent(id)}/itens`),
+    enviar: (id) => post(`/lotes/${encodeURIComponent(id)}/enviar`),
+    enviarTudo: () => post('/lotes/enviar-tudo'),
   },
 
   fila: {

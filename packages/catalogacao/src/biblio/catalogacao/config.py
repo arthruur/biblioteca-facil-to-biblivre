@@ -18,9 +18,9 @@ SERVER_URL: str = ""
 fila_lock = threading.Lock()
 fila: list[dict] = []
 
-# Lote em memoria (Fase de Captura) — acumula ISBNs antes do envio
-carrinho_lock = threading.Lock()
-carrinho: list[dict] = []  # cada item: {isbn, titulo, autor, ...}
+# O lote NAO mora aqui: virou um por aparelho, em `lotes.py`. Deixar a lista
+# global de pe so criaria a armadilha de alguem dar append nela e a tela nao
+# mostrar nada.
 
 
 def garantir_pastas() -> None:
@@ -75,6 +75,6 @@ from biblio.biblivre.conexao import (  # noqa: E402
 
 __all__ = [
     "ROOT", "DATA_DIR", "FILA_DIR", "EXPORT_DIR", "CERT_DIR", "SERVER_URL",
-    "fila", "fila_lock", "carrinho", "carrinho_lock", "garantir_pastas",
+    "fila", "fila_lock", "garantir_pastas",
     "tesseract_cmd", "aplicar_tesseract", "db_config", "definir_db", "sem_senha",
 ]

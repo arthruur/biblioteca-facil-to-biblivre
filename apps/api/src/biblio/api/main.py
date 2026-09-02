@@ -19,7 +19,7 @@ from biblio.biblivre import conexao
 from biblio.catalogacao import config
 from biblio.catalogacao.fila import carregar_do_disco, reconsultar_acervo
 
-from .routers import acervo, catalogacao, fila, sistema
+from .routers import acervo, catalogacao, fila, lotes, sistema
 
 # O bundle do Vite. Em dev o front roda no dev server (porta 5173) e fala com
 # esta API por proxy, então a pasta pode não existir — a API sobe do mesmo jeito.
@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(catalogacao.router, prefix="/api")
     app.include_router(catalogacao.alias, prefix="/api")
     app.include_router(fila.router, prefix="/api")
+    app.include_router(lotes.router, prefix="/api")
     app.include_router(acervo.router, prefix="/api")
     app.include_router(sistema.router, prefix="/api")
 

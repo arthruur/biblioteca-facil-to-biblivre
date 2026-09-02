@@ -39,7 +39,16 @@ async def reindexar_cache():
 
 @router.get("/db", summary="Estado da conexão (nunca devolve a senha)")
 async def db_estado():
-    return {"config": conexao.sem_senha(), **acervo.estado()}
+    """
+    Diz explicitamente se o banco esta de pe.
+
+    `conectado` vem de uma sonda com TTL (`conexao.sondar`), nao do tamanho do
+    indice de ISBN. A tela nao tem como inferir conexao de `indexados`: com o
+    indice montado sob demanda ele e 0 num banco perfeitamente conectado, e a
+    pilula ficava ambar sem motivo.
+    """
+    sonda = await em_thread(conexao.sondar)
+    return {"config": conexao.sem_senha(), **acervo.estado(), **sonda}
 
 
 @router.post("/db", summary="Conecta, testa e reavalia a fila inteira")

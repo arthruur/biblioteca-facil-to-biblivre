@@ -5,30 +5,43 @@
  * o celular, e sentado no PC revisando. O sistema é um só; o que muda é a
  * densidade — daí `--toque-min`, que só a tela do celular usa.
  *
- * As cores de destino são o vocabulário mais importante da interface e não são
- * decorativas: roxo = nasce ficha nova, verde = só exemplar, âmbar = não deu
- * para verificar. O usuário aprende essas três cores no primeiro lote e depois
- * lê a tela inteira de relance por elas.
+ * A linguagem visual é a do design system "Industry" (projeto de design
+ * "Fluxo Escanear → Enviar"): objeto de prancheta técnica. Nada de canto
+ * arredondado, nada de sombra decorativa — o que separa duas coisas é um fio
+ * de 1px, e o que delimita um bloco são as marcas de registro nos cantos
+ * (`.moldura`). Títulos e números em Barlow Condensed; corpo em Barlow.
+ *
+ * O que NÃO vem do Industry é a cor. O design de origem é quase monocromático
+ * e as cores de destino são o vocabulário mais importante desta interface:
+ * roxo = nasce ficha nova, verde = só exemplar, âmbar = não deu para
+ * verificar. O usuário aprende essas três cores no primeiro lote e depois lê a
+ * tela inteira de relance por elas — então elas ficam, e ficam saturadas.
+ * O que o Industry contribui é o chão neutro em que elas aparecem.
  */
 
 :root {
   color-scheme: light dark;
 
   /* --- Escala tipográfica --- */
-  --fonte: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fonte: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fonte-titulo: 'Barlow Condensed', 'Barlow', 'Segoe UI', Roboto, sans-serif;
   --fonte-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   --txt-xs: 0.6875rem;   /* 11px — metadado, fonte do lookup */
   --txt-sm: 0.8125rem;   /* 13px — corpo secundário, células de tabela */
   --txt-base: 0.9375rem; /* 15px — corpo */
   --txt-md: 1.0625rem;   /* 17px — título de card */
-  --txt-lg: 1.375rem;    /* 22px — número dos indicadores */
-  --txt-xl: 2rem;        /* 32px — número grande */
+  --txt-lg: 1.375rem;    /* 22px — título de tela */
+  --txt-xl: 2.125rem;    /* 34px — número dos indicadores */
 
   --peso-normal: 400;
   --peso-medio: 500;
   --peso-forte: 600;
   --peso-max: 700;
+
+  /* Condensada aperta muito o texto em caixa alta; os microrrótulos do
+     Industry (10-11px, versalete) precisam desse respiro para serem lidos. */
+  --entre-micro: 0.11em;
 
   /* --- Espaçamento: escala de 4px --- */
   --e1: 0.25rem;
@@ -39,9 +52,12 @@
   --e6: 2rem;
   --e7: 3rem;
 
-  --raio-sm: 6px;
-  --raio: 10px;
-  --raio-lg: 14px;
+  /* Prancheta: tudo quadrado. `--raio-full` sobrevive só para o ponto de
+     status e para o círculo do radio — as duas coisas que são de fato
+     redondas, não caixas com canto suavizado. */
+  --raio-sm: 0;
+  --raio: 0;
+  --raio-lg: 0;
   --raio-full: 999px;
 
   /* Alvo mínimo de toque no celular. Quem está de pé segurando um livro não
@@ -51,123 +67,145 @@
   --transicao: 140ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* --- Paleta base (tema claro) --- */
-  --fundo: #f7f8fa;
-  --superficie: #ffffff;
-  --superficie-2: #f0f2f5;
-  --superficie-3: #e4e7ec;
-  --borda: #dcdfe5;
-  --borda-forte: #b9bfc9;
+  /* Chão neutro do Industry: cinza sem temperatura, para a cor de destino não
+     competir com o fundo. */
+  --fundo: #f2f2f3;
+  --superficie: #fafafb;
+  --superficie-2: #e9e9ea;
+  --superficie-3: #dcdcde;
 
-  --texto: #16181d;
-  --texto-2: #565d6b;
-  --texto-3: #868d99;
+  --texto: #1d1f20;
+  --texto-2: #55585a;
+  --texto-3: #83878a;
+
+  /* Fios. `--borda` é o divisor padrão do Industry (16% da tinta);
+     `--borda-forte` é o contorno de um controle que aceita clique. */
+  --borda: color-mix(in srgb, #1d1f20 16%, transparent);
+  --borda-forte: color-mix(in srgb, #1d1f20 34%, transparent);
+  --borda-suave: color-mix(in srgb, #1d1f20 8%, transparent);
 
   --acento: #2f5fd8;
-  --acento-suave: #eaf0fe;
+  --acento-2: #416180;
+  --acento-suave: #e8effd;
+  --acento-borda: #b6cbf5;
   --acento-texto: #ffffff;
 
   /* Destino no BibLivre — o coração do vocabulário visual */
   --nova: #6d3fd4;          /* obra nova: nasce ficha */
   --nova-suave: #f0eafc;
-  --nova-borda: #d5c4f5;
+  --nova-borda: #cbb6f2;
 
-  --existente: #17795e;     /* já no acervo: só exemplar */
-  --existente-suave: #e6f5f0;
-  --existente-borda: #a8ddcb;
+  --existente: #12735a;     /* já no acervo: só exemplar */
+  --existente-suave: #e2f4ee;
+  --existente-borda: #9ad6c3;
 
-  --alerta: #a86609;        /* não verificado / precisa de atenção */
-  --alerta-suave: #fdf3e2;
-  --alerta-borda: #f0d5a4;
+  --alerta: #9c5f07;        /* não verificado / precisa de atenção */
+  --alerta-suave: #fdf1de;
+  --alerta-borda: #eeca94;
 
-  --erro: #c0392b;
-  --erro-suave: #fdeceb;
-  --erro-borda: #f3c0bb;
+  --erro: #b8332a;
+  --erro-suave: #fceae8;
+  --erro-borda: #f0b6b0;
 
-  --sombra-sm: 0 1px 2px rgba(16, 18, 23, 0.06);
-  --sombra: 0 2px 8px rgba(16, 18, 23, 0.08);
-  --sombra-lg: 0 8px 28px rgba(16, 18, 23, 0.14);
-  --sombra-modal: 0 24px 64px rgba(16, 18, 23, 0.28);
+  /* Elevação existe, mas discreta: um objeto de prancheta que flutua
+     (barra de seleção, modal) precisa se separar do papel, não brilhar. */
+  --sombra-sm: 0 1px 2px color-mix(in srgb, #1d1f20 12%, transparent);
+  --sombra: 0 3px 10px color-mix(in srgb, #1d1f20 14%, transparent);
+  --sombra-lg: 0 12px 32px color-mix(in srgb, #1d1f20 20%, transparent);
+  --sombra-modal: 0 20px 56px color-mix(in srgb, #1d1f20 34%, transparent);
 
-  /* O visor da câmera é preto em qualquer tema: é vídeo, não interface. */
-  --visor: #0b0d12;
-  --visor-texto: #e8eaee;
-  --visor-texto-2: #9aa2b1;
+  /* O visor da câmera é escuro em qualquer tema: é vídeo, não interface. Mas
+     é o azul-ardósia do Industry, não preto — dá temperatura ao maior bloco
+     da tela do celular. */
+  --visor: #1d2d3d;
+  --visor-fundo: #16222e;
+  --visor-texto: #f2f2f3;
+  --visor-texto-2: color-mix(in srgb, #f2f2f3 65%, transparent);
+  --visor-fio: color-mix(in srgb, #f2f2f3 55%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema='claro']) {
-    --fundo: #101319;
-    --superficie: #171b23;
-    --superficie-2: #1e232d;
-    --superficie-3: #272d39;
-    --borda: #2c323e;
-    --borda-forte: #454d5c;
+    --fundo: #131517;
+    --superficie: #1a1c1f;
+    --superficie-2: #232629;
+    --superficie-3: #2e3236;
 
-    --texto: #e9ecf1;
-    --texto-2: #a5adbb;
-    --texto-3: #767e8c;
+    --texto: #eceded;
+    --texto-2: #a6aaad;
+    --texto-3: #7a7e82;
 
-    --acento: #6d95f5;
-    --acento-suave: #1a2542;
+    --borda: color-mix(in srgb, #eceded 18%, transparent);
+    --borda-forte: color-mix(in srgb, #eceded 38%, transparent);
+    --borda-suave: color-mix(in srgb, #eceded 9%, transparent);
+
+    --acento: #7ba1fb;
+    --acento-2: #94bce3;
+    --acento-suave: #17233d;
+    --acento-borda: #2f4470;
     --acento-texto: #0d1017;
 
-    --nova: #ab8bf0;
-    --nova-suave: #241a3d;
-    --nova-borda: #40315f;
+    --nova: #b79bf3;
+    --nova-suave: #22193a;
+    --nova-borda: #453363;
 
-    --existente: #4bc59d;
-    --existente-suave: #102c25;
-    --existente-borda: #1f4b3e;
+    --existente: #4fcda3;
+    --existente-suave: #0e2b23;
+    --existente-borda: #1f5142;
 
-    --alerta: #e3a850;
-    --alerta-suave: #2e2413;
-    --alerta-borda: #52401f;
+    --alerta: #e8b263;
+    --alerta-suave: #2d2312;
+    --alerta-borda: #56421f;
 
-    --erro: #f0776a;
-    --erro-suave: #331917;
-    --erro-borda: #5c2b27;
+    --erro: #f5897c;
+    --erro-suave: #321916;
+    --erro-borda: #62302a;
 
-    --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --sombra: 0 2px 8px rgba(0, 0, 0, 0.45);
-    --sombra-lg: 0 8px 28px rgba(0, 0, 0, 0.55);
-    --sombra-modal: 0 24px 64px rgba(0, 0, 0, 0.7);
+    --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --sombra: 0 3px 10px rgba(0, 0, 0, 0.55);
+    --sombra-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+    --sombra-modal: 0 20px 56px rgba(0, 0, 0, 0.72);
   }
 }
 
 :root[data-tema='escuro'] {
-  --fundo: #101319;
-  --superficie: #171b23;
-  --superficie-2: #1e232d;
-  --superficie-3: #272d39;
-  --borda: #2c323e;
-  --borda-forte: #454d5c;
+  --fundo: #131517;
+  --superficie: #1a1c1f;
+  --superficie-2: #232629;
+  --superficie-3: #2e3236;
 
-  --texto: #e9ecf1;
-  --texto-2: #a5adbb;
-  --texto-3: #767e8c;
+  --texto: #eceded;
+  --texto-2: #a6aaad;
+  --texto-3: #7a7e82;
 
-  --acento: #6d95f5;
-  --acento-suave: #1a2542;
+  --borda: color-mix(in srgb, #eceded 18%, transparent);
+  --borda-forte: color-mix(in srgb, #eceded 38%, transparent);
+  --borda-suave: color-mix(in srgb, #eceded 9%, transparent);
+
+  --acento: #7ba1fb;
+  --acento-2: #94bce3;
+  --acento-suave: #17233d;
+  --acento-borda: #2f4470;
   --acento-texto: #0d1017;
 
-  --nova: #ab8bf0;
-  --nova-suave: #241a3d;
-  --nova-borda: #40315f;
+  --nova: #b79bf3;
+  --nova-suave: #22193a;
+  --nova-borda: #453363;
 
-  --existente: #4bc59d;
-  --existente-suave: #102c25;
-  --existente-borda: #1f4b3e;
+  --existente: #4fcda3;
+  --existente-suave: #0e2b23;
+  --existente-borda: #1f5142;
 
-  --alerta: #e3a850;
-  --alerta-suave: #2e2413;
-  --alerta-borda: #52401f;
+  --alerta: #e8b263;
+  --alerta-suave: #2d2312;
+  --alerta-borda: #56421f;
 
-  --erro: #f0776a;
-  --erro-suave: #331917;
-  --erro-borda: #5c2b27;
+  --erro: #f5897c;
+  --erro-suave: #321916;
+  --erro-borda: #62302a;
 
-  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sombra: 0 2px 8px rgba(0, 0, 0, 0.45);
-  --sombra-lg: 0 8px 28px rgba(0, 0, 0, 0.55);
-  --sombra-modal: 0 24px 64px rgba(0, 0, 0, 0.7);
+  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --sombra: 0 3px 10px rgba(0, 0, 0, 0.55);
+  --sombra-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --sombra-modal: 0 20px 56px rgba(0, 0, 0, 0.72);
 }

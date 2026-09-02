@@ -4,7 +4,6 @@ import {
   Campo,
   IconeCheck,
   IconeEditar,
-  IconeLivro,
   IconePendente,
   IconeRemover,
   Stepper,
@@ -61,19 +60,17 @@ export function LinhaItem({
           />
         </td>
 
-        <td className="col-capa">
+        <td>
           {item.capa ? (
             <img className="mini-capa" src={item.capa} alt="" loading="lazy" />
           ) : (
-            <span className="mini-capa mini-capa--vazia" aria-hidden="true">
-              <IconeLivro tamanho={18} />
-            </span>
+            <span className="mini-capa mini-capa--vazia hachura" aria-hidden="true" />
           )}
         </td>
 
         <td>
           <p className={`obra__titulo${semTitulo ? ' obra__titulo--vazio' : ''}`}>
-            {semTitulo ? '— sem metadados —' : item.titulo}
+            {semTitulo ? 'sem metadados' : item.titulo}
           </p>
           <p className="obra__linha2">
             {[item.autor, item.editora, item.ano].filter(Boolean).join(' · ') ||
@@ -90,7 +87,7 @@ export function LinhaItem({
           <Destino item={item} conectado={conectado} />
         </td>
 
-        <td className="col-ex">
+        <td>
           {exportado ? (
             <span className="mono">{item.quantidade}</span>
           ) : (
@@ -101,24 +98,24 @@ export function LinhaItem({
           )}
         </td>
 
-        <td className="col-situacao">
+        <td>
           <Situacao status={item.status} />
         </td>
 
-        <td className="col-acoes">
+        <td>
           {!exportado && (
             <div className="acoes-linha">
               <Botao
-                variante="fantasma"
+                variante="secundario"
                 className="btn--icone"
                 onClick={() => aoEditar(editando ? null : item.id)}
                 title="Editar campos da obra"
                 aria-label="Editar campos"
               >
-                <IconeEditar tamanho={14} />
+                <IconeEditar tamanho={13} />
               </Botao>
               <Botao
-                variante="fantasma"
+                variante="secundario"
                 className="btn--icone"
                 onClick={() => aoAlternarRevisado(item)}
                 title={
@@ -133,19 +130,19 @@ export function LinhaItem({
                 }
               >
                 {item.status === 'revisado' ? (
-                  <IconePendente tamanho={14} />
+                  <IconePendente tamanho={13} />
                 ) : (
-                  <IconeCheck tamanho={14} />
+                  <IconeCheck tamanho={13} />
                 )}
               </Botao>
               <Botao
-                variante="fantasma"
+                variante="secundario"
                 className="btn--icone"
                 onClick={() => aoRemover(item)}
                 title="Remover da fila"
                 aria-label="Remover da fila"
               >
-                <IconeRemover tamanho={14} />
+                <IconeRemover tamanho={13} />
               </Botao>
             </div>
           )}
@@ -171,7 +168,14 @@ function Editor({ item, aoSalvar, aoFechar }) {
   const isbnMudou = (rascunho.isbn || '') !== (item.isbn || '')
 
   return (
-    <div>
+    <div className="editor__caixa">
+      <div className="editor__cabecalho">
+        <span className="editor__titulo">Editar item</span>
+        <span className="editor__dica">
+          Alterar o ISBN reconsulta o acervo — o destino pode mudar na hora.
+        </span>
+      </div>
+
       <div className="editor__grade">
         {CAMPOS.map(([campo, rotulo], i) => (
           <Campo
@@ -186,26 +190,25 @@ function Editor({ item, aoSalvar, aoFechar }) {
           />
         ))}
       </div>
+
       <div className="editor__rodape">
-        <p className="editor__dica">
+        <Botao
+          variante="primario"
+          onClick={() => {
+            aoSalvar(item.id, rascunho)
+            aoFechar()
+          }}
+        >
+          Salvar
+        </Botao>
+        <Botao variante="secundario" onClick={aoFechar}>
+          Cancelar (Esc)
+        </Botao>
+        <span className="editor__previa">
           {isbnMudou
-            ? 'O ISBN mudou — ao salvar, o destino é reconsultado no acervo e pode virar outro.'
+            ? 'ISBN alterado: o destino será reconsultado ao salvar.'
             : 'Estes campos vão para o MARC gerado no export.'}
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--e2)' }}>
-          <Botao variante="fantasma" onClick={aoFechar}>
-            Cancelar
-          </Botao>
-          <Botao
-            variante="primario"
-            onClick={() => {
-              aoSalvar(item.id, rascunho)
-              aoFechar()
-            }}
-          >
-            Salvar alterações
-          </Botao>
-        </div>
+        </span>
       </div>
     </div>
   )

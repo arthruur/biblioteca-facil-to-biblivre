@@ -56,7 +56,7 @@ def verificar_api():
 
     from biblio.api.main import app, preparar
     from biblio.biblivre import conexao, marc
-    from biblio.catalogacao import config, fila as fila_mod
+    from biblio.catalogacao import config, fila as fila_mod, lotes
 
     secao("API — rotas, contrato e persistência")
     preparar()
@@ -77,10 +77,10 @@ def verificar_api():
            .status_code == 400)
 
     # Lote: injetado direto para não depender das APIs externas de ISBN.
-    config.carrinho.append({
+    lotes.semear({
         "isbn": "9786559870530", "titulo": "2041", "autor": "Kai-Fu Lee",
-        "quantidade": 1, "exemplares": 1, "acervo": None, "fonte": "teste",
-    })
+        "fonte": "teste",
+    }, dispositivo="celular-de-teste")
     checar("lote lista o item", c.get("/api/lote").json()["total"] == 1)
     checar("ISBN vazio é recusado",
            c.post("/api/lote", json={"isbn": ""}).status_code == 400)
@@ -143,6 +143,31 @@ def verificar_api():
     checar("remoção apaga o arquivo",
            c.delete(f"/api/fila/{item_id}").status_code == 200
            and not list((DADOS / "fila").glob("fila_*.json")))
+
+    # Multi-aparelho: cada celular tem a sua bandeja, e enviar uma nao leva a
+    # outra. Roda com a fila ja vazia para nao mexer nas contagens acima.
+    lotes.zerar()
+    lotes.semear({"isbn": "9786559870530", "titulo": "2041", "fonte": "teste"},
+                 dispositivo="celular-da-ana")
+    lotes.semear({"isbn": "9788535914849", "titulo": "Sapiens",
+                  "fonte": "teste"}, dispositivo="celular-do-balcao")
+    painel = c.get("/api/lotes").json()
+    checar("cada aparelho tem sua bandeja", len(painel["dispositivos"]) == 2,
+           painel)
+    checar("painel soma os dois aparelhos", painel["titulos"] == 2)
+    checar("enviar um aparelho nao leva o outro",
+           c.post("/api/lotes/celular-do-balcao/enviar").json()["enviados"] == 1)
+    checar("bandeja do aparelho nao enviado fica intacta",
+           c.get("/api/lote", headers={"X-Dispositivo": "celular-da-ana"})
+           .json()["total"] == 1)
+    checar("renomear aparelho pega",
+           c.put("/api/lotes/celular-da-ana", json={"nome": "Celular da Ana"})
+           .json()["nome"] == "Celular da Ana")
+    checar("versao do painel sobe a cada mudanca",
+           c.get("/api/lotes").json()["versao"] > painel["versao"])
+    checar("bipe do celular nao vai para o lote do balcao",
+           c.get("/api/lote", headers={"X-Dispositivo": "balcao"})
+           .json()["total"] == 0)
 
     # O frontend só existe depois do build; a API tem de subir de qualquer jeito.
     raiz = c.get("/")

@@ -1,0 +1,635 @@
+/*
+ * Tela do celular.
+ *
+ * Ocupa a viewport inteira e não rola: quatro faixas de altura fixa, e só a
+ * trilha do lote rola (na horizontal). Quem está de pé segurando um livro não
+ * procura conteúdo abaixo da dobra — se não couber, não entra.
+ *
+ * Medidas de toque vêm do design (quadro `Celular · /`): visor de 340px,
+ * botão de ação de 52px, ±  de 44px. Nada abaixo de 44px aceita dedo.
+ */
+
+.cel {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--fundo);
+  overflow: hidden;
+  position: relative;
+}
+
+/* --- Cabeçalho --- */
+.cel__topo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border-bottom: 1px solid var(--borda);
+  background: var(--superficie);
+}
+
+.cel__titulo {
+  font-size: var(--txt-md);
+  color: var(--texto);
+}
+
+/* O estado do acervo é a única coisa fora da câmera que fica na tela o tempo
+   todo. Verde = o ISBN é confrontado com o acervo a cada bipe; âmbar = não é,
+   e todo livro vai entrar como obra nova. */
+.cel__acervo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px var(--e2);
+  font-size: var(--txt-sm);
+  border: 1px solid var(--borda);
+  white-space: nowrap;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cel__acervo--ok {
+  border-color: var(--existente-borda);
+  background: var(--existente-suave);
+  color: var(--existente);
+}
+.cel__acervo--ok .pilula__ponto {
+  background: var(--existente);
+}
+.cel__acervo--off {
+  border-color: var(--alerta-borda);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+}
+.cel__acervo--off .pilula__ponto {
+  background: var(--alerta);
+}
+
+/* --- Ajustes do aparelho --- */
+.ajustes {
+  flex: none;
+  margin: var(--e3) var(--e3) 0;
+  padding: var(--e3);
+  background: var(--superficie);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.ajustes__desc {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.4;
+}
+.ajustes__linha {
+  display: flex;
+  gap: var(--e2);
+}
+.ajustes__campo {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  font-size: var(--txt-md);
+}
+.ajustes__campo:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+.ajustes__linha .btn {
+  height: 44px;
+}
+.ajustes__caixa {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  padding-top: var(--e2);
+  border-top: 1px solid var(--borda-suave);
+  font-size: var(--txt-base);
+  cursor: pointer;
+}
+.ajustes__caixa input {
+  margin-top: 4px;
+}
+.ajustes__caixa em {
+  display: block;
+  font-style: normal;
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.35;
+}
+
+/* --- Visor --- */
+.cel__visor {
+  flex: none;
+  height: 340px;
+  position: relative;
+  background: var(--visor);
+  overflow: hidden;
+}
+
+.cel__camera,
+.cel__camera video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block;
+}
+.cel__camera img[alt='Info icon'],
+.cel__camera > div:first-child > img {
+  display: none !important;
+}
+
+.cel__etiqueta {
+  position: absolute;
+  top: var(--e3);
+  left: var(--e3);
+  z-index: 2;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--visor-texto-2);
+  pointer-events: none;
+}
+
+.cel__repouso {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e4);
+  background: var(--visor-fundo);
+}
+.cel__repouso-quadro {
+  width: 200px;
+  height: 104px;
+  border: 1px solid var(--visor-fio);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, #f2f2f3 12%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+/* Mira: o retângulo de fio do design, na proporção do EAN-13. */
+.cel__alvo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 250px;
+  max-width: 78%;
+  aspect-ratio: 250 / 130;
+  border: 1px solid var(--visor-fio);
+  pointer-events: none;
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, #16222e 40%, transparent);
+}
+.cel__alvo::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: #94bce3;
+  opacity: 0;
+}
+.cel__alvo--varrendo::after {
+  opacity: 0.95;
+  box-shadow: 0 0 8px #94bce3;
+  animation: varredura 1.4s ease-in-out infinite alternate;
+}
+@keyframes varredura {
+  0% { transform: translateY(-30px); }
+  100% { transform: translateY(30px); }
+}
+.cel__alvo--ok {
+  border-color: var(--existente);
+  border-width: 2px;
+  background: color-mix(in srgb, var(--existente) 18%, transparent);
+}
+
+.cel__controles {
+  position: absolute;
+  right: var(--e2);
+  top: var(--e2);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.cel__botao {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, #16222e 78%, transparent);
+  border: 1px solid var(--visor-fio);
+  color: var(--visor-texto);
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-sm);
+  font-weight: var(--peso-forte);
+  cursor: pointer;
+}
+.cel__botao:disabled {
+  opacity: 0.5;
+}
+.cel__botao--ativo {
+  background: var(--alerta);
+  color: #16222e;
+  border-color: var(--alerta);
+}
+/* Barra de status no pé do quadro: posição fixa, sempre visível. */
+.cel__barra {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: 9px var(--e3);
+  background: color-mix(in srgb, #16222e 82%, transparent);
+  border-top: 1px solid var(--visor-fio);
+  color: var(--visor-texto);
+  font-size: var(--txt-sm);
+}
+.cel__barra-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cel__barra-isbn {
+  flex: none;
+  color: var(--visor-texto-2);
+}
+.cel__barra--ok {
+  background: color-mix(in srgb, var(--existente) 84%, #16222e);
+  border-top-color: var(--existente);
+}
+.cel__barra--erro {
+  background: color-mix(in srgb, var(--erro) 80%, #16222e);
+  border-top-color: var(--erro);
+}
+
+/* Câmera negada (estado E2 da spec) */
+.cel__visor--negado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e3);
+  padding: var(--e4);
+  text-align: center;
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  height: auto;
+  min-height: 340px;
+}
+.cel__negado-marca {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--alerta);
+  font-size: 17px;
+}
+.cel__negado-titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-lg);
+  font-weight: var(--peso-forte);
+  line-height: 1.15;
+}
+.cel__negado-texto {
+  font-size: var(--txt-base);
+  line-height: 1.45;
+  max-width: 34ch;
+}
+.cel__negado-nota {
+  font-size: var(--txt-sm);
+  line-height: 1.45;
+  max-width: 40ch;
+  padding-top: var(--e2);
+  border-top: 1px solid var(--alerta-borda);
+}
+
+/* --- Bandeja --- */
+.cel__lote {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--superficie);
+  border-top: 1px solid var(--borda);
+}
+
+.cel__lote-topo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--e2) var(--e3) 6px;
+}
+.cel__lote-resumo {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.cel__trilha {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  padding: 0 var(--e3) var(--e2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.cel__trilha::-webkit-scrollbar {
+  display: none;
+}
+
+/* Caixa tracejada do design: o lote vazio é o estado inicial, não um erro — e
+   a frase avisa que ele é volátil antes de alguém perder um. */
+.cel__vazio {
+  margin: 0 var(--e3) var(--e3);
+  padding: var(--e4) var(--e3);
+  border: 1px dashed var(--borda);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* --- Card da bandeja --- */
+.cel-card {
+  flex: 0 0 148px;
+  position: relative;
+  padding: var(--e2);
+  border: 1px solid var(--borda);
+  border-left-width: 3px;
+  background: var(--superficie);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scroll-snap-align: start;
+  animation: entra 160ms ease-out;
+}
+.cel-card--nova {
+  border-left-color: var(--nova);
+}
+.cel-card--existente {
+  border-left-color: var(--existente);
+  background: var(--existente-suave);
+}
+
+.cel-card__topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e1);
+  padding-right: 20px;
+}
+.cel-card__isbn {
+  font-size: 10.5px;
+  color: var(--texto-2);
+}
+.cel-card__mult {
+  font-size: var(--txt-base);
+  color: var(--texto);
+}
+.cel-card__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-base);
+  font-weight: var(--peso-forte);
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cel-card__autor {
+  font-size: 11.5px;
+  color: var(--texto-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cel-card__selo {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 10.5px;
+}
+.cel-card__remover {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--texto-3);
+}
+
+/* --- Rodapé --- */
+.cel__rodape {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  /* Sem barra de navegação embaixo, é este rodapé que encosta no indicador de
+     home do aparelho: o respiro dele vem daqui. */
+  padding: var(--e2) var(--e3) calc(var(--e3) + env(safe-area-inset-bottom));
+  background: var(--superficie);
+  border-top: 1px solid var(--borda);
+}
+
+.cel__erro {
+  padding: var(--e2);
+  border: 1px solid var(--alerta);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  font-size: var(--txt-sm);
+  line-height: 1.4;
+}
+.cel__ok {
+  padding: var(--e2);
+  border: 1px solid var(--existente);
+  background: var(--existente-suave);
+  color: var(--existente);
+  font-size: var(--txt-sm);
+}
+
+.cel__link-manual {
+  align-self: flex-start;
+  font-size: var(--txt-sm);
+  color: var(--acento);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 2px 0;
+}
+
+.cel__manual {
+  display: flex;
+  gap: var(--e2);
+}
+.cel__manual-campo {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  font-size: var(--txt-md);
+  letter-spacing: 0.04em;
+}
+.cel__manual-campo:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+.cel__manual .btn {
+  height: 44px;
+}
+
+.cel__enviar {
+  width: 100%;
+}
+
+/* --- Modal de confirmação do bipe --- */
+/*
+ * O modal em si é o `.modal` compartilhado (components/componentes.css), que
+ * no celular já sobe como folha pelo rodapé. Aqui só mora o conteúdo dele.
+ */
+.leitura__cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+.leitura__identidade {
+  min-width: 0;
+}
+.leitura__isbn {
+  font-size: var(--txt-sm);
+  color: var(--acento);
+}
+.leitura__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: 24px;
+  font-weight: var(--peso-forte);
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.leitura__linha2 {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.35;
+}
+.leitura__capa {
+  width: 54px;
+  height: 74px;
+  flex: none;
+  object-fit: cover;
+  border: 1px solid var(--borda);
+  display: block;
+}
+/* Sem capa: fica o lugar dela hachurado, para o cabeçalho não mudar de
+   largura quando a imagem chega das bases externas. */
+.leitura__capa--vazia {
+  background-color: var(--superficie-2);
+}
+
+.leitura__destino {
+  border: 1px solid;
+  padding: var(--e2) var(--e3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--txt-sm);
+  line-height: 1.4;
+}
+.leitura__destino-titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  line-height: 1.2;
+}
+.leitura__destino--existente {
+  border-color: var(--existente);
+  background: var(--existente-suave);
+  color: var(--existente);
+}
+.leitura__destino--nova {
+  border-color: var(--nova);
+  background: var(--nova-suave);
+  color: var(--nova);
+}
+.leitura__destino--alerta {
+  border-color: var(--alerta);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+}
+
+.leitura__exemplares {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--e2) 0;
+  border-top: 1px solid var(--borda);
+  border-bottom: 1px solid var(--borda);
+  font-size: var(--txt-base);
+}
+
+/*
+ * As duas saídas ocupam o rodapé inteiro do modal. Em coluna no celular, com a
+ * primária embaixo: é a que o polegar alcança sem trocar a mão de posição, e
+ * "continuar" é o que acontece dezenas de vezes por lote.
+ */
+.leitura__acoes {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.leitura__confirmar,
+.leitura__descartar {
+  width: 100%;
+}
+
+@media (min-width: 641px) {
+  .leitura__acoes {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  .leitura__confirmar,
+  .leitura__descartar {
+    width: auto;
+  }
+}
+
+/* Tela curta (celular pequeno, ou teclado aberto): o visor cede altura antes
+   de qualquer outra faixa — a bandeja e o botao de enviar nao podem sumir. */
+@media (max-height: 700px) {
+  .cel__visor {
+    height: 260px;
+  }
+}
+@media (max-height: 580px) {
+  .cel__visor {
+    height: 200px;
+  }
+  .cel__alvo {
+    width: 200px;
+  }
+}

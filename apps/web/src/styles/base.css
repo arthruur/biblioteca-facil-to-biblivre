@@ -19,13 +19,27 @@ body,
 body {
   font-family: var(--fonte);
   font-size: var(--txt-base);
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--texto);
   background: var(--fundo);
   -webkit-font-smoothing: antialiased;
   /* O celular fica em modo retrato com a mão ocupada segurando o livro: um
      "puxar para atualizar" acidental no meio de um lote perderia o ritmo. */
   overscroll-behavior-y: contain;
+}
+
+/* Barlow Condensed para tudo que é rótulo, número ou título: é ela que dá o
+   ar de prancheta e é ela que deixa um "34" caber ao lado de outros seis. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--fonte-titulo);
+  font-weight: var(--peso-forte);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
 }
 
 input,
@@ -44,12 +58,29 @@ button {
 
 a {
   color: var(--acento);
+  text-underline-offset: 3px;
 }
 
+:focus {
+  outline: none;
+}
 :focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: 2px;
-  border-radius: var(--raio-sm);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--acento) 28%, transparent);
+}
+
+/* Caixas de seleção acompanham o acento em vez do azul do sistema — são o
+   controle mais repetido da tela da fila. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--acento);
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 /* Quem pediu menos movimento não deveria ver o card do lote "pular" a cada
@@ -73,6 +104,28 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/* Número grande: indicador da fila, contagem de exemplares, prévia do export.
+   Condensada e com `tabular-nums` para a coluna não dançar quando o valor
+   troca de 9 para 10. */
+.numero {
+  font-family: var(--fonte-titulo);
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+/* Microrrótulo: a etiqueta de 10-11px em versalete que nomeia cada bloco da
+   prancheta ("LOTE", "A EXPORTAR", "CAMPOS EXTRAÍDOS"). */
+.microrrotulo {
+  font-size: 10px;
+  font-weight: var(--peso-medio);
+  letter-spacing: var(--entre-micro);
+  text-transform: uppercase;
+  color: var(--texto-3);
+  line-height: 1.4;
+}
+
 .so-leitor-de-tela {
   position: absolute;
   width: 1px;
@@ -87,4 +140,84 @@ a {
 .rolagem-x {
   overflow-x: auto;
   scrollbar-width: thin;
+}
+
+/*
+ * Moldura de prancheta.
+ *
+ * Um bloco que é "objeto de projeto" — visor, card do lote, painel do QR,
+ * caixa de diálogo — ganha contorno de fio e quatro marcas de registro nos
+ * cantos, desenhadas por fora da caixa. É o único ornamento do sistema, e ele
+ * é informativo: marca onde um objeto começa e termina sem precisar de sombra
+ * nem de fundo diferente.
+ */
+.moldura {
+  position: relative;
+  border: 1px solid var(--borda);
+}
+
+.moldura__canto {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  color: color-mix(in srgb, var(--texto) 55%, transparent);
+  pointer-events: none;
+}
+.moldura__canto::before,
+.moldura__canto::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+}
+.moldura__canto::before {
+  left: 5px;
+  top: 0;
+  width: 1px;
+  height: 100%;
+}
+.moldura__canto::after {
+  top: 5px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+}
+.moldura__canto--se {
+  top: -6px;
+  left: -6px;
+}
+.moldura__canto--sd {
+  top: -6px;
+  right: -6px;
+}
+.moldura__canto--ie {
+  bottom: -6px;
+  left: -6px;
+}
+.moldura__canto--id {
+  bottom: -6px;
+  right: -6px;
+}
+
+/* Hachura de 45° do Industry: marca um lugar onde entra imagem que ainda não
+   existe (capa que não veio das bases, quadro da câmera desligada). */
+.hachura {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--texto) 10%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+/* --- Utilitários de Animação --- */
+.animacao-girar {
+  animation: girar 1s linear infinite;
+}
+@keyframes girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes entra {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
 }

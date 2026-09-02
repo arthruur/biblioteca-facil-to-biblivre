@@ -150,14 +150,7 @@ async function ajustarCamera(track) {
     }
   }
 
-  const zoom = caps.zoom
-  return {
-    lanterna: caps.torch === true,
-    zoom:
-      zoom && typeof zoom === 'object' && zoom.max > zoom.min
-        ? { min: zoom.min, max: zoom.max, passo: zoom.step || 0.1 }
-        : null,
-  }
+  return { lanterna: caps.torch === true }
 }
 
 function beepOk() {
@@ -201,9 +194,8 @@ export function useScanner({ aoLer }) {
   const [tomStatus, setTomStatus] = useState('')
   const [erroCamera, setErroCamera] = useState('')
   const [motor, setMotor] = useState('')
-  const [recursos, setRecursos] = useState({ lanterna: false, zoom: null })
+  const [recursos, setRecursos] = useState({ lanterna: false })
   const [lanternaLigada, setLanternaLigada] = useState(false)
-  const [zoom, setZoom] = useState(null)
 
   const videoRef = useRef(null)
   const trackRef = useRef(null)
@@ -367,7 +359,6 @@ export function useScanner({ aoLer }) {
       trackRef.current = track
       const caps = await ajustarCamera(track)
       setRecursos(caps)
-      setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null)
       setMotor('nativo')
 
       rodarLacoNativo(new window.BarcodeDetector({ formats: formatos }))
@@ -417,9 +408,7 @@ export function useScanner({ aoLer }) {
     const track = video?.srcObject?.getVideoTracks?.()[0] || null
     trackRef.current = track
     if (track) {
-      const caps = await ajustarCamera(track)
-      setRecursos(caps)
-      setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null)
+      setRecursos(await ajustarCamera(track))
     }
     setMotor('zxing')
   }, [entregar])
@@ -480,9 +469,8 @@ export function useScanner({ aoLer }) {
     trackRef.current = null
     setEscaneando(false)
     setMotor('')
-    setRecursos({ lanterna: false, zoom: null })
+    setRecursos({ lanterna: false })
     setLanternaLigada(false)
-    setZoom(null)
     anunciar('Câmera fechada')
   }, [anunciar])
 
@@ -497,17 +485,6 @@ export function useScanner({ aoLer }) {
       anunciar('A lanterna não respondeu neste aparelho')
     }
   }, [lanternaLigada, anunciar])
-
-  const mudarZoom = useCallback(async (valor) => {
-    const track = trackRef.current
-    if (!track) return
-    setZoom(valor)
-    try {
-      await track.applyConstraints({ advanced: [{ zoom: valor }] })
-    } catch {
-      /* fora de faixa: a próxima mudança corrige */
-    }
-  }, [])
 
   /** Decodifica uma foto do rolo da câmera (livro fora do alcance da luz). */
   const lerArquivo = useCallback(
@@ -616,7 +593,6 @@ export function useScanner({ aoLer }) {
     motor,
     recursos,
     lanternaLigada,
-    zoom,
     ocrAtivo,
     ocrAutoAtivo: OCR_AUTO_ATIVO,
     iniciar,
@@ -625,7 +601,6 @@ export function useScanner({ aoLer }) {
     tentarOcr,
     dispararFoco,
     alternarLanterna,
-    mudarZoom,
     anunciar,
   }
 }

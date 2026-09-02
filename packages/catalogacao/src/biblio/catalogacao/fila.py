@@ -19,7 +19,8 @@ from datetime import datetime
 
 from biblio.biblivre import acervo as _acervo
 
-from .config import FILA_DIR, carrinho, carrinho_lock, fila, fila_lock
+from . import lotes as _lotes
+from .config import FILA_DIR, fila, fila_lock
 from .lookup import buscar_metadados
 
 STATUS_VALIDOS = ("pendente", "revisado", "exportado", "ignorado")
@@ -260,9 +261,9 @@ def reconsultar_acervo() -> dict:
 def estatisticas() -> dict:
     with fila_lock:
         itens = list(fila)
-    with carrinho_lock:
-        no_lote = len(carrinho)
-        exemplares_lote = sum(int(i.get("quantidade") or 1) for i in carrinho)
+    totais_lote = _lotes.totais()
+    no_lote = totais_lote["itens"]
+    exemplares_lote = totais_lote["exemplares"]
 
     por_status = {s: 0 for s in STATUS_VALIDOS}
     exemplares = 0
@@ -293,80 +294,60 @@ def estatisticas() -> dict:
         "obras_novas": max(0, a_exportar - ja_no_acervo),
         "sem_metadados": sem_metadados,
         "isbn_repetido": sum(1 for v in repetidos.values() if v > 1),
-        "lote": {"itens": no_lote, "exemplares": exemplares_lote},
+        "lote": {"itens": no_lote, "exemplares": exemplares_lote,
+                 "dispositivos": totais_lote["dispositivos"]},
     }
 
 
-# --- Lote (alias carrinho): acumula ISBNs; mesmo ISBN soma exemplares ---
+# --- Lote: fachada sobre `lotes.py` ---
+#
+# O lote passou a ser um por aparelho (ver lotes.py). Estas funcoes continuam
+# existindo com o nome antigo porque as rotas /api/carrinho* ainda apontam
+# para elas, e quebrar um bipe em campo por causa de renomeacao seria o pior
+# tipo de regressao. Sem `dispositivo`, cai no lote do balcao.
 
-def carrinho_adicionar(isbn: str) -> dict:
-    """Adiciona ISBN ao lote. Se ja existe, incrementa quantidade (exemplares)."""
-    limpo = isbn.replace("-", "").replace(" ", "").strip()
-    with carrinho_lock:
-        for item in carrinho:
-            if item.get("isbn") == limpo:
-                item["quantidade"] = int(item.get("quantidade") or 1) + 1
-                item["exemplares"] = item["quantidade"]
-                return {"status": "incrementado", "isbn": limpo, "item": item,
-                        "total": len(carrinho), "quantidade": item["quantidade"]}
-
-    # Lookup externo e consulta ao acervo ficam fora do lock: sao lentos.
-    dados = buscar_metadados(limpo)
-    info_acervo = _consultar_acervo(limpo)
-    entry = {"isbn": limpo, **dados, "quantidade": 1, "exemplares": 1,
-             "acervo": info_acervo, "adicionado_em": datetime.now().isoformat()}
-
-    with carrinho_lock:
-        # Corrida: outro bipe do mesmo ISBN pode ter entrado durante o lookup
-        for item in carrinho:
-            if item.get("isbn") == limpo:
-                item["quantidade"] = int(item.get("quantidade") or 1) + 1
-                item["exemplares"] = item["quantidade"]
-                return {"status": "incrementado", "isbn": limpo, "item": item,
-                        "total": len(carrinho), "quantidade": item["quantidade"]}
-        carrinho.append(entry)
-        return {"status": "ok", "item": entry, "total": len(carrinho)}
+def carrinho_adicionar(isbn: str, dispositivo: str | None = None,
+                       nome: str | None = None) -> dict:
+    return _lotes.adicionar(isbn, dispositivo, nome,
+                            buscar=buscar_metadados,
+                            consultar_acervo=_consultar_acervo)
 
 
-def carrinho_listar() -> dict:
-    with carrinho_lock:
-        return {"itens": list(carrinho), "total": len(carrinho)}
+def carrinho_listar(dispositivo: str | None = None,
+                    nome: str | None = None) -> dict:
+    """Compat: `itens` achatado de todas as bandejas, mais o detalhe por aparelho."""
+    estado = _lotes.listar(dispositivo, nome)
+    return {
+        "itens": _lotes.itens(dispositivo),
+        "total": len(_lotes.itens(dispositivo)),
+        **estado,
+    }
 
 
-def carrinho_atualizar_quantidade(isbn: str, quantidade: int) -> dict:
-    limpo = isbn.replace("-", "").strip()
-    q = max(1, int(quantidade))
-    with carrinho_lock:
-        for item in carrinho:
-            if item.get("isbn") == limpo:
-                item["quantidade"] = q
-                item["exemplares"] = q
-                return {"status": "ok", "isbn": limpo, "quantidade": q, "item": item}
-        return {"status": "nao_encontrado", "isbn": limpo}
+def carrinho_atualizar_quantidade(isbn: str, quantidade: int,
+                                  dispositivo: str | None = None) -> dict:
+    return _lotes.atualizar_quantidade(isbn, quantidade, dispositivo)
 
 
-def carrinho_remover(isbn: str) -> dict:
-    limpo = isbn.replace("-", "").strip()
-    with carrinho_lock:
-        antes = len(carrinho)
-        carrinho[:] = [x for x in carrinho if x.get("isbn") != limpo]
-        if len(carrinho) == antes:
-            return {"status": "nao_encontrado", "isbn": limpo}
-        return {"status": "ok", "total": len(carrinho)}
+def carrinho_remover(isbn: str, dispositivo: str | None = None) -> dict:
+    return _lotes.remover(isbn, dispositivo)
 
 
-def carrinho_limpar() -> dict:
-    with carrinho_lock:
-        carrinho.clear()
-        return {"status": "ok", "total": 0}
+def carrinho_limpar(dispositivo: str | None = None) -> dict:
+    r = _lotes.limpar(dispositivo)
+    return {"status": r["status"], "total": 0, "removidos": r["removidos"]}
 
 
-def carrinho_enviar() -> dict:
-    """Move todo o lote para a fila e limpa o lote. Retorna enviados."""
-    with carrinho_lock:
-        if not carrinho:
-            return {"status": "vazio", "enviados": 0}
-        itens = list(carrinho)
-        carrinho.clear()
+def carrinho_enviar(dispositivo: str | None = None) -> dict:
+    """
+    Move para a fila o lote de um aparelho, ou de todos.
+
+    `retirar` esvazia a bandeja de forma atomica antes de qualquer gravacao:
+    se o PC clicar "enviar tudo" no mesmo instante em que o celular clicar
+    "enviar", o item sai de um lado so.
+    """
+    itens = _lotes.retirar(dispositivo)
+    if not itens:
+        return {"status": "vazio", "enviados": 0, "itens": []}
     enviados = [adicionar_fila(dados) for dados in itens]
     return {"status": "ok", "enviados": len(enviados), "itens": enviados}

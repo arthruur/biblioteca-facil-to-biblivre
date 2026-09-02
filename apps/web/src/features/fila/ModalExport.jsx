@@ -1,16 +1,26 @@
 import { useState } from 'react'
-import {
-  Aviso,
-  Botao,
-  Campo,
-  IconeCheck,
-  IconeExportar,
-  IconeRecarregar,
-  Modal,
-} from '../../components'
+import { Aviso, Botao, Campo, IconeCheck, Modal } from '../../components'
+
+const MODOS = [
+  [
+    'gravar',
+    'Gravar agora no BibLivre',
+    'Insere direto no PostgreSQL numa transação só: ou entra tudo, ou não entra nada.',
+  ],
+  [
+    'arquivos',
+    'Só gerar os arquivos',
+    'Escreve o .mrc e o .csv na pasta de dados e não toca no banco.',
+  ],
+]
 
 /**
  * Confirmação obrigatória antes de qualquer escrita no acervo.
+ *
+ * A prévia vem primeiro e em número grande: quantas fichas nascem, quantas
+ * obras só ganham exemplar, quantos exemplares no total. Depois dela vem a
+ * lista nominal dos que entram como exemplar — é a única forma de a pessoa
+ * conferir que a deduplicação acertou antes de a transação rodar.
  */
 export function ModalExport({
   itens,
@@ -23,94 +33,83 @@ export function ModalExport({
   const [modo, setModo] = useState('gravar')
   const [senha, setSenha] = useState('')
 
-  const noAcervo = (itens || []).filter((i) => i.acervo?.existe)
-  const novas = (itens || []).filter((i) => !i.acervo?.existe)
-  const exemplares = (itens || []).reduce(
-    (s, i) => s + (Number(i.quantidade) || 1),
-    0
-  )
+  const lista = itens || []
+  const noAcervo = lista.filter((i) => i.acervo?.existe)
+  const novas = lista.filter((i) => !i.acervo?.existe)
+  const exemplares = lista.reduce((s, i) => s + (Number(i.quantidade) || 1), 0)
 
   const precisaSenha = modo === 'gravar' && !conectado && !senha
 
   return (
     <Modal
-      titulo="Exportar Acervo para o BibLivre"
+      titulo="Confirmar gravação no BibLivre"
       largo
       aoFechar={aoFechar}
       fecharNoFundo={false}
       rodape={
         <>
-          <Botao variante="fantasma" onClick={aoFechar} disabled={ocupado}>
+          <Botao variante="secundario" onClick={aoFechar} disabled={ocupado}>
             Cancelar
           </Botao>
           <Botao
             variante={modo === 'gravar' ? 'primario' : 'secundario'}
             onClick={() => aoConfirmar({ executar: modo === 'gravar', senha })}
-            disabled={ocupado || precisaSenha || !itens?.length}
+            disabled={ocupado || precisaSenha || !lista.length}
           >
             {ocupado
-              ? 'Processando gravação…'
+              ? 'Processando…'
               : modo === 'gravar'
-                ? 'Gravar agora no BibLivre'
-                : 'Gerar arquivos MARC21 / CSV'}
+                ? 'Gravar agora'
+                : 'Gerar arquivos'}
           </Botao>
         </>
       }
     >
       {temSelecao && (
-        <Aviso icone={<IconeCheck tamanho={16} />} titulo="Exportando seleção ativa">
-          {itens.length} {itens.length === 1 ? 'item selecionado' : 'itens selecionados'} —
-          o restante da fila não entrará nesta gravação.
+        <Aviso icone={<IconeCheck tamanho={15} />} titulo="Exportando só a seleção">
+          {lista.length} {lista.length === 1 ? 'item selecionado' : 'itens selecionados'} —
+          o restante da fila não entra nesta gravação.
         </Aviso>
       )}
 
-      {!conectado && (
-        <div style={{ marginTop: temSelecao ? 'var(--e3)' : 0 }}>
-          <Aviso tom="alerta" icone="⚠" titulo="Banco PostgreSQL não conectado">
-            Nenhum ISBN foi verificado previamente contra o acervo. Se gravar agora,{' '}
-            <strong>todos os {itens.length} itens entrarão como obra nova</strong> —
-            inclusive livros que a biblioteca já possa ter. Conecte antes, ou informe a
-            senha do Postgres abaixo.
-          </Aviso>
+      <div className="previa">
+        <div className="previa__celula previa__celula--nova">
+          <span className="previa__numero numero">{novas.length}</span>
+          <span className="microrrotulo">
+            {novas.length === 1 ? 'obra nova' : 'obras novas'}
+          </span>
         </div>
-      )}
-
-      <div className="export__numeros">
-        <div className="export__numero export__numero--nova">
-          <strong>{novas.length}</strong>
-          <span>{novas.length === 1 ? 'obra nova (novo registro)' : 'obras novas (novos registros)'}</span>
+        <div className="previa__celula previa__celula--existente">
+          <span className="previa__numero numero">{noAcervo.length}</span>
+          <span className="microrrotulo">já no acervo</span>
         </div>
-        <div className="export__numero export__numero--existente">
-          <strong>{noAcervo.length}</strong>
-          <span>já no acervo (acrescenta exemplares)</span>
-        </div>
-        <div className="export__numero">
-          <strong>{exemplares}</strong>
-          <span>exemplares no total</span>
+        <div className="previa__celula">
+          <span className="previa__numero numero">{exemplares}</span>
+          <span className="microrrotulo">
+            {exemplares === 1 ? 'exemplar' : 'exemplares'}
+          </span>
         </div>
       </div>
 
+      {!conectado && (
+        <Aviso tom="alerta" icone="⚠" titulo="Banco desconectado">
+          Nenhum ISBN foi verificado contra o acervo. Se gravar agora,{' '}
+          <strong style={{ display: 'inline' }}>todos</strong> os {lista.length} itens
+          entram como obra nova — inclusive os que a biblioteca já tem. Conecte antes,
+          ou informe a senha do Postgres abaixo.
+        </Aviso>
+      )}
+
       {noAcervo.length > 0 && (
-        <div style={{ marginTop: 'var(--e3)', marginBottom: 'var(--e3)' }}>
-          <p
-            className="campo__rotulo"
-            style={{ marginBottom: 'var(--e2)' }}
-          >
-            Livros já existentes (não duplicarão ficha)
+        <div>
+          <p className="microrrotulo" style={{ marginBottom: 6 }}>
+            Entram como exemplar em obra existente
           </p>
-          <ul className="export__lista">
+          <ul className="export-lista">
             {noAcervo.map((i) => (
               <li key={i.id}>
-                <span
-                  style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {i.titulo || i.isbn}
-                </span>
-                <code className="mono">
+                <span className="export-lista__titulo">{i.titulo || i.isbn}</span>
+                <code className="export-lista__destino mono">
                   #{i.acervo.record_id} +{Number(i.quantidade) || 1} ex
                 </code>
               </li>
@@ -119,54 +118,46 @@ export function ModalExport({
         </div>
       )}
 
-      <div className="export__modo">
-        <button
-          type="button"
-          className="export__opcao"
-          aria-pressed={modo === 'gravar'}
-          onClick={() => setModo('gravar')}
-        >
-          <strong>🚀 Gravar agora no BibLivre</strong>
-          <span>
-            Insere diretamente no PostgreSQL numa transação segura. Nada é gravado pela metade.
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className="export__opcao"
-          aria-pressed={modo === 'arquivos'}
-          onClick={() => setModo('arquivos')}
-        >
-          <strong>📄 Gerar arquivos (.mrc + .csv)</strong>
-          <span>
-            Apenas exporta os arquivos MARC21 e CSV na pasta de dados, sem alterar o banco de dados.
-          </span>
-        </button>
+      <div className="modos">
+        {MODOS.map(([valor, titulo, desc]) => (
+          <button
+            key={valor}
+            type="button"
+            className={`modos__opcao ${modo === valor ? 'modos__opcao--ativa' : ''}`}
+            aria-pressed={modo === valor}
+            onClick={() => setModo(valor)}
+          >
+            <span className="modos__titulo">{titulo}</span>
+            <span className="modos__desc">{desc}</span>
+          </button>
+        ))}
       </div>
 
       {modo === 'gravar' && !conectado && (
-        <div style={{ marginTop: 'var(--e4)' }}>
-          <Campo
-            rotulo="Senha do PostgreSQL"
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            ajuda="Necessária para autorizar a gravação direta no banco."
-            autoFocus
-          />
-        </div>
+        <Campo
+          rotulo="Senha do PostgreSQL"
+          type="password"
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          ajuda="Vive só na memória do processo do servidor; nunca vai para disco."
+          autoFocus
+        />
       )}
 
-      {modo === 'gravar' && novas.length > 0 && (
-        <div style={{ marginTop: 'var(--e4)' }}>
-          <Aviso tom="nova" icone={<IconeRecarregar tamanho={16} />}>
-            {novas.length === 1 ? '1 obra nova nasce' : `${novas.length} obras novas nascem`}{' '}
-            neste export — após a gravação, lembre-se de reindexar no BibLivre (Administração
-            → Manutenção → Reindexar) para que apareçam na busca pública.
-          </Aviso>
-        </div>
-      )}
+      <p className="export-nota">
+        Uma transação só: ou entra tudo, ou não entra nada. Os arquivos{' '}
+        <code className="mono">obras_*.mrc</code> e{' '}
+        <code className="mono">exemplares_*.csv</code> são escritos em disco nos dois
+        modos.
+        {modo === 'gravar' && novas.length > 0 && (
+          <>
+            {' '}
+            {novas.length === 1 ? 'A obra nova exige' : 'As obras novas exigem'}{' '}
+            reindexar no BibLivre (Administração → Manutenção → Reindexar) para
+            aparecer na busca pública.
+          </>
+        )}
+      </p>
     </Modal>
   )
 }

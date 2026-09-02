@@ -1,18 +1,39 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { api } from './api/client'
-import { BottomNav, Navbar } from './components'
+import { Navbar } from './components'
 import { ModalBanco } from './features/fila/ModalBanco'
 import { ModalExport } from './features/fila/ModalExport'
+import { useDispositivo, useEhPc } from './hooks/useDispositivo'
 
-const TelaEscanear = lazy(() =>
-  import('./features/scanner/TelaEscanear').then((m) => ({ default: m.TelaEscanear }))
+/*
+ * Duas posturas, e elas não têm o mesmo tamanho.
+ *
+ * A rota `/` resolve para telas diferentes conforme o aparelho, e isso é
+ * deliberado: no celular ela é a câmera (de pé na estante, uma mão livre); no
+ * PC é o balcão de captura, que gerencia os celulares que estão bipando. Não é
+ * a mesma tela reflowada — o PC não tem câmera útil apontando para lombada de
+ * livro, e oferecer "abrir a câmera" lá só produzia um caminho que não
+ * funciona.
+ *
+ * O celular tem uma tela só: a câmera. Fila de revisão e conexão com o
+ * PostgreSQL são gerência — leitura de metadados, decisão de destino, gravação
+ * no acervo, senha de banco —, e gerência se faz sentado. Quem está de pé com
+ * o livro na mão bipa e envia; quem revisa o que foi bipado está no PC. Por
+ * isso `/fila` no celular não abre tela nenhuma e não há barra de navegação:
+ * não existe segundo destino para navegar.
+ */
+const TelaCelular = lazy(() =>
+  import('./features/scanner/TelaCelular').then((m) => ({ default: m.TelaCelular }))
+)
+const TelaBalcao = lazy(() =>
+  import('./features/balcao/TelaBalcao').then((m) => ({ default: m.TelaBalcao }))
 )
 const TelaFila = lazy(() =>
   import('./features/fila/TelaFila').then((m) => ({ default: m.TelaFila }))
 )
 
 function rotaAtual() {
-  return window.location.pathname.replace(/\/+$/, '') === '/fila' ? 'fila' : 'escanear'
+  return window.location.pathname.replace(/\/+$/, '') === '/fila' ? 'fila' : 'captura'
 }
 
 export default function App() {
@@ -26,6 +47,12 @@ export default function App() {
   const [exportando, setExportando] = useState(false)
   const [itensParaExportar, setItensParaExportar] = useState([])
 
+  const ehPc = useEhPc()
+
+  // Só o celular tem identidade de aparelho: ele é um dos N que bipam. O PC
+  // olha todos, e o que ele digitar à mão cai na bandeja do balcão.
+  const dispositivo = useDispositivo({ ativo: !ehPc })
+
   const irPara = useCallback((destino) => {
     const caminho = destino === 'fila' ? '/fila' : '/'
     window.history.pushState({}, '', caminho)
@@ -38,10 +65,19 @@ export default function App() {
     return () => window.removeEventListener('popstate', aoVoltar)
   }, [])
 
+  // Um link para /fila chega no celular por caminhos legítimos: o endereço
+  // colado do PC, um histórico anterior, o QR aberto duas vezes. Sem tela para
+  // servir, a URL é corrigida em vez de ficar um endereço que não resolve em
+  // nada.
+  useEffect(() => {
+    if (ehPc || rota !== 'fila') return
+    window.history.replaceState({}, '', '/')
+    setRota('captura')
+  }, [ehPc, rota])
+
   const recarregarConexao = useCallback(async () => {
     try {
-      const estado = await api.db.estado()
-      setDb(estado)
+      setDb(await api.db.estado())
     } catch {
       setDb(null)
     }
@@ -49,24 +85,38 @@ export default function App() {
 
   const carregarStats = useCallback(async () => {
     try {
-      const s = await api.fila.stats()
-      setStats(s)
-    } catch {}
-  }, [])
-
-  const carregarLoteQtd = useCallback(async () => {
-    try {
-      const l = await api.lote.listar()
-      setLoteQtd(l?.itens?.length || 0)
-    } catch {}
+      setStats(await api.fila.stats())
+    } catch {
+      /* a tela mostra o que já tem; o próximo ciclo reconcilia */
+    }
   }, [])
 
   useEffect(() => {
     api.sistema.info().then(setInfo).catch(() => {})
     recarregarConexao()
     carregarStats()
-    carregarLoteQtd()
-  }, [recarregarConexao, carregarStats, carregarLoteQtd])
+  }, [recarregarConexao, carregarStats])
+
+  // A pílula do acervo tem de refletir o banco caindo no meio do turno, não só
+  // o estado de quando a tela abriu.
+  useEffect(() => {
+    const t = setInterval(recarregarConexao, 20000)
+    return () => clearInterval(t)
+  }, [recarregarConexao])
+
+  // A contagem do lote vem da tela de captura enquanto ela está aberta. Na
+  // fila, quem alimenta o badge é o painel de lotes.
+  useEffect(() => {
+    if (rota !== 'fila') return
+    const puxar = () =>
+      api.lotes
+        .painel()
+        .then((d) => setLoteQtd(d.titulos))
+        .catch(() => {})
+    puxar()
+    const t = setInterval(puxar, 10000)
+    return () => clearInterval(t)
+  }, [rota])
 
   const reconsultarAcervo = useCallback(async () => {
     setReconsultando(true)
@@ -88,8 +138,7 @@ export default function App() {
     }
     try {
       const lista = await api.fila.listar({ status: 'pendente,revisado' })
-      const alvos = (lista.itens || []).filter((i) => i.status !== 'exportado')
-      setItensParaExportar(alvos)
+      setItensParaExportar((lista.itens || []).filter((i) => i.status !== 'exportado'))
       setModalGlobal('export')
     } catch (e) {
       console.error('Falha ao carregar itens para export:', e)
@@ -109,9 +158,7 @@ export default function App() {
         })
         setModalGlobal(null)
         await Promise.all([carregarStats(), recarregarConexao()])
-        if (rota !== 'fila') {
-          irPara('fila')
-        }
+        if (rota !== 'fila') irPara('fila')
         return r
       } finally {
         setExportando(false)
@@ -121,59 +168,55 @@ export default function App() {
   )
 
   const conexao = descreverConexao(db)
+  const naFila = rota === 'fila' && ehPc
 
   return (
     <div className="app-shell">
-      {/* Navbar Desktop Persistente */}
-      <Navbar
-        rotaAtiva={rota}
-        aoNavegar={irPara}
-        loteQtd={loteQtd}
-        filaQtd={stats?.total || 0}
-        conexao={conexao}
-        aoAbrirBanco={() => setModalGlobal('banco')}
-        aoAbrirExport={() => abrirExport()}
-        aoReconsultar={reconsultarAcervo}
-        reconsultando={reconsultando}
-      />
+      {/*
+        A barra do topo é do PC. No celular ela duplicava o cabeçalho da tela
+        — "Escanear" já traz o próprio título e o estado do acervo — e eram
+        dois cabeçalhos empilhados comendo 104px da viewport onde o visor
+        precisa de 340. Lá também não há para onde navegar: a captura é a
+        tela única.
+      */}
+      {ehPc && (
+        <Navbar
+          rotaAtiva={rota}
+          aoNavegar={irPara}
+          loteQtd={loteQtd}
+          filaQtd={stats?.a_exportar || 0}
+          conexao={conexao}
+          aoAbrirBanco={() => setModalGlobal('banco')}
+          aoAbrirExport={() => abrirExport()}
+        />
+      )}
 
-      {/* Conteúdo da Tela */}
       <main className="app-corpo">
         <Suspense fallback={<Carregando />}>
-          {rota === 'fila' ? (
+          {naFila ? (
             <TelaFila
               conexao={conexao}
               stats={stats}
-              aoIrParaEscanear={() => irPara('escanear')}
-              aoRecarregarConexao={recarregarConexao}
+              aoIrParaCaptura={() => irPara('captura')}
               aoAtualizarStats={setStats}
               aoAbrirExport={abrirExport}
-              aoAbrirBanco={() => setModalGlobal('banco')}
+              aoReconsultar={reconsultarAcervo}
+              reconsultando={reconsultando}
             />
-          ) : (
-            <TelaEscanear
+          ) : ehPc ? (
+            <TelaBalcao
               info={info}
               conexao={conexao}
               aoIrParaFila={() => irPara('fila')}
               aoAtualizarLoteQtd={setLoteQtd}
               aoAtualizarFilaStats={carregarStats}
             />
+          ) : (
+            <TelaCelular conexao={conexao} dispositivo={dispositivo} />
           )}
         </Suspense>
       </main>
 
-      {/* Bottom Navigation Mobile Persistente */}
-      <BottomNav
-        rotaAtiva={rota}
-        aoNavegar={irPara}
-        loteQtd={loteQtd}
-        filaQtd={stats?.total || 0}
-        aoAbrirExport={() => abrirExport()}
-        aoAbrirBanco={() => setModalGlobal('banco')}
-        conexao={conexao}
-      />
-
-      {/* Modais Globais */}
       {modalGlobal === 'banco' && (
         <ModalBanco
           estadoInicial={conexao.bruto}
@@ -201,44 +244,46 @@ export default function App() {
 
 function Carregando() {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '60dvh',
-        color: 'var(--texto-3)',
-        fontSize: 'var(--txt-sm)',
-        gap: 12,
-      }}
-    >
-      <div className="animacao-girar" style={{ fontSize: 24 }}>
-        ◓
-      </div>
-      <span>Carregando aplicação…</span>
+    <div className="carregando">
+      <span className="microrrotulo">Carregando</span>
     </div>
   )
 }
 
+/**
+ * O estado do acervo, em texto de tela.
+ *
+ * `conectado` vem de `db.conectado` — uma sonda de conexão de verdade no
+ * servidor (`biblio.biblivre.conexao.sondar`). Antes era inferido de
+ * `db.indexados > 0`, o tamanho do índice de ISBN em memória, e isso dava
+ * falso negativo sempre que o índice é montado sob demanda: a pílula ficava
+ * âmbar ("Acervo indisponível") com o Postgres perfeitamente conectado. O
+ * índice diz se a consulta vai ser rápida, não se o banco existe.
+ */
 function descreverConexao(db) {
   if (!db) {
     return {
       conectado: false,
       tom: undefined,
-      rotulo: 'Verificando conexão…',
+      rotulo: 'Verificando…',
       detalhe: 'Consultando o estado do PostgreSQL do BibLivre',
       bruto: null,
     }
   }
 
-  const indexados = db.indexados || 0
-  if (indexados > 0) {
+  if (db.conectado) {
+    const obras = db.obras || 0
+    const indexados = db.indexados || 0
     return {
       conectado: true,
       tom: 'ok',
-      rotulo: `Acervo: ${indexados.toLocaleString('pt-BR')} ISBNs`,
-      detalhe: `${db.config?.dbname || 'biblivre4'} em ${db.config?.host || 'localhost'}, schema ${db.config?.schema || 'single'}`,
+      // O número que interessa é o do acervo. Com o índice quente mostramos os
+      // ISBNs indexados (é o que de fato responde ao bipe); sem ele, a
+      // contagem de obras, que a sonda traz de graça.
+      rotulo: indexados
+        ? `Acervo: ${indexados.toLocaleString('pt-BR')} ISBNs`
+        : `Acervo: ${obras.toLocaleString('pt-BR')} obras`,
+      detalhe: `${db.dbname || 'biblivre5'} em ${db.host || 'localhost'}, schema ${db.schema || 'single'}${indexados ? '' : ' · índice de ISBN sob demanda'}`,
       bruto: db,
     }
   }

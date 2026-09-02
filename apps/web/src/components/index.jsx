@@ -3,6 +3,36 @@ import './componentes.css'
 
 const juntar = (...cls) => cls.filter(Boolean).join(' ')
 
+/* --- Moldura de prancheta --- */
+
+/**
+ * As quatro marcas de registro de um bloco.
+ *
+ * Ficam fora da caixa, então quem as usa precisa ser `position: relative` e
+ * não pode ter `overflow: hidden` — daí existirem separadas de `Moldura`: um
+ * botão já é relativo por conta própria e só precisa das marcas.
+ */
+export function Cantos() {
+  return (
+    <>
+      <span className="moldura__canto moldura__canto--se" aria-hidden="true" />
+      <span className="moldura__canto moldura__canto--sd" aria-hidden="true" />
+      <span className="moldura__canto moldura__canto--ie" aria-hidden="true" />
+      <span className="moldura__canto moldura__canto--id" aria-hidden="true" />
+    </>
+  )
+}
+
+/** Bloco de prancheta: contorno de fio + marcas de registro nos cantos. */
+export function Moldura({ como: Como = 'div', className, children, ...resto }) {
+  return (
+    <Como className={juntar('moldura', className)} {...resto}>
+      <Cantos />
+      {children}
+    </Como>
+  )
+}
+
 /* --- Ícones SVG limpos e modernos --- */
 
 export function IconeScanner({ tamanho = 18, className = '' }) {
@@ -449,13 +479,85 @@ export function Stepper({ valor, aoMudar, min = 1, max = 999, grande, rotulo }) 
   )
 }
 
-export function Campo({ rotulo, ajuda, largo, ...resto }) {
+export function Campo({ rotulo, ajuda, largo, className, ...resto }) {
   return (
-    <label className={juntar('campo', largo && 'campo--largo')}>
+    <label className={juntar('campo', largo && 'campo--largo', className)}>
       <span className="campo__rotulo">{rotulo}</span>
       <input className="campo__entrada" {...resto} />
       {ajuda && <span className="campo__ajuda">{ajuda}</span>}
     </label>
+  )
+}
+
+/**
+ * Controle segmentado: opções mutuamente exclusivas num só contorno.
+ *
+ * `opcoes` é uma lista de `[valor, rótulo]` — a mesma forma da constante ABAS
+ * da tela da fila, para não precisar transformar nada na chamada.
+ */
+export function Segmentado({ opcoes, valor, aoMudar, rotulo }) {
+  return (
+    <div className="segmentado" role="tablist" aria-label={rotulo}>
+      {opcoes.map(([v, r]) => (
+        <button
+          key={v}
+          role="tab"
+          aria-selected={valor === v}
+          className={juntar(
+            'segmentado__opcao',
+            valor === v && 'segmentado__opcao--ativa'
+          )}
+          onClick={() => aoMudar(v)}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Faixa de indicadores: os números grandes que abrem a tela da fila.
+ *
+ * Cada item: `{ n, rotulo, nota, tom, ativo, aoClicar }`. O `tom` é o
+ * vocabulário de destino ('nova', 'existente', 'alerta', 'erro', 'acento') e é
+ * ele que colore o número — a única razão de a faixa ter cor.
+ */
+export function FaixaIndicadores({ itens }) {
+  return (
+    <div className="indicadores">
+      {itens.map((it) => {
+        const classes = juntar(
+          'indicador',
+          it.tom && `indicador--${it.tom}`,
+          !it.n && 'indicador--zero',
+          it.ativo && 'indicador--ativo'
+        )
+        const conteudo = (
+          <>
+            <span className="indicador__numero numero">{it.n ?? 0}</span>
+            <span className="indicador__rotulo">{it.rotulo}</span>
+            {it.nota && <span className="indicador__nota">{it.nota}</span>}
+          </>
+        )
+
+        return it.aoClicar ? (
+          <button
+            key={it.rotulo}
+            className={classes}
+            onClick={it.aoClicar}
+            aria-pressed={!!it.ativo}
+            title={it.nota}
+          >
+            {conteudo}
+          </button>
+        ) : (
+          <div key={it.rotulo} className={classes} title={it.nota}>
+            {conteudo}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -476,6 +578,15 @@ export function EstadoVazio({ icone, titulo, children, acao }) {
 
 /* --- Navegação e App Shell --- */
 
+/*
+ * A rota `/` chama-se "captura" e nao "escanear" porque ela e duas telas: no
+ * celular e a camera, no PC e o balcao que gerencia os celulares. O destino e
+ * o mesmo; o rotulo aqui e fixo porque esta barra so existe no PC.
+ *
+ * Ela e a unica navegacao do app. O celular nao tem barra nenhuma: la a
+ * captura e a tela unica, e o titulo dela e da propria tela.
+ */
+
 export function Navbar({
   rotaAtiva,
   aoNavegar,
@@ -484,19 +595,17 @@ export function Navbar({
   conexao,
   aoAbrirBanco,
   aoAbrirExport,
-  aoReconsultar,
-  reconsultando = false,
 }) {
   return (
     <header className="app-nav">
       <div className="app-nav__esquerda">
         <button
           className="app-nav__marca"
-          onClick={() => aoNavegar('escanear')}
-          title="Ir para o scanner"
+          onClick={() => aoNavegar('captura')}
+          title="Ir para a captura"
         >
           <div className="app-nav__logo" aria-hidden="true">
-            <IconeLivro tamanho={20} />
+            <IconeLivro tamanho={18} />
           </div>
           <div className="app-nav__titulos">
             <span className="app-nav__nome">BiblioFácil</span>
@@ -507,12 +616,12 @@ export function Navbar({
 
       <nav className="app-nav__centro" aria-label="Navegação principal">
         <button
-          className={juntar('app-nav__item', rotaAtiva === 'escanear' && 'app-nav__item--ativo')}
-          onClick={() => aoNavegar('escanear')}
-          aria-current={rotaAtiva === 'escanear' ? 'page' : undefined}
+          className={juntar('app-nav__item', rotaAtiva === 'captura' && 'app-nav__item--ativo')}
+          onClick={() => aoNavegar('captura')}
+          aria-current={rotaAtiva === 'captura' ? 'page' : undefined}
         >
-          <IconeScanner tamanho={17} />
-          <span>Escanear</span>
+          <IconeScanner tamanho={16} />
+          <span>Balcão de captura</span>
           {loteQtd > 0 && <span className="badge-lote">{loteQtd}</span>}
         </button>
 
@@ -521,17 +630,20 @@ export function Navbar({
           onClick={() => aoNavegar('fila')}
           aria-current={rotaAtiva === 'fila' ? 'page' : undefined}
         >
-          <IconeFila tamanho={17} />
-          <span>Fila de Revisão</span>
+          <IconeFila tamanho={16} />
+          <span>Fila de revisão</span>
+          {/* O badge conta o que pede acao, nao o total: item ja exportado
+              continua na fila para consulta, e um "7" ao lado de uma fila sem
+              nada a fazer e so um alarme falso. */}
           {filaQtd > 0 && <span className="badge-fila">{filaQtd}</span>}
         </button>
 
         <button
           className="app-nav__item app-nav__item--export"
           onClick={aoAbrirExport}
-          title="Abrir diálogo de exportação para o BibLivre"
+          title="Abrir a confirmação de gravação no BibLivre"
         >
-          <IconeExportar tamanho={17} />
+          <IconeExportar tamanho={16} />
           <span>Exportar</span>
         </button>
       </nav>
@@ -546,91 +658,8 @@ export function Navbar({
             {conexao.rotulo}
           </Pilula>
         )}
-
-        {conexao?.conectado && (
-          <button
-            className="btn-icone-nav"
-            onClick={aoReconsultar}
-            disabled={reconsultando}
-            title="Revarrer acervo e reavaliar a fila"
-            aria-label="Revarrer acervo e reavaliar fila"
-          >
-            <IconeRecarregar
-              tamanho={16}
-              className={reconsultando ? 'animacao-girar' : ''}
-            />
-          </button>
-        )}
       </div>
     </header>
   )
 }
 
-export function BottomNav({
-  rotaAtiva,
-  aoNavegar,
-  loteQtd = 0,
-  filaQtd = 0,
-  aoAbrirExport,
-  aoAbrirBanco,
-  conexao,
-}) {
-  return (
-    <nav className="bottom-nav" aria-label="Navegação móvel">
-      <button
-        className={juntar('bottom-nav__item', rotaAtiva === 'escanear' && 'bottom-nav__item--ativo')}
-        onClick={() => aoNavegar('escanear')}
-        aria-current={rotaAtiva === 'escanear' ? 'page' : undefined}
-      >
-        <div className="bottom-nav__icone-wrap">
-          <IconeScanner tamanho={22} />
-          {loteQtd > 0 && <span className="bottom-nav__badge">{loteQtd}</span>}
-        </div>
-        <span>Escanear</span>
-      </button>
-
-      <button
-        className={juntar('bottom-nav__item', rotaAtiva === 'fila' && 'bottom-nav__item--ativo')}
-        onClick={() => aoNavegar('fila')}
-        aria-current={rotaAtiva === 'fila' ? 'page' : undefined}
-      >
-        <div className="bottom-nav__icone-wrap">
-          <IconeFila tamanho={22} />
-          {filaQtd > 0 && <span className="bottom-nav__badge">{filaQtd}</span>}
-        </div>
-        <span>Fila</span>
-      </button>
-
-      <button
-        className="bottom-nav__item"
-        onClick={aoAbrirExport}
-        aria-label="Exportar para o BibLivre"
-      >
-        <div className="bottom-nav__icone-wrap">
-          <IconeExportar tamanho={22} />
-        </div>
-        <span>Exportar</span>
-      </button>
-
-      <button
-        className={juntar(
-          'bottom-nav__item',
-          conexao?.conectado ? 'bottom-nav__item--db-ok' : 'bottom-nav__item--db-alerta'
-        )}
-        onClick={aoAbrirBanco}
-        aria-label="Status do banco de dados BibLivre"
-      >
-        <div className="bottom-nav__icone-wrap">
-          <IconeBanco tamanho={22} />
-          <span
-            className={juntar(
-              'bottom-nav__ponto-status',
-              conexao?.conectado ? 'bottom-nav__ponto--ok' : 'bottom-nav__ponto--alerta'
-            )}
-          />
-        </div>
-        <span>BibLivre</span>
-      </button>
-    </nav>
-  )
-}

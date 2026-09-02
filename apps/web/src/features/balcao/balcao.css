@@ -1,0 +1,469 @@
+/*
+ * Balcão de captura — a tela do PC na fase de captura.
+ *
+ * Duas colunas: os aparelhos à esquerda (é o que muda sozinho, e é onde o olho
+ * fica), o pareamento à direita (é o que se usa uma vez por turno). Rodapé
+ * fixo com o total e o "enviar tudo".
+ *
+ * Sem visor de câmera de propósito — ver o comentário no topo de TelaBalcao.jsx.
+ */
+
+.balcao {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 56px);
+  background: var(--fundo);
+}
+
+/* --- Cabeçalho --- */
+.balcao__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e3) var(--e5);
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+}
+
+.balcao__topo-esq {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e3);
+  min-width: 0;
+}
+
+.balcao__titulo {
+  font-size: var(--txt-lg);
+  color: var(--texto);
+}
+
+.balcao__sub {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Corpo --- */
+.balcao__corpo {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--e5);
+  padding: var(--e5);
+  padding-bottom: 100px;
+  align-items: start;
+}
+
+.balcao__aparelhos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e5);
+  min-width: 0;
+}
+
+.balcao__erro {
+  padding: var(--e2) var(--e3);
+  border: 1px solid var(--erro);
+  background: var(--erro-suave);
+  color: var(--erro);
+  font-size: var(--txt-sm);
+}
+
+.balcao__recado {
+  padding: var(--e2) var(--e3);
+  border: 1px solid var(--existente);
+  background: var(--existente-suave);
+  color: var(--existente);
+  font-size: var(--txt-sm);
+}
+
+/* --- Bloco de um aparelho --- */
+.aparelho {
+  padding: var(--e3);
+  background: var(--superficie);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+
+/* Parado não é erro: é um celular que a pessoa pôs no bolso. Ele desbota, e a
+   bandeja continua ali para o PC decidir o que fazer. */
+.aparelho--parado {
+  background: transparent;
+}
+.aparelho--parado .aparelho__nome,
+.aparelho--parado .aparelho__contagem {
+  color: var(--texto-2);
+}
+
+.aparelho__cabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  flex-wrap: wrap;
+}
+
+.aparelho__ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--raio-full);
+  background: var(--existente);
+  flex: none;
+}
+.aparelho__ponto--parado {
+  background: transparent;
+  border: 1px solid var(--borda-forte);
+}
+
+.aparelho__nome {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  color: var(--texto);
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: 1px solid transparent;
+}
+.aparelho__nome:hover {
+  border-color: var(--borda);
+}
+.aparelho__nome svg {
+  color: var(--texto-3);
+}
+
+.aparelho__nome-edicao {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+.aparelho__nome-campo {
+  width: 190px;
+  height: 28px;
+  padding: 0 var(--e2);
+  border: 1px solid var(--acento);
+  background: var(--superficie-2);
+  font-size: var(--txt-base);
+}
+.aparelho__nome-campo:focus {
+  outline: none;
+}
+
+.aparelho__contagem {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-base);
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+  color: var(--texto);
+}
+
+.aparelho__quando {
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+}
+
+.aparelho__acoes {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+
+.aparelho__vazio {
+  padding: var(--e4) var(--e3);
+  border: 1px dashed var(--borda);
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+  text-align: center;
+}
+
+.aparelho__trilha {
+  display: flex;
+  gap: var(--e2);
+  overflow-x: auto;
+  padding-bottom: var(--e2);
+  scrollbar-width: thin;
+}
+
+/* --- Card na bandeja do PC --- */
+.bcard {
+  flex: 0 0 186px;
+  position: relative;
+  padding: var(--e2);
+  border: 1px solid var(--borda);
+  border-left-width: 3px;
+  background: var(--superficie);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: entra 160ms ease-out;
+}
+.bcard--nova {
+  border-left-color: var(--nova);
+}
+.bcard--existente {
+  border-left-color: var(--existente);
+  background: var(--existente-suave);
+}
+.bcard--alerta {
+  border-left-color: var(--alerta);
+  background: var(--alerta-suave);
+}
+
+.bcard__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e1);
+}
+.bcard__isbn {
+  font-size: 11px;
+  color: var(--texto-2);
+}
+.bcard__remover {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--texto-3);
+  border: 1px solid transparent;
+}
+.bcard__remover:hover {
+  border-color: var(--erro-borda);
+  background: var(--erro-suave);
+  color: var(--erro);
+}
+
+.bcard__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bcard__titulo--vazio {
+  font-family: var(--fonte);
+  font-size: var(--txt-base);
+  font-style: italic;
+  font-weight: var(--peso-normal);
+  color: var(--alerta);
+}
+.bcard__autor {
+  font-size: 11.5px;
+  color: var(--texto-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bcard__selo {
+  align-self: flex-start;
+  margin-top: 3px;
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bcard__rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  margin-top: var(--e1);
+  padding-top: var(--e2);
+  border-top: 1px solid var(--borda-suave);
+}
+.bcard__fonte {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Nenhum aparelho --- */
+.sem-aparelho {
+  padding: var(--e7) var(--e5);
+  border: 1px dashed var(--borda);
+  background: var(--superficie);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e2);
+}
+.sem-aparelho__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: 26px;
+  font-weight: var(--peso-forte);
+  color: var(--texto);
+  line-height: 1.15;
+}
+.sem-aparelho__texto {
+  font-size: var(--txt-base);
+  color: var(--texto-2);
+  line-height: 1.5;
+  max-width: 52ch;
+}
+.sem-aparelho__url {
+  font-size: var(--txt-sm);
+  color: var(--acento);
+  margin-top: var(--e2);
+}
+
+/* --- Lateral: pareamento e entrada manual --- */
+.balcao__lateral {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e5);
+  position: sticky;
+  top: calc(56px + var(--e5));
+}
+
+.parear {
+  padding: var(--e3);
+  background: var(--superficie);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+
+.parear__desc {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.45;
+}
+
+.parear__qr {
+  align-self: center;
+  padding: var(--e2);
+  background: #fff;
+  border: 1px solid var(--borda);
+  line-height: 0;
+}
+.parear__qr img {
+  display: block;
+  width: 138px;
+  height: 138px;
+}
+
+.parear__url-linha {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding-top: var(--e2);
+  border-top: 1px solid var(--borda-suave);
+}
+.parear__url {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--txt-sm);
+  color: var(--acento);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parear__copiar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-sm);
+  font-weight: var(--peso-forte);
+  color: var(--texto-2);
+  padding: 2px 6px;
+  border: 1px solid var(--borda);
+}
+.parear__copiar:hover {
+  border-color: var(--borda-forte);
+  color: var(--texto);
+}
+
+.parear__manual {
+  display: flex;
+  gap: var(--e2);
+}
+.parear__campo {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  font-size: var(--txt-base);
+  letter-spacing: 0.04em;
+}
+.parear__campo:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+
+.balcao__aviso-banco {
+  padding: var(--e3);
+  border: 1px solid var(--alerta);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  font-size: var(--txt-sm);
+  line-height: 1.45;
+}
+.balcao__aviso-titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+/* --- Rodapé --- */
+.balcao__rodape {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e2) var(--e5);
+  background: var(--superficie);
+  border-top: 1px solid var(--borda);
+}
+
+.balcao__rodape-resumo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e2);
+}
+.balcao__rodape-numero {
+  font-size: 26px;
+  color: var(--texto);
+}
+.balcao__rodape-rotulo {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+
+.balcao__enviar {
+  height: 40px;
+  padding: 0 var(--e5);
+}
+
+/* Janela estreita mas ainda "PC" (1024 e abaixo): a lateral desce para o fim,
+   e os aparelhos ficam com a largura toda — é neles que o olho fica. */
+@media (max-width: 1100px) {
+  .balcao__corpo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .balcao__lateral {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
+  }
+}

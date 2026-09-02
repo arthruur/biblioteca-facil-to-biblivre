@@ -81,7 +81,11 @@ def definir_db(novo: dict) -> dict:
                 _db[chave] = novo[chave]
         if novo.get("port"):
             _db["port"] = int(novo["port"])
-        return {k: v for k, v in _db.items() if k != "senha"}
+        resumo = {k: v for k, v in _db.items() if k != "senha"}
+    # Fora do `_lock`: `invalidar_sonda` toma o dela, e aninhar os dois em
+    # ordens diferentes em dois lugares e como se escreve um deadlock.
+    invalidar_sonda()
+    return resumo
 
 
 def ident(nome: str) -> str:
@@ -170,3 +174,56 @@ def testar_conexao(sobrepor: dict | None = None) -> dict:
             con.close()
         except Exception:
             pass
+
+
+# --- Sonda de conectividade ---
+#
+# A tela precisa saber se o banco esta de pe, e ela pergunta em laco. Antes ela
+# inferia isso do tamanho do indice de ISBN (`acervo.estado()["indexados"]`), o
+# que da falso negativo sempre que o indice e montado sob demanda — o padrao em
+# desenvolvimento, onde `--reload` liga BIBLIO_SEM_INDICE=1. Resultado: pilula
+# ambar "Acervo indisponivel" com o Postgres conectado.
+#
+# Agora a resposta vem de uma conexao de verdade, com TTL curto para o laco da
+# tela nao abrir conexao a cada dois segundos.
+
+TTL_SONDA = 15.0
+
+_sonda_lock = threading.Lock()
+_sonda: dict = {}
+_sonda_em: float = 0.0
+
+
+def sondar(forcar: bool = False) -> dict:
+    """
+    `{conectado, erro, obras, exemplares}` — com cache de `TTL_SONDA`.
+
+    Nao levanta: banco fora do ar e um estado normal desta aplicacao, nao uma
+    excecao. Sem senha configurada devolve `conectado: False` sem nem tentar
+    abrir socket.
+    """
+    global _sonda, _sonda_em
+    import time as _time
+
+    with _sonda_lock:
+        fresco = _sonda and (_time.time() - _sonda_em) < TTL_SONDA
+        if fresco and not forcar:
+            return dict(_sonda)
+
+    cfg = db_config()
+    if not (cfg.get("senha") or os.environ.get("PGPASSWORD")):
+        resultado = {"conectado": False, "erro": "senha do Postgres nao configurada"}
+    else:
+        resultado = testar_conexao()
+
+    with _sonda_lock:
+        _sonda = dict(resultado)
+        _sonda_em = _time.time()
+        return dict(resultado)
+
+
+def invalidar_sonda() -> None:
+    """Forca a proxima `sondar()` a ir ao banco. Chamar depois de `definir_db`."""
+    global _sonda_em
+    with _sonda_lock:
+        _sonda_em = 0.0

@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from biblio.biblivre import conexao
-from biblio.catalogacao import config
+from biblio.catalogacao import lotes
 from biblio.catalogacao.export import exportar_itens
 from biblio.catalogacao.fila import (
     acao_em_lote,
@@ -73,8 +73,11 @@ async def exportar_biblivre(dados: PedidoExport | None = None):
         conexao.definir_db(db_args)
     db_args = {**conexao.db_config(), **(db_args or {})}
 
-    if config.carrinho:
-        await em_thread(carrinho_enviar)
+    # Bandeja aberta em qualquer aparelho entra antes: quem clicou "exportar"
+    # no PC quis exportar tudo, inclusive o que o celular acabou de bipar e
+    # ainda nao enviou.
+    if lotes.totais()["itens"]:
+        await em_thread(carrinho_enviar, None)
 
     if dados.ids:
         alvo = set(dados.ids)

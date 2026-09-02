@@ -57,13 +57,32 @@ export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
         </>
       }
     >
-      <Aviso icone={<IconeBanco tamanho={18} />}>
-        A senha vive apenas na memória temporária do servidor — nunca é gravada em disco.
-        Com a conexão ativa, o sistema verifica se o livro já existe no acervo e evita
-        duplicatas.
-      </Aviso>
+      {/* O erro fica acima dos campos: é neles que a pessoa vai mexer, e ela
+          precisa ler o motivo antes de decidir qual corrigir (estado E6). */}
+      {erro && (
+        <Aviso tom="erro" icone="⚠" titulo="Não conectou">
+          <span className="mono" style={{ fontSize: 'var(--txt-sm)' }}>
+            {erro}
+          </span>
+        </Aviso>
+      )}
 
-      <div className="grade-form" style={{ marginTop: 'var(--e4)' }}>
+      {sucesso && (
+        <Aviso tom="existente" icone={<IconeCheck tamanho={16} />} titulo="Conectado">
+          {sucesso.obras?.toLocaleString('pt-BR')} obras e{' '}
+          {sucesso.exemplares?.toLocaleString('pt-BR')} exemplares no acervo.{' '}
+          {sucesso.fila?.avaliados > 0 && (
+            <>
+              A fila foi reavaliada: {sucesso.fila.no_acervo} de{' '}
+              {sucesso.fila.avaliados}{' '}
+              {sucesso.fila.no_acervo === 1 ? 'item já estava' : 'itens já estavam'}{' '}
+              catalogados.
+            </>
+          )}
+        </Aviso>
+      )}
+
+      <div className="grade-form">
         <Campo rotulo="Host / Endereço" {...campo('host')} placeholder="localhost" />
         <Campo rotulo="Porta" {...campo('port')} inputMode="numeric" placeholder="5432" />
         <Campo rotulo="Banco de Dados" {...campo('dbname')} placeholder="biblivre4" />
@@ -83,29 +102,12 @@ export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
         />
       </div>
 
-      {erro && (
-        <div style={{ marginTop: 'var(--e4)' }}>
-          <Aviso tom="erro" icone="⚠" titulo="Falha na conexão">
-            {erro}
-          </Aviso>
-        </div>
-      )}
-
-      {sucesso && (
-        <div style={{ marginTop: 'var(--e4)' }}>
-          <Aviso tom="existente" icone={<IconeCheck tamanho={18} />} titulo="Conectado com sucesso!">
-            {sucesso.obras?.toLocaleString('pt-BR')} obras e{' '}
-            {sucesso.exemplares?.toLocaleString('pt-BR')} exemplares encontrados no acervo.{' '}
-            {sucesso.fila?.avaliados > 0 && (
-              <>
-                A fila foi reavaliada contra o acervo: {sucesso.fila.no_acervo} de{' '}
-                {sucesso.fila.avaliados}{' '}
-                {sucesso.fila.no_acervo === 1 ? 'item já estava' : 'itens já estavam'} catalogados.
-              </>
-            )}
-          </Aviso>
-        </div>
-      )}
+      <p className="export-nota">
+        <IconeBanco tamanho={13} /> A senha vive só na memória do processo do servidor;
+        nunca vai para disco. Ao conectar, a fila inteira é reavaliada contra o acervo —
+        sem banco, todo ISBN aparece como “não verificado” e entra como obra nova na
+        gravação.
+      </p>
     </Modal>
   )
 }

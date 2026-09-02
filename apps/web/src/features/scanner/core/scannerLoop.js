@@ -9,7 +9,9 @@
  * - INTERVALO_ATIVO: number (45ms)
  * - INTERVALO_OCIOSO: number (90ms)
  * - INTERVALO_PAUSA: number (450ms)
+ * - ETAPAS_PADRAO: { candidatos: boolean, salvaguarda: boolean }
  * - executarPassoLeitura(ctx: object): Promise<{ proxima: number, leu: boolean }>
+ * - iniciarLacoNativo(params: object): void
  *
  * FLUXO:
  * Invocado a cada iteração do laço nativo pelo hook `useScanner.js`.
@@ -24,36 +26,73 @@ import { maiorArea, maiorDentroDoAlvo } from './geometria.js'
 export const INTERVALO_ATIVO = 45
 export const INTERVALO_OCIOSO = 90
 export const INTERVALO_PAUSA = 450
-const INTERVALO_SALVAGUARDA = 450
+const INTERVALO_CONGELADO = 200
 
-async function tentarDecodificarRecorte(video, regiao, detector, aoLerCodigo, agora) {
+/**
+ * As duas etapas de busca podem ser desligadas em separado na tela de depuração:
+ * com `candidatos: false` o laço só faz varredura de quadro cheio (é o teste que
+ * responde "a heurística de ROI está atrapalhando?"); com `salvaguarda: false`
+ * ele só confia no ROI.
+ */
+export const ETAPAS_PADRAO = Object.freeze({ candidatos: true, salvaguarda: true })
+
+function criarRegistro(video, alvo) {
+  return {
+    t: Date.now(),
+    fase: 'espera',
+    videoW: video?.videoWidth || 0,
+    videoH: video?.videoHeight || 0,
+    readyState: video?.readyState ?? 0,
+    candidatos: 0,
+    densidade: 0,
+    caixas: [],
+    tentativas: 0,
+    achados: 0,
+    bruto: null,
+    tipo: null,
+    aceito: false,
+    recorte: null,
+    alvo,
+    ms: 0,
+  }
+}
+
+async function tentarDecodificarRecorte(video, regiao, detector, aoLerCodigo, agora, registro) {
   const recorte = recortarRegiao(video, regiao)
   if (!recorte) return false
+  registro.tentativas += 1
+  registro.recorte = recorte
 
   const achados = await detector.detect(recorte)
+  registro.achados += achados?.length || 0
   if (!achados?.length) return false
 
   const escolhido = maiorArea(achados)
   if (!escolhido?.rawValue) return false
+  registro.bruto = escolhido.rawValue
 
   return aoLerCodigo(escolhido.rawValue, regiao, agora)
 }
 
-async function processarCandidatos({ video, detector, candidatos, ctx, agora }) {
+async function processarCandidatos({ video, detector, candidatos, ctx, agora, registro }) {
   const melhor = candidatos[0]
   ctx.ultimoCandidatoRef.current = melhor
+  registro.fase = 'candidatos'
+  registro.candidatos = candidatos.length
+  registro.densidade = melhor?.densidade || 0
 
-  ctx.aoAtualizarDeteccoes(
-    candidatos.slice(0, 3).map((c, i) => ({
-      x: c.x, y: c.y, w: c.largura, h: c.altura,
-      dentroAlvo: true, tipo: 'candidato', pulsando: true,
-      id: `cand-${i}`,
-    }))
-  )
+  const caixas = candidatos.slice(0, ctx.maxCaixas || 3).map((c, i) => ({
+    x: c.x, y: c.y, w: c.largura, h: c.altura,
+    dentroAlvo: c.dentroAlvo !== false, tipo: 'candidato', pulsando: true,
+    miolo: c.mioloBarras, densidade: c.densidade, ordem: i,
+    id: `cand-${i}`,
+  }))
+  registro.caixas = caixas
+  ctx.aoAtualizarDeteccoes(caixas)
 
-  let leu = await tentarDecodificarRecorte(video, melhor, detector, ctx.aoLerCodigo, agora)
+  let leu = await tentarDecodificarRecorte(video, melhor, detector, ctx.aoLerCodigo, agora, registro)
   if (!leu && candidatos.length > 1) {
-    leu = await tentarDecodificarRecorte(video, candidatos[1], detector, ctx.aoLerCodigo, agora)
+    leu = await tentarDecodificarRecorte(video, candidatos[1], detector, ctx.aoLerCodigo, agora, registro)
   }
 
   return { proxima: leu ? INTERVALO_PAUSA : INTERVALO_ATIVO, leu }
@@ -85,23 +124,30 @@ function extrairRegiao(item, videoW, videoH) {
   return { x: 0.15, y: 0.35, largura: 0.70, altura: 0.30 }
 }
 
-async function executarSalvaguarda({ video, detector, alvo, ctx, agora }) {
+async function executarSalvaguarda({ video, detector, alvo, ctx, agora, registro }) {
+  registro.fase = 'salvaguarda'
   if (Date.now() - ctx.ultimoFullScanRef.current <= 150) {
+    registro.fase = 'espera'
     return { proxima: INTERVALO_OCIOSO, leu: false }
   }
   ctx.ultimoFullScanRef.current = Date.now()
+  registro.tentativas += 1
   const achados = await detector.detect(video)
+  registro.achados += achados?.length || 0
   if (!achados?.length) return { proxima: INTERVALO_OCIOSO, leu: false }
 
   const escolhido = maiorDentroDoAlvo(achados, video.videoWidth, video.videoHeight, alvo)
   if (!escolhido?.rawValue) return { proxima: INTERVALO_OCIOSO, leu: false }
+  registro.bruto = escolhido.rawValue
 
   const regiao = extrairRegiao(escolhido, video.videoWidth, video.videoHeight)
-  ctx.aoAtualizarDeteccoes([{
+  const caixas = [{
     x: regiao.x, y: regiao.y, w: regiao.largura, h: regiao.altura,
     dentroAlvo: true, tipo: 'candidato', pulsando: true, raw: escolhido.rawValue,
     id: 'nativo-0',
-  }])
+  }]
+  registro.caixas = caixas
+  ctx.aoAtualizarDeteccoes(caixas)
   const leu = ctx.aoLerCodigo(escolhido.rawValue, regiao, agora)
   return { proxima: leu ? INTERVALO_PAUSA : INTERVALO_OCIOSO, leu }
 }
@@ -114,22 +160,40 @@ async function executarSalvaguarda({ video, detector, alvo, ctx, agora }) {
  */
 export async function executarPassoLeitura(ctx) {
   const { video, detector, alvo } = ctx
-  if (!video?.videoWidth || video.readyState < 2) {
-    return { proxima: INTERVALO_OCIOSO, leu: false }
+  const etapas = ctx.etapas || ETAPAS_PADRAO
+  const inicio = performance.now()
+  const registro = criarRegistro(video, alvo)
+
+  const emitir = (resultado) => {
+    registro.ms = performance.now() - inicio
+    registro.aceito = Boolean(resultado.leu)
+    if (registro.bruto && ctx.classificar) {
+      registro.tipo = ctx.classificar(registro.bruto)?.tipo || null
+    }
+    ctx.aoDiagnosticar?.(registro)
+    return resultado
   }
 
-  const candidatos = encontrarCandidatos(video, alvo)
+  if (!video?.videoWidth || video.readyState < 2) {
+    return emitir({ proxima: INTERVALO_OCIOSO, leu: false })
+  }
+
+  const candidatos = etapas.candidatos ? encontrarCandidatos(video, alvo) : []
   const agora = performance.now()
 
   if (candidatos.length > 0) {
-    return processarCandidatos({ video, detector, candidatos, ctx, agora })
+    return emitir(await processarCandidatos({ video, detector, candidatos, ctx, agora, registro }))
   }
 
   ctx.ultimoCandidatoRef.current = null
   ctx.candidatoEstavelInicioRef.current = 0
   ctx.aoLimparDeteccoesDebounced()
 
-  return executarSalvaguarda({ video, detector, alvo, ctx, agora })
+  if (!etapas.salvaguarda) {
+    return emitir({ proxima: INTERVALO_OCIOSO, leu: false })
+  }
+
+  return emitir(await executarSalvaguarda({ video, detector, alvo, ctx, agora, registro }))
 }
 
 /**
@@ -147,13 +211,28 @@ export function iniciarLacoNativo({
   classificarCodigo,
   ativoRef,
   lacoRef,
+  aoDiagnosticar,
 }) {
   const passo = async () => {
     if (!ativoRef.current) return
+
+    // Congelado: o laço continua vivo (a câmera não fecha) mas não gasta CPU
+    // analisando quadro. Um "passo" pedido na tela de depuração destrava um
+    // ciclo só, para inspecionar o recorte e os contadores sem o vídeo correndo.
+    if (refs.pausadoRef?.current && !refs.passoPedidoRef?.current) {
+      lacoRef.current = setTimeout(passo, INTERVALO_CONGELADO)
+      return
+    }
+    if (refs.passoPedidoRef?.current) refs.passoPedidoRef.current = false
+
     const { proxima } = await executarPassoLeitura({
       video: videoRef.current,
       detector,
       alvo,
+      etapas: refs.etapasRef?.current,
+      maxCaixas: refs.maxCaixasRef?.current,
+      classificar: classificarCodigo,
+      aoDiagnosticar,
       ultimoCandidatoRef: refs.ultimoCandidatoRef,
       candidatoEstavelInicioRef: refs.candidatoEstavelInicioRef,
       ultimoFullScanRef: refs.ultimoFullScanRef,
@@ -184,8 +263,9 @@ export function iniciarLacoNativo({
         return true
       },
     })
-    if (ativoRef.current) lacoRef.current = setTimeout(passo, proxima)
+    if (ativoRef.current) {
+      lacoRef.current = setTimeout(passo, refs.pausadoRef?.current ? INTERVALO_CONGELADO : proxima)
+    }
   }
   passo()
 }
-

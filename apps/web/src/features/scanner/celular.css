@@ -383,6 +383,18 @@
   border-top: 1px solid var(--alerta-borda);
 }
 
+.ajustes__depurar {
+  align-self: flex-start;
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--borda);
+  padding-bottom: 1px;
+}
+.ajustes__depurar:hover {
+  color: var(--texto);
+}
+
 /* --- Bandeja --- */
 .cel__lote {
   flex: 1;
@@ -393,7 +405,13 @@
   border-top: 1px solid var(--borda);
 }
 
-/* Modo Câmera Cheia (quando lote está recolhido com o botão "-") */
+/* Modo Câmera Cheia — o estado inicial da tela: a bandeja recolhida devolve
+   a altura toda para o visor e sobra uma linha de resumo do lote.
+
+   O rodapé continua na tela: como este é o estado padrão, esconder o rodapé
+   inteiro tirava do alcance a única entrada manual de ISBN e as mensagens de
+   erro do envio. O que sai é só o botão grande de enviar, que ganha versão
+   compacta na barra do lote. */
 .cel--camera-cheia .cel__visor {
   flex: 1;
   height: 100%;
@@ -404,14 +422,11 @@
 }
 .cel--camera-cheia .cel__trilha,
 .cel--camera-cheia .cel__vazio,
-.cel--camera-cheia .cel__rodape {
+.cel--camera-cheia .cel__enviar {
   display: none !important;
 }
-
-.cel--camera-cheia .cel__trilha,
-.cel--camera-cheia .cel__vazio,
 .cel--camera-cheia .cel__rodape {
-  display: none !important;
+  padding: var(--e2) var(--e3) calc(var(--e2) + env(safe-area-inset-bottom));
 }
 
 /* Remove qualquer moldura ou região sombreada de bibliotecas como html5-qrcode */

@@ -31,9 +31,20 @@ const TelaBalcao = lazy(() =>
 const TelaFila = lazy(() =>
   import('./features/fila/TelaFila').then((m) => ({ default: m.TelaFila }))
 )
+/*
+  A bancada do scanner é uma tela de conferência, não do fluxo: só se chega nela
+  digitando /scanner-debug ou pelo atalho no painel de ajustes do celular. Fica
+  fora da barra de navegação de propósito.
+*/
+const TelaDebugScanner = lazy(() =>
+  import('./features/scanner/TelaDebugScanner').then((m) => ({ default: m.TelaDebugScanner }))
+)
 
 function rotaAtual() {
-  return window.location.pathname.replace(/\/+$/, '') === '/fila' ? 'fila' : 'captura'
+  const caminho = window.location.pathname.replace(/\/+$/, '')
+  if (caminho === '/fila') return 'fila'
+  if (caminho === '/scanner-debug') return 'debug'
+  return 'captura'
 }
 
 export default function App() {
@@ -169,6 +180,7 @@ export default function App() {
 
   const conexao = descreverConexao(db)
   const naFila = rota === 'fila' && ehPc
+  const naBancada = rota === 'debug'
 
   return (
     <div className="app-shell">
@@ -179,7 +191,7 @@ export default function App() {
         precisa de 340. Lá também não há para onde navegar: a captura é a
         tela única.
       */}
-      {ehPc && (
+      {ehPc && !naBancada && (
         <Navbar
           rotaAtiva={rota}
           aoNavegar={irPara}
@@ -193,7 +205,9 @@ export default function App() {
 
       <main className="app-corpo">
         <Suspense fallback={<Carregando />}>
-          {naFila ? (
+          {naBancada ? (
+            <TelaDebugScanner />
+          ) : naFila ? (
             <TelaFila
               conexao={conexao}
               stats={stats}

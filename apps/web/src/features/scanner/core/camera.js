@@ -9,6 +9,8 @@
  * - RESTRICOES_VIDEO: MediaStreamConstraints
  * - abrirCamera(elementoId: string, restricoes?: object): Promise<{ stream, video, track }>
  * - ajustarCamera(track: MediaStreamTrack): Promise<{ lanterna: boolean, zoom: object | null }>
+ * - detectarLanterna(track: MediaStreamTrack): boolean
+ * - obterTrackDoVideo(video: HTMLVideoElement | null): MediaStreamTrack | null
  * - alternarLanterna(track: MediaStreamTrack, ligar: boolean): Promise<boolean>
  * - aplicarZoom(track: MediaStreamTrack, valor: number): Promise<void>
  * - dispararPulsoFoco(track: MediaStreamTrack): Promise<void>
@@ -54,6 +56,42 @@ export async function abrirCamera(elementoId, restricoes = RESTRICOES_VIDEO) {
 }
 
 /**
+ * Diz se a lanterna (torch) deste aparelho pode ser acionada.
+ *
+ * Não basta olhar `capabilities.torch === true`: parte dos aparelhos Android
+ * anuncia o recurso como lista (`[false, true]`), outros não anunciam nada em
+ * `getCapabilities` e só expõem `torch` em `getSettings` — e a lanterna funciona
+ * nos dois casos. Reconhecer os três formatos é o que mantém o botão de lanterna
+ * na tela em vez de escondê-lo num aparelho que a tem.
+ *
+ * @param {MediaStreamTrack} track
+ * @returns {boolean}
+ */
+export function detectarLanterna(track) {
+  if (!track) return false
+  const caps = track.getCapabilities?.() ?? {}
+  if (caps.torch === true) return true
+  if (Array.isArray(caps.torch) && caps.torch.includes(true)) return true
+  const settings = track.getSettings?.() ?? {}
+  return 'torch' in settings
+}
+
+/**
+ * Extrai a faixa de vídeo pendurada num elemento `<video>`.
+ *
+ * O motor de reserva (html5-qrcode) abre a câmera por conta própria e não
+ * devolve a faixa: sem isto, lanterna, zoom e foco não existiriam no caminho
+ * ZXing.
+ *
+ * @param {HTMLVideoElement | null} video
+ * @returns {MediaStreamTrack | null}
+ */
+export function obterTrackDoVideo(video) {
+  const stream = video?.srcObject
+  return stream?.getVideoTracks?.()[0] || null
+}
+
+/**
  * Aplica foco contínuo e extrai recursos da câmera (lanterna e zoom).
  *
  * @param {MediaStreamTrack} track
@@ -82,23 +120,31 @@ export async function ajustarCamera(track) {
   const zoomDisponivel = z && typeof z === 'object' && z.max > z.min
     ? { min: z.min, max: z.max, passo: z.step || 0.1 } : null
 
-  return { lanterna: caps.torch === true, zoom: zoomDisponivel }
+  return { lanterna: detectarLanterna(track), zoom: zoomDisponivel }
 }
 
 /**
  * Liga ou desliga a lanterna do aparelho.
  *
+ * Confere o resultado em `getSettings`: há aparelhos que aceitam a restrição sem
+ * reclamar e deixam a lanterna apagada. Devolver `false` aí é o que faz a tela
+ * avisar em vez de acender um botão mentiroso.
+ *
  * @param {MediaStreamTrack} track
  * @param {boolean} ligar
+ * @returns {Promise<boolean>} `true` quando a lanterna realmente ficou no estado pedido
  */
 export async function alternarLanterna(track, ligar) {
   if (!track) return false
+  const alvo = Boolean(ligar)
   try {
-    await track.applyConstraints({ advanced: [{ torch: Boolean(ligar) }] })
-    return true
+    await track.applyConstraints({ advanced: [{ torch: alvo }] })
   } catch {
     return false
   }
+  const settings = track.getSettings?.() ?? {}
+  if ('torch' in settings && settings.torch !== alvo) return false
+  return true
 }
 
 /**

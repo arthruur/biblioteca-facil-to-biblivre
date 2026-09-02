@@ -9,6 +9,7 @@ import {
   Selo,
   Stepper,
 } from '../../components'
+import { OverlayDeteccoes } from './OverlayDeteccoes'
 import { normalizarIsbnDigitado } from './isbn'
 import { useLote } from './useLote'
 import { useScanner } from './useScanner'
@@ -40,7 +41,12 @@ export function TelaCelular({ conexao, dispositivo }) {
   const [envioFalhou, setEnvioFalhou] = useState('')
   const [enviado, setEnviado] = useState('')
   const [batizando, setBatizando] = useState(false)
-  const [loteRecolhido, setLoteRecolhido] = useState(false)
+  /*
+    A bandeja começa recolhida: a tela abre no gesto que ela existe para
+    servir — câmera grande, lote reduzido a uma linha de resumo. Quem quer ver
+    os cards abre com o "+", e a escolha vale até fechar a tela.
+  */
+  const [loteRecolhido, setLoteRecolhido] = useState(true)
   const trilhaRef = useRef(null)
 
   const lote = useLote({
@@ -301,55 +307,38 @@ function VisorCelular({ scanner, ultimoIsbn }) {
         </div>
       ) : (
         <>
-          {/* Bouncing boxes dinâmicas */}
-          <div className="cel__overlay" aria-hidden="true">
-            {scanner.deteccoes?.length > 0 ? (
-              scanner.deteccoes.map((d, i) => (
-                <div
-                  key={d.id || `${d.raw}-${i}`}
-                  className={`cel__frame cel__frame--${d.tipo} ${d.dentroAlvo ? 'cel__frame--central' : ''} ${d.pulsando ? 'cel__frame--pulsando' : ''}`}
-                  style={{
-                    left: `${d.x * 100}%`,
-                    top: `${d.y * 100}%`,
-                    width: `${d.w * 100}%`,
-                    height: `${d.h * 100}%`,
-                  }}
-                >
-                  <span className="cel__frame-canto cel__frame-canto--se" />
-                  <span className="cel__frame-canto cel__frame-canto--sd" />
-                  <span className="cel__frame-canto cel__frame-canto--ie" />
-                  <span className="cel__frame-canto cel__frame-canto--id" />
-                  {d.raw ? (
-                    <span className="cel__frame-label mono">
-                      {d.raw.slice(-4)}
-                    </span>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              scanner.escaneando && (
-                <span className="cel__hint-discreto">
-                  Aponte para o código de barras
-                </span>
-              )
-            )}
-          </div>
+          {/* Os quadradinhos, projetados no recorte real do vídeo */}
+          <OverlayDeteccoes
+            deteccoes={scanner.deteccoes}
+            quadro={scanner.quadro}
+            alvo={scanner.alvo}
+            dica="Aponte para o código de barras"
+          />
 
           <div className="cel__controles">
-            {scanner.recursos.lanterna && (
-              <button
-                type="button"
-                className={`cel__botao${scanner.lanternaLigada ? ' cel__botao--ativo' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  scanner.alternarLanterna()
-                }}
-                aria-pressed={scanner.lanternaLigada}
-                title="Ligar/desligar lanterna"
-              >
-                <IconeLanterna tamanho={13} />
-              </button>
-            )}
+            {/*
+              A lanterna fica sempre no visor, mesmo quando `getCapabilities`
+              não anuncia `torch`: estante de biblioteca é escura, o aparelho
+              costuma mentir sobre o recurso, e a tentativa é barata — se a
+              lanterna não responder, a barra de status diz isso.
+            */}
+            <button
+              type="button"
+              className={`cel__botao${scanner.lanternaLigada ? ' cel__botao--ativo' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                scanner.alternarLanterna()
+              }}
+              aria-pressed={scanner.lanternaLigada}
+              aria-label={scanner.lanternaLigada ? 'Apagar a lanterna' : 'Acender a lanterna'}
+              title={
+                scanner.recursos.lanterna
+                  ? 'Ligar/desligar a lanterna'
+                  : 'Tentar a lanterna (este aparelho não anunciou o recurso)'
+              }
+            >
+              <IconeLanterna tamanho={16} />
+            </button>
             {!scanner.ocrAutoAtivo && (
               <button
                 type="button"
@@ -539,6 +528,15 @@ function BatizarAparelho({ dispositivo, confirmarCada, aoAlternarConfirmar, aoFe
           </em>
         </span>
       </label>
+
+      {/*
+        A tela de depuração é a mesma câmera sem lote nem envio, com os
+        contadores de cada etapa do laço à mostra. Fica aqui porque é para quem
+        está conferindo o aparelho, não para quem está bipando.
+      */}
+      <a className="ajustes__depurar" href="/scanner-debug">
+        Depurar o scanner (etapa por etapa) →
+      </a>
     </Moldura>
   )
 }

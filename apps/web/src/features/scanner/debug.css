@@ -1,0 +1,262 @@
+/*
+ * Bancada do scanner (/scanner-debug).
+ *
+ * Não é tela de produção: aqui a informação vence o conforto. Fonte pequena,
+ * monoespaçada nos números, tudo numa coluna que rola — de propósito, ao
+ * contrário da tela de bipar, que não rola. Serve no celular (é lá que o
+ * scanner roda) e no PC lado a lado.
+ */
+
+.dbg {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--fundo);
+  color: var(--texto);
+}
+
+.dbg__topo {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+}
+.dbg__titulo {
+  font-size: var(--txt-md);
+}
+.dbg__sub {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+.dbg__voltar {
+  flex: none;
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  text-decoration: none;
+  padding: 6px 8px;
+  border: 1px solid var(--borda);
+}
+
+/* O visor reaproveita .cel__visor (celular.css) e só troca a altura: aqui o
+   painel de baixo é o assunto principal. */
+.dbg__visor {
+  flex: none;
+  height: 46vh;
+  min-height: 220px;
+}
+.dbg__erro {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e3);
+  padding: var(--e4);
+  text-align: center;
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  font-size: var(--txt-sm);
+  line-height: 1.45;
+}
+
+.dbg__painel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e3);
+}
+
+.dbg__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+.dbg__btn {
+  min-height: 40px;
+  padding: 0 var(--e3);
+  background: var(--superficie-2);
+  border: 1px solid var(--borda);
+  color: var(--texto);
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-sm);
+  font-weight: var(--peso-forte);
+  cursor: pointer;
+}
+.dbg__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dbg__btn--forte {
+  background: var(--alerta);
+  border-color: var(--alerta);
+  color: #16222e;
+}
+
+.dbg__veredito {
+  padding: var(--e2);
+  border-left: 3px solid var(--alerta);
+  background: var(--superficie);
+  font-size: var(--txt-sm);
+  line-height: 1.4;
+}
+
+/* --- As quatro etapas --- */
+.dbg__etapas {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--borda);
+  border: 1px solid var(--borda);
+}
+.dbg__etapa {
+  display: flex;
+  gap: var(--e2);
+  padding: var(--e2);
+  background: var(--superficie);
+  border-left: 3px solid var(--borda);
+}
+.dbg__etapa--ok {
+  border-left-color: var(--existente);
+}
+.dbg__etapa--off {
+  opacity: 0.55;
+  border-left-style: dashed;
+}
+.dbg__etapa-n {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--borda);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+.dbg__etapa--ok .dbg__etapa-n {
+  border-color: var(--existente);
+  color: var(--existente);
+}
+.dbg__etapa-corpo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dbg__etapa-nome {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-sm);
+  font-weight: var(--peso-forte);
+}
+.dbg__etapa-detalhe {
+  font-size: 11px;
+  color: var(--texto-2);
+  word-break: break-word;
+}
+.dbg__etapa-contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  font-size: 11px;
+  color: var(--texto-3);
+  text-transform: lowercase;
+}
+.dbg__etapa-contadores strong {
+  color: var(--texto);
+}
+.dbg__mini {
+  padding: 1px 6px;
+  background: transparent;
+  border: 1px dashed var(--borda);
+  color: var(--texto-2);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+/* --- Recorte e listas --- */
+.dbg__colunas {
+  display: grid;
+  gap: var(--e3);
+}
+.dbg__bloco {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  padding: var(--e2);
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  min-width: 0;
+}
+.dbg__titulo-2 {
+  margin-top: var(--e2);
+}
+.dbg__recorte {
+  width: 100%;
+  height: auto;
+  background: #0b1119;
+  border: 1px solid var(--borda);
+  image-rendering: pixelated;
+}
+.dbg__caixa {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+.dbg__nota {
+  font-size: 11px;
+  color: var(--texto-3);
+  line-height: 1.4;
+}
+.dbg__lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dbg__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e1, 4px);
+  padding: 4px 6px;
+  background: var(--superficie-2);
+  border-left: 3px solid var(--borda);
+  font-size: 11px;
+}
+.dbg__item--isbn {
+  border-left-color: var(--existente);
+}
+.dbg__item--ean {
+  border-left-color: var(--alerta);
+}
+.dbg__item--invalido,
+.dbg__item--desconhecido {
+  border-left-color: var(--erro);
+}
+.dbg__tag {
+  padding: 0 4px;
+  border: 1px solid var(--borda);
+  color: var(--texto-3);
+  text-transform: lowercase;
+}
+
+@media (min-width: 720px) {
+  .dbg__colunas {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dbg__visor {
+    height: 52vh;
+  }
+}

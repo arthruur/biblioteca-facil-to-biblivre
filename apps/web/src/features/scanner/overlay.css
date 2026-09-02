@@ -1,0 +1,60 @@
+/*
+ * Camada das caixas de detecção.
+ *
+ * `.cel__overlay` (definido em celular.css) é a caixa do visor; `.ov__quadro` é
+ * o retângulo do vídeo dentro dela — medido em pixels no JS, porque com
+ * `object-fit: cover` ele é maior que o visor e sobra para fora. Tudo que
+ * representa coordenada do scanner vive dentro de `.ov__quadro`.
+ */
+
+.ov__quadro {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* A mira do alvo (geometria.js ALVO): só aparece na depuração, porque no uso
+   real ela viraria enfeite — o scanner já lê fora dela pela salvaguarda. */
+.ov__alvo {
+  position: absolute;
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.ov__alvo-rotulo {
+  position: absolute;
+  top: -8px;
+  left: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* O miolo das barras dentro do quadrado do candidato: mostra o que a etapa 2
+   considerou "barras" antes de expandir para pegar os números do ISBN. */
+.ov__miolo {
+  position: absolute;
+  border: 1px solid rgba(250, 204, 21, 0.9);
+  background: rgba(250, 204, 21, 0.1);
+  box-sizing: border-box;
+}
+
+/* Na depuração a caixa não pisca: quadradinho pulsando atrapalha comparar
+   posição entre passos. */
+.ov__frame--depuracao {
+  animation: none !important;
+}
+
+.ov__medidas {
+  position: absolute;
+  left: var(--e2);
+  top: var(--e2);
+  padding: 2px 6px;
+  font-size: 10px;
+  color: var(--visor-texto-2);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  pointer-events: none;
+}

@@ -185,7 +185,34 @@ há um projeto separado — fotografar a **ficha CIP** impressa na página de
 crédito e chegar a um registro pré-preenchido para revisão, reaproveitando
 o `gerar_marc.py` e a carga já validada.
 
-Está em fase de **projeto, não de implementação**: decisões de arquitetura,
-o que é fato apurado no fonte, o que ainda é hipótese e as três métricas
-que a fase 1 precisa medir estão em
+O caminho por **código de barras** (mais confiável que OCR de ficha CIP) já
+está implementado e em uso — ver [SPEC_UI.md](SPEC_UI.md) para as telas e o
+[README](../README.md) para o fluxo. O que sobra de OCR de ficha CIP segue em
+fase de projeto: decisões de arquitetura, o que é fato apurado no fonte, o que
+ainda é hipótese e as três métricas que a fase 1 precisa medir estão em
 [CATALOGACAO_POR_FOTO.md](CATALOGACAO_POR_FOTO.md).
+
+### O que a catalogação por ISBN já resolve
+
+- [x] **Dedup por ISBN contra o acervo** (`scripts/catalogacao/acervo.py`) — o
+      ISBN lido é confrontado com o 020 $a de `biblio_records` antes de gerar
+      MARC. Livro que já existe entra como **exemplar** do registro que já está
+      lá, não como ficha nova. O casamento aceita ISBN-10 e ISBN-13 como o
+      mesmo livro. Índice em memória (~10.5 mil ISBNs varridos em <1s, TTL de
+      5 min, invalidado a cada gravação) porque o ISBN mora dentro do blob
+      `iso2709`: não há coluna nem índice, e buscar um a um seria varredura de
+      tabela a cada bipe.
+- [x] **Fila persistida e revisável** (`scripts/catalogacao/fila.py`,
+      `static/fila.html`) — os itens já viviam em `data/fila/*.json`, mas o
+      servidor nunca os relia: reiniciar o processo dava fila vazia com os
+      arquivos intactos no disco. Agora carregam na subida, têm `id` e ciclo
+      de vida (`pendente → revisado → exportado`, ou `ignorado`), e o
+      dashboard do PC edita, filtra, agrupa e exporta em lote.
+- [x] **Exemplares no mesmo lugar da migração**
+      (`scripts/catalogacao/holdings.py`) — reusa `montar_exemplar`,
+      `gerar_tombos` e `ler_prefixo_tombo` de `inserir_exemplares.py` em vez de
+      chamar o script por subprocesso. Obras e exemplares fecham na **mesma
+      transação**: não existe mais obra gravada com exemplar faltando.
+
+Ainda em aberto: reindex automático (hoje é aviso na tela), e medir em campo
+quanto o dedup por ISBN de fato pega — o teste com a fila real pegou 19 de 26.

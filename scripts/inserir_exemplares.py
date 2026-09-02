@@ -164,8 +164,14 @@ def ler_registros(cur):
     return mapa, duplicados, sem_035
 
 
-def montar_exemplar(linha, loc_biblio, tombo, biblioteca, tipo_aquisicao):
-    """O registro MARC do exemplar, no molde de HoldingBO."""
+def montar_exemplar(linha, loc_biblio, tombo, biblioteca, tipo_aquisicao,
+                    nota_procedencia=None):
+    """
+    O registro MARC do exemplar, no molde de HoldingBO.
+
+    `nota_procedencia` sobrescreve o 852 $x. O padrão é a nota da migração;
+    a catalogação por ISBN passa a sua (ver catalogacao/holdings.py).
+    """
     rec = Record(force_utf8=True, leader=LEADER_HOLDING)
 
     # 090: o BibLivre copia $a/$b/$c do bibliográfico e acrescenta $d = ex.N.
@@ -203,9 +209,12 @@ def montar_exemplar(linha, loc_biblio, tombo, biblioteca, tipo_aquisicao):
     sub852 = []
     if linha["localizacao"].strip():
         sub852.append(_sf("c", linha["localizacao"].strip()))
-    nota = f"Migrado do Biblioteca Fácil: NUMACERVO {linha['numacervo']}"
-    if linha["tombo"].strip():
-        nota += f"; tombo original {linha['tombo'].strip()}"
+    if nota_procedencia:
+        nota = nota_procedencia
+    else:
+        nota = f"Migrado do Biblioteca Fácil: NUMACERVO {linha['numacervo']}"
+        if linha["tombo"].strip():
+            nota += f"; tombo original {linha['tombo'].strip()}"
     sub852.append(_sf("x", nota))
     rec.add_field(Field(tag="852", indicators=["_", "0"], subfields=sub852))
 

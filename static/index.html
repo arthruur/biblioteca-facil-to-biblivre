@@ -36,6 +36,8 @@
         .cart-item .ci-titulo{font-size:11px;color:#eee;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .cart-item .ci-autor{font-size:10px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .cart-item .ci-fonte{font-size:9px;color:#3498db;margin-top:4px}
+        .cart-item.no-acervo{border-color:#2ecc71;box-shadow:0 0 0 1px rgba(46,204,113,.25)}
+        .cart-item .ci-acervo{font-size:9.5px;color:#2ecc71;font-weight:600;margin-top:3px}
         .cart-item .ci-remove{position:absolute;top:4px;right:4px;background:rgba(231,76,60,.9);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer}
         .cart-item.buscando{opacity:.6}
         .cart-item.duplicado{border-color:#f39c12}
@@ -121,6 +123,7 @@
             <h3 id="modal-titulo" style="font-size:18px;text-align:center"></h3>
             <p id="modal-autor" style="color:#aaa;text-align:center;font-size:13px;margin:4px 0"></p>
             <p id="modal-meta" style="color:#666;text-align:center;font-size:12px"></p>
+            <div id="modal-acervo" style="display:none;background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.4);color:#2ecc71;border-radius:8px;padding:8px 10px;font-size:12px;margin:8px 0;line-height:1.4"></div>
             <div id="modal-desc" style="font-size:12px;color:#ccc;margin:12px 0;max-height:120px;overflow:auto;white-space:pre-wrap"></div>
             <div style="font-size:12px;line-height:1.8">
                 <div><span style="color:#888">ISBN:</span> <span id="modal-isbn" style="font-family:monospace;color:#2ecc71"></span></div>
@@ -203,6 +206,13 @@ function abrirModal(isbn){
     document.getElementById('modal-paginas').textContent=item.paginas||'—';
     document.getElementById('modal-idioma').textContent=item.idioma||'—';
     document.getElementById('modal-fonte').textContent=item.fonte||'';
+    // Aviso de dedup: este ISBN ja tem ficha no BibLivre
+    const av=document.getElementById('modal-acervo');
+    if(item.acervo&&item.acervo.existe){
+        av.style.display='block';
+        av.innerHTML=`<b>✓ Já está no acervo</b><br>Obra #${item.acervo.record_id} · ${item.acervo.exemplares} exemplar(es) hoje.`+
+            `<br>Não vai virar ficha nova — os ${item.quantidade||1} exemplar(es) entram nessa obra.`;
+    } else av.style.display='none';
     document.getElementById('modal-cdd').value=item.cdd||'';
     document.getElementById('modal-cutter').value=item.cutter||'';
     document.getElementById('modal-qtd').value=item.quantidade||1;
@@ -244,11 +254,16 @@ function renderLote(){
         const qtd=item.quantidade||1;
         const badge=qtd>1?`<span style="background:#f39c12;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;margin-left:4px">×${qtd}</span>`:'';
         const dup=item.status==='duplicado'?' • duplicado':'';
+        // Ja catalogado: o livro nao vira ficha nova, so ganha exemplar.
+        const acervo=item.acervo&&item.acervo.existe
+            ? `<div class="ci-acervo">✓ já no acervo · ${item.acervo.exemplares} ex</div>` : '';
         div.innerHTML=`<button class="ci-remove" onclick="event.stopPropagation(); removerDoLote('${item.isbn}')">×</button>
             <div class="ci-isbn">${item.isbn}${badge}</div>
             <div class="ci-titulo">${item.titulo|| (item.status==='buscando'?'buscando...': '—')}</div>
             <div class="ci-autor">${item.autor||''}</div>
+            ${acervo}
             <div class="ci-fonte">${item.fonte||''}${dup}</div>`;
+        if(item.acervo&&item.acervo.existe) div.classList.add('no-acervo');
         loteLista.appendChild(div);
     });
     const totalEx=lote.reduce((s,i)=>s+(i.quantidade||1),0);

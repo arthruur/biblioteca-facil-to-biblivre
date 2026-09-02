@@ -10,14 +10,29 @@ Fluxo validado em campo (ex.: `9786559870530` → *2041*, Globo Livros via `Bras
 
 **Celular:** `Escanear` (ZXing `TRY_HARDER` EAN-13 em tempo real) → **Lote** (galeria que acumula, padrão scanner de documentos, debounce 2s) → clique para ver ficha completa (capa, descrição, ISBN, CDD/Cutter editáveis) e ajustar **Exemplares ×N** → **Foto** (fallback `scanFile`) → **Manual** (ISBN 10/13) → **Enviar lote para fila**
 
-**Fila (`/fila`):** lista Lote + Fila, **Exportar para Biblivre 5** gera `data/export/obras_<ts>.mrc` + `exemplares_<ts>.csv` via `scripts/gerar_marc.py` (`chave_obra` conservadora) e, com senha, insere direto em `single.biblio_records/holdings` (`scripts/inserir_obras.py` / `inserir_exemplares.py` com `Bib.<ano>.<seq>` continuando de `666`). Depois **Administração → Manutenção → Reindexar**.
+**Dedup por ISBN:** antes de gerar qualquer MARC, cada ISBN é confrontado com o acervo já catalogado (`scripts/catalogacao/acervo.py` indexa 020 $a de `biblio_records` — ~10.5 mil ISBNs em <1s, com equivalência ISBN-10 ↔ ISBN-13). Livro que já existe **não vira ficha nova**: entra como exemplar a mais no `record_id` que já está lá. Sem isso, reescanear o acervo duplicaria o catálogo.
+
+**Fila (`/fila`) — dashboard de revisão:** persiste em `data/fila/*.json` e sobrevive a reinício. Indicadores (a exportar / pendentes / revisados / obras novas / já no acervo / precisam de atenção), busca, filtro por situação, ordenação, edição embutida de 12 campos, ações em lote (revisado/pendente/ignorar/remover), stepper de exemplares e export dos selecionados. **Exportar** gera `data/export/obras_<ts>.mrc` + `exemplares_<ts>.csv` via `scripts/gerar_marc.py` (`chave_obra` conservadora) e, com senha, grava em `single.biblio_records/holdings` numa transação só (`Bib.<ano>.<seq>` continuando do maior existente). Reindexar só é pedido quando nasceu obra nova.
+
+Ver [docs/SPEC_UI.md](docs/SPEC_UI.md) para a spec das telas.
 
 Fallback robusto: ZXing falha 5× → Tesseract.js (OCR-B abaixo do código, `eng` `psm 7`, valida dígito ISBN-13).
 
 ```
 Celular (ZXing) --ISBN--> /api/lote --lookup--> Google Books → BrasilAPI → Open Library
-                          --quantidade--> /api/fila/exportar-biblivre --gerar_marc--> Biblivre 5
+                                    --acervo--> ISBN já catalogado?
+                                                 ├── não → obra nova  (biblio_records + N holdings)
+                                                 └── sim → só exemplar (N holdings no record_id existente)
+PC /fila (revisão) --------> /api/fila/exportar-biblivre --> Biblivre 5
 ```
+
+Para ligar a checagem de duplicata é preciso dar ao servidor acesso ao Postgres do Biblivre — pela tela `/fila`, por `--db-senha`, ou por `PGPASSWORD`/`BIBLIVRE_DB_SENHA`:
+
+```bash
+python scripts/servidor.py --db-senha SUA_SENHA
+```
+
+Sem isso o app funciona igual, mas trata todo livro como obra nova — e a tela avisa disso em vez de degradar em silêncio.
 
 ## 2) Implantação rápida (recomendado: container)
 

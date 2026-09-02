@@ -1,17 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
-import { Botao, Pilula } from '../../components'
+import {
+  Aviso,
+  Botao,
+  IconeBuscar,
+  IconeCheck,
+  IconeCopiar,
+  IconeFoto,
+  IconeLanterna,
+  IconeLivro,
+  IconeRemover,
+  IconeScanner,
+  Selo,
+  Stepper,
+} from '../../components'
 import { ModalFicha } from './ModalFicha'
-import { useLote } from './useLote'
 import { normalizarIsbnDigitado } from './isbn'
+import { useLote } from './useLote'
 import { useScanner } from './useScanner'
 import './scanner.css'
 
-export function TelaEscanear({ info, conexao, aoIrParaFila }) {
+export function TelaEscanear({
+  info,
+  conexao,
+  aoIrParaFila,
+  aoAtualizarLoteQtd,
+  aoAtualizarFilaStats,
+}) {
   const [recado, setRecado] = useState('')
   const [tomRecado, setTomRecado] = useState('')
   const [abertoIsbn, setAbertoIsbn] = useState(null)
   const [manual, setManual] = useState('')
   const [gavetaExpandida, setGavetaExpandida] = useState(false)
+  const [copiadoUrl, setCopiadoUrl] = useState(false)
   const arquivoRef = useRef(null)
   const trilhaRef = useRef(null)
 
@@ -26,11 +46,16 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
       const r = await lote.adicionar(isbn)
       if (!r) return
       scanner.anunciar(
-        r.jaTinha ? `+1 exemplar · ${isbn}` : `Adicionado · ${isbn}`,
+        r.jaTinha ? `+1 exemplar · ${isbn}` : `Adicionado ao lote · ${isbn}`,
         'ok'
       )
     },
   })
+
+  // Sincroniza a contagem do lote com o App Shell
+  useEffect(() => {
+    aoAtualizarLoteQtd?.(lote.itens.length)
+  }, [lote.itens.length, aoAtualizarLoteQtd])
 
   useEffect(() => {
     const t = trilhaRef.current
@@ -44,9 +69,10 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
       const d = await lote.enviar()
       if (d) {
         avisar(
-          `${d.enviados} ${d.enviados === 1 ? 'título enviado' : 'títulos enviados'} para a fila`,
+          `${d.enviados} ${d.enviados === 1 ? 'título enviado' : 'títulos enviados'} para a fila de revisão`,
           'ok'
         )
+        aoAtualizarFilaStats?.()
       }
     } catch (e) {
       avisar(`Não deu para enviar: ${e.message}`, 'erro')
@@ -67,187 +93,211 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
     avisar(`Adicionado ${isbn}`, 'ok')
   }
 
+  const copiarUrlServidor = () => {
+    if (!info?.server_url) return
+    navigator.clipboard?.writeText(info.server_url)
+    setCopiadoUrl(true)
+    setTimeout(() => setCopiadoUrl(false), 2000)
+  }
+
   const total = lote.totalExemplares
   const temLote = lote.itens.length > 0
 
   return (
     <div className="escanear">
-      <header className="escanear__topo">
-        <div className="escanear__marca">
-          <span className="escanear__titulo">Escanear</span>
-          <span className="escanear__sub">Balcão · ISBN</span>
+      {/* Barra superior de status do scanner */}
+      <div className="escanear__subtopo">
+        <div className="escanear__subtopo-esq">
+          <span className="escanear__badge-modo">
+            <IconeScanner tamanho={14} /> Balcão de Captura
+          </span>
+          <span className="escanear__contagem-lote">
+            {temLote
+              ? `${lote.itens.length} títulos (${total} ex) no lote`
+              : 'Lote vazio — aponte para o código'}
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--e2)', alignItems: 'center' }}>
-          <Pilula tom={conexao.tom} title={conexao.detalhe}>
-            {conexao.rotulo}
-          </Pilula>
+
+        <div className="escanear__subtopo-dir">
+          <Botao
+            variante={scanner.escaneando ? 'secundario' : 'primario'}
+            tamanho="pequeno"
+            onClick={scanner.escaneando ? scanner.parar : scanner.iniciar}
+          >
+            {scanner.escaneando ? '✕ Fechar câmera' : '📷 Iniciar câmera'}
+          </Botao>
           <Botao
             variante="fantasma"
             tamanho="pequeno"
-            onClick={aoIrParaFila}
-            className="controles__so-desktop"
+            onClick={() => arquivoRef.current?.click()}
+            title="Carregar foto da contracapa"
           >
-            Fila →
+            <IconeFoto tamanho={15} /> Foto
           </Botao>
-          {/* mobile badge */}
-          <button
-            onClick={aoIrParaFila}
-            className="gaveta__badge"
-            style={{ display: temLote ? 'inline-flex' : 'none' }}
-            aria-label={`Ir para fila com ${lote.itens.length} títulos`}
-          >
-            {lote.itens.length} na fila
-          </button>
         </div>
-      </header>
+      </div>
 
       <div className="escanear__corpo">
-        <Visor scanner={scanner} onExpandir={() => setGavetaExpandida((v) => !v)} />
+        {/* Painel Central / Visor */}
+        <div className="escanear__centro">
+          <Visor scanner={scanner} onExpandir={() => setGavetaExpandida((v) => !v)} />
 
-        <aside className="escanear__lateral controles__so-desktop">
+          {/* Barra de entrada manual e foto */}
+          <div className="escanear__entrada-bar">
+            <div className="escanear__manual-wrap">
+              <input
+                className="escanear__input-isbn"
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && adicionarManual()}
+                placeholder="Digitar ISBN manualmente (10 ou 13 dígitos)…"
+                inputMode="numeric"
+                aria-label="ISBN manual"
+              />
+              <Botao
+                variante="secundario"
+                onClick={adicionarManual}
+                disabled={!manual.trim()}
+              >
+                + Adicionar
+              </Botao>
+            </div>
+
+            <input
+              ref={arquivoRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) scanner.lerArquivo(f)
+                e.target.value = ''
+              }}
+            />
+          </div>
+
+          {recado && (
+            <div className="escanear__recado-wrap">
+              <Aviso
+                tom={tomRecado === 'ok' ? 'existente' : tomRecado === 'erro' ? 'erro' : undefined}
+                icone={tomRecado === 'ok' ? <IconeCheck tamanho={16} /> : undefined}
+              >
+                {recado}
+              </Aviso>
+            </div>
+          )}
+        </div>
+
+        {/* Lateral Desktop: QR Code e Acervo */}
+        <aside className="escanear__lateral">
           {info?.server_url && (
-            <div className="qr">
-              <p className="galeria__rotulo" style={{ marginBottom: 'var(--e2)' }}>
-                Abra no celular
+            <div className="qr-card">
+              <p className="qr-card__titulo">📱 Abrir no Celular</p>
+              <p className="qr-card__desc">
+                Escaneie com a câmera do smartphone para usar o leitor móvel na estante.
               </p>
-              <div className="qr__caixa">
+              <div className="qr-card__caixa">
                 <img src="/api/qrcode" alt="QR code para abrir no celular" />
               </div>
-              <p className="qr__url">{info.server_url}</p>
+              <div className="qr-card__url-wrap">
+                <code className="qr-card__url">{info.server_url}</code>
+                <button
+                  className="qr-card__btn-copiar"
+                  onClick={copiarUrlServidor}
+                  title="Copiar endereço"
+                >
+                  <IconeCopiar tamanho={14} />
+                  {copiadoUrl ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
             </div>
           )}
-          <p style={{ fontSize: 'var(--txt-sm)', color: 'var(--texto-2)' }}>
-            O scanner precisa de HTTPS. Ao abrir no celular, aceite o certificado uma vez.
-          </p>
-          {temLote && (
-            <div style={{ marginTop: 'var(--e4)' }}>
-              <p className="galeria__rotulo">No lote</p>
-              <p style={{ fontSize: 'var(--txt-sm)', color: 'var(--texto-2)' }}>
-                {lote.itens.length} títulos · {total} exemplares
-              </p>
-            </div>
-          )}
+
+          <div className="info-card">
+            <h4 className="info-card__titulo">Fluxo da Catalogação</h4>
+            <ol className="info-card__passos">
+              <li>
+                <strong>1. Bipar</strong>: Aponte a câmera para o código de barras ou digite o ISBN.
+              </li>
+              <li>
+                <strong>2. Lote</strong>: Os livros são acumulados instantaneamente nesta tela.
+              </li>
+              <li>
+                <strong>3. Enviar</strong>: Clique em <em>Enviar para a Fila</em> para consolidar.
+              </li>
+              <li>
+                <strong>4. Revisar & Exportar</strong>: Confira os metadados na Fila e grave no BibLivre.
+              </li>
+            </ol>
+          </div>
         </aside>
       </div>
 
-      {/* Gaveta: bottom sheet no mobile, galeria no desktop */}
-      {temLote ? (
-        <Gaveta
-          itens={lote.itens}
-          total={total}
-          trilhaRef={trilhaRef}
-          aoAbrir={setAbertoIsbn}
-          expandida={gavetaExpandida}
-          aoToggle={() => setGavetaExpandida((v) => !v)}
-        />
-      ) : (
-        <div
-          className="gaveta"
-          style={{ padding: '14px var(--e4)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, color: 'var(--texto-3)', fontSize: 'var(--txt-sm)' }}
-        >
-          <span aria-hidden>📚</span> Nenhum livro no lote — bipar enche aqui
-        </div>
-      )}
-
-      <div className="controles">
-        {/* FAB bar — só mobile (escondida via CSS no desktop) */}
-        <div className="fab-bar">
-          {scanner.escaneando ? (
-            <button className="fab fab--parar" onClick={scanner.parar} aria-label="Fechar câmera">
-              ✕
-            </button>
-          ) : (
-            <button className="fab" onClick={scanner.iniciar} aria-label="Abrir câmera">
-              ◎
-            </button>
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '11px', color: 'var(--texto-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {temLote ? `${lote.itens.length} títulos · ${total} ex` : 'Lote vazio'}
-            </div>
-            <div style={{ fontSize: 'var(--txt-xs)', color: 'var(--texto-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {recado || (scanner.escaneando ? 'Aponte para as barras' : 'Toque no botão para escanear')}
-            </div>
+      {/* Gaveta do Lote (Bottom Sheet no Mobile / Faixa no Desktop) */}
+      <section className={`gaveta ${gavetaExpandida ? 'gaveta--expandida' : ''}`}>
+        <div className="gaveta__cabecalho">
+          <div className="gaveta__info">
+            <span className="gaveta__titulo">
+              Itens no Lote Atual
+              <span className="badge-lote">{lote.itens.length}</span>
+            </span>
+            <span className="gaveta__subtotal">
+              {total} {total === 1 ? 'exemplar total' : 'exemplares no total'}
+            </span>
           </div>
-          <button
-            className={`fab-acao ${!temLote ? 'fab-acao--sec' : ''}`}
-            onClick={enviar}
-            disabled={!temLote || lote.enviando}
-            style={{ flex: '0 0 auto', minWidth: 124 }}
-          >
-            {lote.enviando ? 'Enviando…' : `Enviar →`}
-          </button>
-        </div>
 
-        {/* Desktop controls */}
-        <div className="controles__linha controles__so-desktop">
-          {scanner.escaneando ? (
-            <Botao variante="secundario" tamanho="toque" onClick={scanner.parar}>
-              Fechar câmera
-            </Botao>
-          ) : (
-            <Botao variante="primario" tamanho="toque" onClick={scanner.iniciar}>
-              Escanear
-            </Botao>
-          )}
-          <Botao
-            variante="secundario"
-            tamanho="toque"
-            onClick={() => arquivoRef.current?.click()}
-          >
-            Usar foto
-          </Botao>
-        </div>
-
-        <input
-          ref={arquivoRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) scanner.lerArquivo(f)
-            e.target.value = ''
-          }}
-        />
-
-        <div className="controles__manual">
-          <input
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && adicionarManual()}
-            placeholder="Digitar ISBN (10 ou 13 dígitos)"
-            inputMode="numeric"
-            aria-label="ISBN manual"
-          />
-          <Botao onClick={adicionarManual} disabled={!manual.trim()}>
-            Adicionar
-          </Botao>
-        </div>
-
-        <p className={`controles__recado controles__recado--${tomRecado} controles__so-desktop`} role="status">
-          {recado}
-        </p>
-
-        {temLote && (
-          <div className="controles__linha controles__so-desktop">
-            <Botao variante="fantasma" onClick={lote.limpar} style={{ flex: '0 0 auto' }}>
-              Limpar
-            </Botao>
+          <div className="gaveta__acoes-topo">
+            {temLote && (
+              <Botao
+                variante="fantasma"
+                tamanho="pequeno"
+                onClick={lote.limpar}
+                title="Limpar todos os itens do lote atual"
+              >
+                Limpar lote
+              </Botao>
+            )}
             <Botao
               variante="primario"
-              tamanho="toque"
+              tamanho="pequeno"
               onClick={enviar}
-              disabled={lote.enviando}
+              disabled={!temLote || lote.enviando}
             >
               {lote.enviando
                 ? 'Enviando…'
-                : `Enviar para a fila (${lote.itens.length} tít, ${total} ex)`}
+                : `Enviar para a Fila (${lote.itens.length} tít) →`}
             </Botao>
+            <button
+              className="gaveta__toggle-expandir"
+              onClick={() => setGavetaExpandida((v) => !v)}
+              aria-expanded={gavetaExpandida}
+            >
+              {gavetaExpandida ? 'Recolher ↑' : 'Expandir ↓'}
+            </button>
+          </div>
+        </div>
+
+        {temLote ? (
+          <div className="gaveta__trilha" ref={trilhaRef}>
+            {lote.itens.map((item) => (
+              <CardLote
+                key={item.isbn}
+                item={item}
+                aoAbrir={setAbertoIsbn}
+                aoMudarQtd={(q) => lote.mudarQuantidade(item.isbn, q)}
+                aoRemover={() => lote.remover(item.isbn)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="gaveta__vazia">
+            <IconeLivro tamanho={22} />
+            <span>Nenhum livro no lote ainda — aponte a câmera para bipar</span>
           </div>
         )}
-      </div>
+      </section>
 
+      {/* Modal de Ficha do Livro no Lote */}
       {aberto && (
         <ModalFicha
           item={aberto}
@@ -274,6 +324,7 @@ function Visor({ scanner }) {
   ]
     .filter(Boolean)
     .join(' ')
+
   const statusClasse = [
     'visor__status',
     scanner.tomStatus ? `visor__status--${scanner.tomStatus}` : 'visor__status--info',
@@ -286,60 +337,66 @@ function Visor({ scanner }) {
     <div
       className="visor"
       onClick={() => scanner.escaneando && scanner.dispararFoco?.()}
-      title={scanner.escaneando ? 'Toque para focar' : undefined}
+      title={scanner.escaneando ? 'Toque para focar a câmera' : undefined}
     >
       <div id={scanner.elementoId} className="visor__camera" />
 
       {!scanner.escaneando && !scanner.erroCamera && (
         <div className="visor__repouso">
-          <span className="visor__repouso-icone" aria-hidden="true">
-            📷
-          </span>
+          <div className="visor__repouso-icone" aria-hidden="true">
+            <IconeScanner tamanho={48} />
+          </div>
           <p className="visor__repouso-texto">
-            Toque no botão circular e aponte para o código de barras da contracapa.
+            Toque no botão <strong>Iniciar câmera</strong> ou digite o ISBN abaixo para começar.
           </p>
-          <p style={{ fontSize: 'var(--txt-xs)', opacity: 0.8, marginTop: 8 }}>
-            Toque no visor para focar
-          </p>
+          <Botao
+            variante="primario"
+            tamanho="toque"
+            onClick={scanner.iniciar}
+            style={{ marginTop: 8 }}
+          >
+            📷 Abrir Câmera do Scanner
+          </Botao>
         </div>
       )}
 
       {scanner.escaneando && <div className={alvoClasse} aria-hidden="true" />}
       {showFlash && <div className="visor__flash" aria-hidden="true" />}
 
+      {/* Controles sobrepostos no visor */}
       {scanner.escaneando && (
         <div className="visor__controles">
-          {(scanner.recursos.lanterna || scanner.recursos.zoom) && (
-            <>
-              {scanner.recursos.lanterna && (
-                <button
-                  type="button"
-                  className={`visor__botao${scanner.lanternaLigada ? ' visor__botao--ativo' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    scanner.alternarLanterna()
-                  }}
-                  aria-pressed={scanner.lanternaLigada}
-                >
-                  ◉ Lanterna
-                </button>
-              )}
-              {scanner.recursos.zoom && (
-                <label className="visor__zoom" onClick={(e) => e.stopPropagation()}>
-                  🔍
-                  <input
-                    type="range"
-                    min={scanner.recursos.zoom.min}
-                    max={scanner.recursos.zoom.max}
-                    step={scanner.recursos.zoom.passo}
-                    value={scanner.zoom ?? scanner.recursos.zoom.min}
-                    onChange={(e) => scanner.mudarZoom(Number(e.target.value))}
-                    aria-label="Aproximação da câmera"
-                  />
-                </label>
-              )}
-            </>
+          {scanner.recursos.lanterna && (
+            <button
+              type="button"
+              className={`visor__botao${scanner.lanternaLigada ? ' visor__botao--ativo' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                scanner.alternarLanterna()
+              }}
+              aria-pressed={scanner.lanternaLigada}
+              title="Ligar ou desligar lanterna"
+            >
+              <IconeLanterna tamanho={14} />
+              <span>{scanner.lanternaLigada ? 'Lanterna Ligada' : 'Lanterna'}</span>
+            </button>
           )}
+
+          {scanner.recursos.zoom && (
+            <label className="visor__zoom" onClick={(e) => e.stopPropagation()}>
+              <span style={{ fontSize: 12 }}>🔍</span>
+              <input
+                type="range"
+                min={scanner.recursos.zoom.min}
+                max={scanner.recursos.zoom.max}
+                step={scanner.recursos.zoom.passo}
+                value={scanner.zoom ?? scanner.recursos.zoom.min}
+                onChange={(e) => scanner.mudarZoom(Number(e.target.value))}
+                aria-label="Aproximação da câmera"
+              />
+            </label>
+          )}
+
           {!scanner.ocrAutoAtivo && (
             <button
               type="button"
@@ -349,8 +406,9 @@ function Visor({ scanner }) {
                 scanner.tentarOcr?.()
               }}
               disabled={scanner.ocrAtivo}
+              title="Ler os números do ISBN abaixo do código de barras"
             >
-              {scanner.ocrAtivo ? 'Lendo…' : 'Tentar números'}
+              {scanner.ocrAtivo ? 'Lendo números…' : '123 Ler Números'}
             </button>
           )}
         </div>
@@ -369,57 +427,53 @@ function Visor({ scanner }) {
   )
 }
 
-function Gaveta({ itens, total, trilhaRef, aoAbrir, expandida, aoToggle }) {
-  return (
-    <section className={`gaveta ${expandida ? 'gaveta--expandida' : ''}`} aria-label="Lote">
-      <div className="gaveta__puxador" aria-hidden />
-      <div className="gaveta__cabecalho">
-        <span className="gaveta__titulo">
-          No lote <span className="gaveta__badge">{itens.length}</span>
-          <span style={{ fontWeight: 400, color: 'var(--texto-2)', fontSize: 'var(--txt-xs)' }}>
-            {total > itens.length ? `· ${total} ex` : ''}
-          </span>
-        </span>
-        <button className="gaveta__acao" onClick={aoToggle} aria-expanded={expandida}>
-          {expandida ? 'Recolher ↑' : 'Ver todos →'}
-        </button>
-      </div>
-      <div className="gaveta__trilha" ref={trilhaRef}>
-        {itens.map((item) => (
-          <CardLote key={item.isbn} item={item} aoAbrir={aoAbrir} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function CardLote({ item, aoAbrir }) {
+function CardLote({ item, aoAbrir, aoMudarQtd, aoRemover }) {
   const qtd = Number(item.quantidade) || 1
   const noAcervo = item.acervo?.existe
   const buscando = item.buscando
-  const classes = ['card-lote', noAcervo && 'card-lote--existente', buscando && 'card-lote--buscando']
-    .filter(Boolean)
-    .join(' ')
-  const selo = noAcervo ? (
-    <span className="card-lote__selo card-lote__selo--ex">+ exemplar</span>
-  ) : item.titulo ? (
-    <span className="card-lote__selo card-lote__selo--nova">nova</span>
-  ) : null
 
   return (
-    <button className={classes} onClick={() => aoAbrir(item.isbn)} aria-label={`${item.titulo || item.isbn}, ${qtd} exemplar(es).`}>
-      <div className="card-lote__linha">
-        <span className="card-lote__isbn">{item.isbn}</span>
-        {qtd > 1 && <span className="card-lote__vezes">×{qtd}</span>}
+    <div
+      className={`card-lote ${noAcervo ? 'card-lote--existente' : 'card-lote--nova'} ${
+        buscando ? 'card-lote--buscando' : ''
+      }`}
+    >
+      <div className="card-lote__topo" onClick={() => aoAbrir(item.isbn)}>
+        <div className="card-lote__info-esq">
+          <span className="card-lote__isbn mono">{item.isbn}</span>
+          <Selo tom={noAcervo ? 'existente' : 'nova'} className="card-lote__selo-tag">
+            {noAcervo ? '+ exemplar' : 'obra nova'}
+          </Selo>
+        </div>
+        <button
+          className="card-lote__btn-remover"
+          onClick={(e) => {
+            e.stopPropagation()
+            aoRemover()
+          }}
+          title="Tirar este livro do lote"
+          aria-label="Remover do lote"
+        >
+          <IconeRemover tamanho={14} />
+        </button>
       </div>
-      <p className={`card-lote__titulo${item.titulo ? '' : ' card-lote__titulo--vazio'}`}>
-        {item.titulo || (buscando ? 'buscando…' : 'sem metadados')}
-      </p>
-      {item.autor && <p className="card-lote__autor">{item.autor}</p>}
-      <p className="card-lote__rodape">
-        {selo}
-        <span>{item.offline ? 'offline' : item.fonte || '—'}</span>
-      </p>
-    </button>
+
+      <div className="card-lote__corpo" onClick={() => aoAbrir(item.isbn)}>
+        <p className={`card-lote__titulo ${!item.titulo ? 'card-lote__titulo--vazio' : ''}`}>
+          {item.titulo || (buscando ? 'Buscando metadados…' : '— sem título informado —')}
+        </p>
+        <p className="card-lote__autor">{item.autor || 'Autor não informado'}</p>
+      </div>
+
+      <div className="card-lote__rodape">
+        <span className="card-lote__fonte">{item.offline ? 'offline' : item.fonte || '—'}</span>
+        <Stepper
+          valor={qtd}
+          aoMudar={(novaQtd) => aoMudarQtd(novaQtd)}
+          min={1}
+          max={99}
+        />
+      </div>
+    </div>
   )
 }

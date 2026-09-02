@@ -1,14 +1,9 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
-import { Aviso, Botao, Campo, Modal } from '../../components'
+import { Aviso, Botao, Campo, IconeBanco, IconeCheck, Modal } from '../../components'
 
 /**
  * Conexão com o Postgres do BibLivre.
- *
- * Conectar não é só ligar um cabo: ao dar certo, a fila inteira é reavaliada
- * contra o acervo e itens que pareciam "obra nova" podem virar "+N
- * exemplares". Por isso o resultado diz quantos mudaram — é a informação que
- * muda a decisão de quem estava prestes a exportar.
  */
 export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
   const cfg = estadoInicial?.config || {}
@@ -41,7 +36,7 @@ export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
       setSucesso(r)
       aoConectar(r)
     } catch (e) {
-      setErro(e.message || 'Não foi possível conectar.')
+      setErro(e.message || 'Não foi possível conectar ao banco de dados.')
     } finally {
       setConectando(false)
     }
@@ -49,37 +44,38 @@ export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
 
   return (
     <Modal
-      titulo="Conexão com o BibLivre"
+      titulo="Conexão com o PostgreSQL do BibLivre"
       aoFechar={aoFechar}
       rodape={
         <>
           <Botao variante="fantasma" onClick={aoFechar}>
-            {sucesso ? 'Fechar' : 'Cancelar'}
+            {sucesso ? 'Concluir' : 'Cancelar'}
           </Botao>
           <Botao variante="primario" onClick={conectar} disabled={conectando}>
-            {conectando ? 'Conectando…' : 'Conectar'}
+            {conectando ? 'Conectando…' : 'Testar e Conectar'}
           </Botao>
         </>
       }
     >
-      <Aviso icone="🔒">
-        A senha vive só na memória do servidor — nunca vai para disco. Sem
-        conexão o sistema funciona igual, mas trata <strong>todo</strong> livro
-        como obra nova, e o risco vira duplicata no acervo.
+      <Aviso icone={<IconeBanco tamanho={18} />}>
+        A senha vive apenas na memória temporária do servidor — nunca é gravada em disco.
+        Com a conexão ativa, o sistema verifica se o livro já existe no acervo e evita
+        duplicatas.
       </Aviso>
 
       <div className="grade-form" style={{ marginTop: 'var(--e4)' }}>
-        <Campo rotulo="Host" {...campo('host')} />
-        <Campo rotulo="Porta" {...campo('port')} inputMode="numeric" />
-        <Campo rotulo="Banco" {...campo('dbname')} />
-        <Campo rotulo="Usuário" {...campo('user')} />
+        <Campo rotulo="Host / Endereço" {...campo('host')} placeholder="localhost" />
+        <Campo rotulo="Porta" {...campo('port')} inputMode="numeric" placeholder="5432" />
+        <Campo rotulo="Banco de Dados" {...campo('dbname')} placeholder="biblivre4" />
+        <Campo rotulo="Usuário" {...campo('user')} placeholder="biblivre" />
         <Campo
           rotulo="Schema"
           {...campo('schema')}
-          ajuda="single, na instalação padrão"
+          ajuda="Padrão: single"
+          placeholder="single"
         />
         <Campo
-          rotulo="Senha"
+          rotulo="Senha do Postgres"
           type="password"
           {...campo('senha')}
           onKeyDown={(e) => e.key === 'Enter' && conectar()}
@@ -89,7 +85,7 @@ export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
 
       {erro && (
         <div style={{ marginTop: 'var(--e4)' }}>
-          <Aviso tom="erro" icone="⚠" titulo="Não conectou">
+          <Aviso tom="erro" icone="⚠" titulo="Falha na conexão">
             {erro}
           </Aviso>
         </div>
@@ -97,17 +93,14 @@ export function ModalBanco({ estadoInicial, aoFechar, aoConectar }) {
 
       {sucesso && (
         <div style={{ marginTop: 'var(--e4)' }}>
-          <Aviso tom="existente" icone="✓" titulo="Conectado">
+          <Aviso tom="existente" icone={<IconeCheck tamanho={18} />} titulo="Conectado com sucesso!">
             {sucesso.obras?.toLocaleString('pt-BR')} obras e{' '}
-            {sucesso.exemplares?.toLocaleString('pt-BR')} exemplares no acervo.{' '}
+            {sucesso.exemplares?.toLocaleString('pt-BR')} exemplares encontrados no acervo.{' '}
             {sucesso.fila?.avaliados > 0 && (
               <>
-                A fila foi reavaliada: {sucesso.fila.no_acervo} de{' '}
+                A fila foi reavaliada contra o acervo: {sucesso.fila.no_acervo} de{' '}
                 {sucesso.fila.avaliados}{' '}
-                {sucesso.fila.no_acervo === 1
-                  ? 'item já está'
-                  : 'itens já estão'}{' '}
-                no acervo.
+                {sucesso.fila.no_acervo === 1 ? 'item já estava' : 'itens já estavam'} catalogados.
               </>
             )}
           </Aviso>

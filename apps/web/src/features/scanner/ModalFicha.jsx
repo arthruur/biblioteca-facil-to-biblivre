@@ -1,12 +1,8 @@
 import { useState } from 'react'
-import { Aviso, Botao, Campo, Modal, Stepper } from '../../components'
+import { Aviso, Botao, Campo, IconeCheck, IconeLivro, Modal, Stepper } from '../../components'
 
 /**
  * Ficha completa de um item do lote.
- *
- * É o único lugar da tela do celular que pede atenção, e por isso só abre a
- * toque. As edições valem para este lote (CDD e Cutter, que o lookup externo
- * quase nunca traz) e a quantidade de exemplares.
  */
 export function ModalFicha({ item, aoFechar, aoSalvar, aoRemover }) {
   const [cdd, setCdd] = useState(item.cdd || '')
@@ -25,7 +21,7 @@ export function ModalFicha({ item, aoFechar, aoSalvar, aoRemover }) {
 
   return (
     <Modal
-      titulo={item.titulo || 'Sem metadados'}
+      titulo={item.titulo || 'Ficha do Livro'}
       aoFechar={fecharSalvando}
       rodape={
         <>
@@ -45,10 +41,14 @@ export function ModalFicha({ item, aoFechar, aoSalvar, aoRemover }) {
       }
     >
       {noAcervo && (
-        <Aviso tom="existente" icone="✓" titulo="Este livro já está no acervo">
+        <Aviso
+          tom="existente"
+          icone={<IconeCheck tamanho={18} />}
+          titulo="Este livro já está cadastrado no acervo"
+        >
           Obra #{item.acervo.record_id} · {item.acervo.exemplares} exemplar(es)
-          hoje. Não vai virar ficha nova — {quantidade}{' '}
-          {quantidade === 1 ? 'exemplar entra' : 'exemplares entram'} nessa obra.
+          existentes hoje. Não criará registro novo — {quantidade}{' '}
+          {quantidade === 1 ? 'exemplar adicional entrará' : 'exemplares adicionais entrarão'} nesta obra.
         </Aviso>
       )}
 
@@ -57,11 +57,11 @@ export function ModalFicha({ item, aoFechar, aoSalvar, aoRemover }) {
           <img className="ficha__capa" src={item.capa} alt="" loading="lazy" />
         ) : (
           <div className="ficha__capa ficha__capa--vazia" aria-hidden="true">
-            📕
+            <IconeLivro tamanho={32} />
           </div>
         )}
         <div style={{ minWidth: 0 }}>
-          <p className="ficha__titulo">{item.titulo || '— sem metadados —'}</p>
+          <p className="ficha__titulo">{item.titulo || '— sem título informado —'}</p>
           {item.subtitulo && <p className="ficha__autor">{item.subtitulo}</p>}
           <p className="ficha__autor">{item.autor || 'Autor não informado'}</p>
           <p className="ficha__meta">
@@ -74,10 +74,10 @@ export function ModalFicha({ item, aoFechar, aoSalvar, aoRemover }) {
 
       <div className="ficha__exemplares">
         <div>
-          <p className="ficha__exemplares-rotulo">Exemplares</p>
+          <p className="ficha__exemplares-rotulo">Quantidade de Exemplares</p>
           <p className="ficha__exemplares-ajuda">
             {noAcervo
-              ? 'Quantas cópias entram na obra que já existe'
+              ? 'Quantas cópias entram na obra já existente'
               : 'Quantas cópias físicas deste título'}
           </p>
         </div>
@@ -89,14 +89,14 @@ export function ModalFicha({ item, aoFechar, aoSalvar, aoRemover }) {
           rotulo="CDD"
           value={cdd}
           onChange={(e) => setCdd(e.target.value)}
-          placeholder="869.3"
+          placeholder="Ex: 869.3"
           inputMode="decimal"
         />
         <Campo
           rotulo="Cutter"
           value={cutter}
           onChange={(e) => setCutter(e.target.value)}
-          placeholder="A848d"
+          placeholder="Ex: A848d"
         />
       </div>
 

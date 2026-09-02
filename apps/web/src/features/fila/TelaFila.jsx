@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
-import { Aviso, Botao, EstadoVazio, Pilula } from '../../components'
+import {
+  Aviso,
+  Botao,
+  EstadoVazio,
+  IconeBuscar,
+  IconeCheck,
+  IconeEditar,
+  IconeExportar,
+  IconeFila,
+  IconeLivro,
+  IconePendente,
+  IconeRemover,
+  IconeScanner,
+  Selo,
+  Stepper,
+} from '../../components'
 import { LinhaItem } from './LinhaItem'
-import { ModalBanco } from './ModalBanco'
-import { ModalExport } from './ModalExport'
 import './fila.css'
 
 const ABAS = [
@@ -15,12 +28,19 @@ const ABAS = [
   ['ignorado', 'Ignorados'],
 ]
 
-/** Grava a quantidade só depois que o usuário para de clicar no stepper. */
 const DEBOUNCE_QUANTIDADE = 400
 
-export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
+export function TelaFila({
+  conexao,
+  stats: statsProp,
+  aoIrParaEscanear,
+  aoRecarregarConexao,
+  aoAtualizarStats,
+  aoAbrirExport,
+  aoAbrirBanco,
+}) {
   const [itens, setItens] = useState([])
-  const [stats, setStats] = useState(null)
+  const [stats, setStats] = useState(statsProp || null)
   const [aba, setAba] = useState('pendente,revisado')
   const [busca, setBusca] = useState('')
   const [soAcervo, setSoAcervo] = useState(false)
@@ -29,8 +49,6 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [resultado, setResultado] = useState(null)
-  const [modal, setModal] = useState(null)
-  const [exportando, setExportando] = useState(false)
 
   const buscaRef = useRef(null)
   const timersQtd = useRef(new Map())
@@ -43,27 +61,31 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
       ])
       setItens(lista.itens || [])
       setStats(s)
+      aoAtualizarStats?.(s)
       setErro('')
     } catch (e) {
       setErro(e.message)
     } finally {
       setCarregando(false)
     }
-  }, [aba, busca])
+  }, [aba, busca, aoAtualizarStats])
 
   useEffect(() => {
     carregar()
   }, [carregar])
 
-  // Atalhos: "/" foca a busca, Esc limpa seleção/editor, Ctrl+A seleciona o
-  // que está visível (docs/SPEC_UI.md §4).
+  useEffect(() => {
+    if (statsProp) setStats(statsProp)
+  }, [statsProp])
+
+  // Atalhos de teclado
   useEffect(() => {
     const aoTeclar = (e) => {
       const digitando = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)
       if (e.key === '/' && !digitando) {
         e.preventDefault()
         buscaRef.current?.focus()
-      } else if (e.key === 'Escape' && !modal) {
+      } else if (e.key === 'Escape') {
         setEditando(null)
         setSelecao(new Set())
       } else if (e.key === 'a' && (e.ctrlKey || e.metaKey) && !digitando) {
@@ -85,7 +107,6 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
     [visiveis, selecao]
   )
 
-  /** O que o export vai levar: a seleção, se houver; senão, o que dá para exportar. */
   const alvoExport = useMemo(() => {
     const base = selecionados.length
       ? selecionados
@@ -126,7 +147,12 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
       id,
       setTimeout(() => {
         api.fila.editar(id, { quantidade }).then(
-          () => api.fila.stats().then(setStats),
+          () => {
+            api.fila.stats().then((s) => {
+              setStats(s)
+              aoAtualizarStats?.(s)
+            })
+          },
           (e) => setErro(`Não deu para salvar a quantidade: ${e.message}`)
         )
       }, DEBOUNCE_QUANTIDADE)
@@ -140,8 +166,8 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
       if (
         !window.confirm(
           quantos === 1
-            ? 'Remover este item da fila? O arquivo dele é apagado.'
-            : `Remover ${quantos} itens da fila? Os arquivos deles são apagados.`
+            ? 'Remover este item da fila? O arquivo dele será excluído.'
+            : `Remover ${quantos} itens da fila? Os arquivos deles serão excluídos.`
         )
       )
         return
@@ -155,69 +181,16 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
     }
   }
 
-  const exportar = async ({ executar, senha }) => {
-    setExportando(true)
-    setErro('')
-    try {
-      const r = await api.fila.exportar({
-        executar,
-        ids: selecionados.length ? selecionados.map((i) => i.id) : null,
-        db: senha ? { senha } : null,
-      })
-      setResultado(r)
-      setModal(null)
-      setSelecao(new Set())
-      await carregar()
-      if (executar) aoRecarregarConexao?.()
-    } catch (e) {
-      setErro(`Export falhou: ${e.message}`)
-    } finally {
-      setExportando(false)
-    }
+  const dispararExport = () => {
+    aoAbrirExport?.(selecionados.length > 0 ? selecionados : null)
   }
 
   return (
     <div className="fila">
-      <header className="fila__topo">
-        <div className="fila__marca">
-          <span className="fila__titulo">Fila de revisão</span>
-          <span className="fila__sub">
-            {stats ? `${stats.total} na fila` : '…'}
-          </span>
-        </div>
-        <div className="fila__acoes-topo">
-          <Botao variante="fantasma" tamanho="pequeno" onClick={aoIrParaEscanear}>
-            ← Escanear
-          </Botao>
-          <Pilula
-            tom={conexao.tom}
-            onClick={() => setModal('banco')}
-            title="Configurar a conexão com o BibLivre"
-          >
-            {conexao.rotulo}
-          </Pilula>
-          {conexao.conectado && (
-            <Botao
-              variante="fantasma"
-              className="btn--icone"
-              title="Revarrer o acervo e reavaliar a fila"
-              aria-label="Revarrer o acervo"
-              onClick={async () => {
-                await api.fila.reconsultar()
-                await carregar()
-                aoRecarregarConexao?.()
-              }}
-            >
-              ↻
-            </Botao>
-          )}
-        </div>
-      </header>
-
       <div className="fila__conteudo">
         {erro && (
           <div style={{ marginBottom: 'var(--e4)' }}>
-            <Aviso tom="erro" icone="⚠" titulo="Algo deu errado">
+            <Aviso tom="erro" icone="⚠" titulo="Ocorreu um erro">
               {erro}
             </Aviso>
           </div>
@@ -232,23 +205,48 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
           </div>
         )}
 
-        {stats && <Indicadores stats={stats} aba={aba} aoTrocarAba={setAba} />}
-
-        <div className="filtros">
-          <input
-            ref={buscaRef}
-            className="filtros__busca"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por título, autor, editora, ISBN ou CDD    ( / )"
-            aria-label="Buscar na fila"
+        {/* Dashboard de Indicadores do Acervo e Fila */}
+        {stats && (
+          <DashboardOverview
+            stats={stats}
+            abaAtiva={aba}
+            aoTrocarAba={(novaAba) => setAba(novaAba)}
+            soAcervo={soAcervo}
+            aoToggleSoAcervo={() => setSoAcervo((v) => !v)}
+            conexao={conexao}
+            aoAbrirBanco={aoAbrirBanco}
           />
+        )}
+
+        {/* Barra de Filtros e Busca */}
+        <div className="filtros">
+          <div className="filtros__busca-wrap">
+            <IconeBuscar tamanho={16} className="filtros__icone-busca" />
+            <input
+              ref={buscaRef}
+              className="filtros__busca"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por título, autor, editora, ISBN ou CDD… ( digite / )"
+              aria-label="Buscar na fila"
+            />
+            {busca && (
+              <button
+                className="filtros__btn-limpar-busca"
+                onClick={() => setBusca('')}
+                title="Limpar busca"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
           <div className="filtros__grupo" role="tablist">
             {ABAS.map(([valor, rotulo]) => (
               <button
                 key={valor}
                 role="tab"
-                className="filtros__aba"
+                className={`filtros__aba ${aba === valor ? 'filtros__aba--ativa' : ''}`}
                 aria-selected={aba === valor}
                 onClick={() => setAba(valor)}
               >
@@ -256,38 +254,40 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
               </button>
             ))}
           </div>
+
           <label className="filtros__caixa">
             <input
               type="checkbox"
               checked={soAcervo}
               onChange={(e) => setSoAcervo(e.target.checked)}
             />
-            só já no acervo
+            <span>Só já no acervo</span>
           </label>
         </div>
 
+        {/* Tabela Desktop / Cards Mobile */}
         {carregando ? (
-          <EstadoVazio icone="⏳" titulo="Carregando a fila…" />
+          <EstadoVazio icone="⏳" titulo="Carregando a fila de revisão…" />
         ) : !itens.length ? (
           <div className="tabela-wrap">
             <EstadoVazio
-              icone="📥"
-              titulo="Nada na fila"
+              icone={<IconeLivro tamanho={40} />}
+              titulo="Nenhum livro na fila"
               acao={
                 <Botao variante="primario" onClick={aoIrParaEscanear}>
-                  Ir para o scanner
+                  <IconeScanner tamanho={16} /> Ir para o scanner
                 </Botao>
               }
             >
-              Escaneie os livros no celular e toque em “Enviar para a fila”. O
-              que chegar aqui espera revisão e sobrevive a reinício do servidor.
+              Escaneie os livros no balcão e clique em “Enviar para a Fila”. Tudo o que
+              chegar aqui fica salvo com segurança em disco para revisão.
             </EstadoVazio>
           </div>
         ) : !visiveis.length ? (
           <div className="tabela-wrap">
             <EstadoVazio
-              icone="🔍"
-              titulo="Nenhum item com esse filtro"
+              icone={<IconeBuscar tamanho={40} />}
+              titulo="Nenhum item encontrado com esses filtros"
               acao={
                 <Botao
                   onClick={() => {
@@ -296,17 +296,18 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
                     setAba('todos')
                   }}
                 >
-                  Limpar filtros
+                  Limpar todos os filtros
                 </Botao>
               }
             >
-              A fila tem {itens.length}{' '}
-              {itens.length === 1 ? 'item' : 'itens'}, mas nenhum casa com a
-              busca e os filtros atuais.
+              A fila possui {itens.length}{' '}
+              {itens.length === 1 ? 'item cadastrado' : 'itens cadastrados'}, mas nenhum
+              combina com os critérios da busca atual.
             </EstadoVazio>
           </div>
         ) : (
           <>
+            {/* Tabela para Desktop */}
             <div className="tabela-wrap">
               <table className="tabela">
                 <thead>
@@ -328,13 +329,13 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
                         aria-label="Selecionar todos os visíveis"
                       />
                     </th>
-                    <th className="col-capa" />
-                    <th>Obra</th>
-                    <th>ISBN</th>
+                    <th className="col-capa">Capa</th>
+                    <th>Obra / Título / Autor</th>
+                    <th>ISBN / Fonte</th>
                     <th>Destino no BibLivre</th>
                     <th className="col-ex">Exemplares</th>
                     <th className="col-situacao">Situação</th>
-                    <th className="col-acoes" />
+                    <th className="col-acoes">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -361,6 +362,8 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
                 </tbody>
               </table>
             </div>
+
+            {/* Cards para Mobile */}
             <div className="fila-cards">
               {visiveis.map((item) => (
                 <FilaCardMobile
@@ -384,17 +387,21 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
         )}
       </div>
 
+      {/* Barra Flutuante de Seleção em Lote */}
       {selecionados.length > 0 && (
         <div className="barra-selecao">
           <span className="barra-selecao__contagem">
-            {selecionados.length} selecionado
-            {selecionados.length > 1 ? 's' : ''}
+            {selecionados.length} selecionado{selecionados.length > 1 ? 's' : ''}
           </span>
-          <Botao tamanho="pequeno" onClick={() => acaoEmLote('revisado')}>
-            ✓ Revisado
+          <Botao
+            tamanho="pequeno"
+            variante="primario"
+            onClick={() => acaoEmLote('revisado')}
+          >
+            <IconeCheck tamanho={13} /> Revisado
           </Botao>
           <Botao tamanho="pequeno" onClick={() => acaoEmLote('pendente')}>
-            ↺ Pendente
+            <IconePendente tamanho={13} /> Pendente
           </Botao>
           <Botao tamanho="pequeno" onClick={() => acaoEmLote('ignorado')}>
             ⊘ Ignorar
@@ -404,7 +411,7 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
             variante="perigo"
             onClick={() => acaoEmLote('remover')}
           >
-            🗑 Remover
+            <IconeRemover tamanho={13} /> Remover
           </Botao>
           <Botao
             tamanho="pequeno"
@@ -416,163 +423,256 @@ export function TelaFila({ conexao, aoIrParaEscanear, aoRecarregarConexao }) {
         </div>
       )}
 
+      {/* Rodapé Fixo de Resumo e Exportação */}
       <footer className="rodape">
         <div className="rodape__resumo">
           <span className="rodape__forte">
             {alvoExport.length}{' '}
-            {selecionados.length ? 'itens (seleção)' : 'itens a exportar'}
+            {selecionados.length ? 'itens selecionados para exportar' : 'itens a exportar'}
           </span>
           {alvoExport.length > 0 && (
-            <>
-              <span>→</span>
-              <span style={{ color: 'var(--nova)' }}>
+            <div className="rodape__badges">
+              <span className="rodape__badge rodape__badge--nova">
                 {novasAlvo} {novasAlvo === 1 ? 'obra nova' : 'obras novas'}
               </span>
-              <span>·</span>
-              <span style={{ color: 'var(--existente)' }}>
+              <span className="rodape__badge rodape__badge--existente">
                 {alvoExport.length - novasAlvo} já no acervo
               </span>
-              <span>·</span>
-              <span>{exemplaresAlvo} exemplares</span>
-            </>
+              <span className="rodape__badge">
+                {exemplaresAlvo} {exemplaresAlvo === 1 ? 'exemplar' : 'exemplares'}
+              </span>
+            </div>
           )}
         </div>
+
         <Botao
           variante="primario"
-          onClick={() => setModal('export')}
+          onClick={dispararExport}
           disabled={!alvoExport.length}
         >
-          Exportar →
+          <IconeExportar tamanho={16} /> Exportar para o BibLivre →
         </Botao>
       </footer>
-
-      <nav className="nav-inferior" aria-label="Navegação">
-        <button onClick={aoIrParaEscanear}>
-          <span aria-hidden>◎</span> Escanear
-        </button>
-        <button className="ativo">
-          <span aria-hidden>☰</span> Fila <span className="badge">{stats?.total ?? 0}</span>
-        </button>
-        <button onClick={() => setModal('export')} disabled={!alvoExport.length}>
-          <span aria-hidden>⬆</span> Exportar
-        </button>
-      </nav>
-
-      {modal === 'banco' && (
-        <ModalBanco
-          estadoInicial={conexao.bruto}
-          aoFechar={() => setModal(null)}
-          aoConectar={() => {
-            aoRecarregarConexao?.()
-            carregar()
-          }}
-        />
-      )}
-
-      {modal === 'export' && (
-        <ModalExport
-          itens={alvoExport}
-          conectado={conexao.conectado}
-          temSelecao={selecionados.length > 0}
-          ocupado={exportando}
-          aoFechar={() => setModal(null)}
-          aoConfirmar={exportar}
-        />
-      )}
     </div>
   )
 }
 
-function FilaCardMobile({ item, selecionado, aoSelecionar, aoEditar, aoMudarQuantidade, aoRemover, aoAlternarRevisado }) {
+function DashboardOverview({
+  stats,
+  abaAtiva,
+  aoTrocarAba,
+  soAcervo,
+  aoToggleSoAcervo,
+  conexao,
+  aoAbrirBanco,
+}) {
+  const s = stats
+  const atencao = (s.sem_metadados || 0) + (s.isbn_repetido || 0)
+
+  const cartoes = [
+    {
+      n: s.a_exportar,
+      r: 'A exportar',
+      desc: 'Pendentes + Revisados',
+      filtro: 'pendente,revisado',
+      destaque: true,
+    },
+    {
+      n: s.por_status.pendente,
+      r: 'Pendentes',
+      desc: 'Aguardando revisão',
+      filtro: 'pendente',
+      tom: 'alerta',
+    },
+    {
+      n: s.por_status.revisado,
+      r: 'Revisados',
+      desc: 'Prontos para gravar',
+      filtro: 'revisado',
+      tom: 'sucesso',
+    },
+    {
+      n: s.obras_novas,
+      r: 'Obras novas',
+      desc: 'Virarão novos registros',
+      tom: 'nova',
+    },
+    {
+      n: s.ja_no_acervo,
+      r: 'Já no acervo',
+      desc: 'Adicionarão exemplares',
+      tom: 'existente',
+      cliqueExtra: aoToggleSoAcervo,
+      ativoExtra: soAcervo,
+    },
+    {
+      n: atencao,
+      r: 'Precisam de atenção',
+      desc: 'Sem título ou repetidos',
+      tom: atencao ? 'erro' : undefined,
+    },
+    {
+      n: s.por_status.exportado,
+      r: 'Exportados',
+      desc: 'Já gravados',
+      filtro: 'exportado',
+      tom: 'neutro',
+    },
+  ]
+
+  return (
+    <div className="dashboard">
+      <div className="dashboard__topo">
+        <div className="dashboard__titulos">
+          <h2 className="dashboard__titulo">Visão Geral da Fila</h2>
+          <span className="dashboard__sub">
+            Total de {s.total} {s.total === 1 ? 'título catalogado' : 'títulos catalogados'} em espera
+          </span>
+        </div>
+
+        <div className="dashboard__status-db">
+          <span
+            className={`dashboard__db-pill ${
+              conexao.conectado ? 'dashboard__db-pill--ok' : 'dashboard__db-pill--off'
+            }`}
+            onClick={aoAbrirBanco}
+            title="Configurar PostgreSQL do BibLivre"
+          >
+            <span className="pilula__ponto" />
+            {conexao.conectado ? 'PostgreSQL Conectado' : 'PostgreSQL Desconectado'}
+          </span>
+        </div>
+      </div>
+
+      <div className="dashboard__grid">
+        {cartoes.map((c) => {
+          const classes = [
+            'dashboard__card',
+            c.destaque && 'dashboard__card--destaque',
+            c.tom && `dashboard__card--${c.tom}`,
+            (abaAtiva === c.filtro || c.ativoExtra) && 'dashboard__card--ativo',
+          ]
+            .filter(Boolean)
+            .join(' ')
+
+          return (
+            <button
+              key={c.r}
+              className={classes}
+              onClick={() => {
+                if (c.filtro) aoTrocarAba(c.filtro)
+                else if (c.cliqueExtra) c.cliqueExtra()
+              }}
+              title={c.desc}
+            >
+              <span className="dashboard__card-numero mono">{c.n}</span>
+              <span className="dashboard__card-rotulo">{c.r}</span>
+              <span className="dashboard__card-desc">{c.desc}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function FilaCardMobile({
+  item,
+  selecionado,
+  aoSelecionar,
+  aoEditar,
+  aoMudarQuantidade,
+  aoRemover,
+  aoAlternarRevisado,
+}) {
   const destinoTom = !item.acervo ? 'alerta' : item.acervo.existe ? 'existente' : 'nova'
   const destinoLabel = !item.acervo
     ? 'não verificado'
     : item.acervo.existe
       ? `+${item.quantidade} ex · #${item.acervo.record_id}`
       : 'obra nova'
+
   return (
-    <div className={`fila-card ${selecionado ? 'fila-card--selecionado' : ''} ${item.status === 'exportado' ? 'fila-card--exportado' : ''}`}>
-      <div style={{ position: 'relative' }}>
+    <div
+      className={`fila-card ${selecionado ? 'fila-card--selecionado' : ''} ${
+        item.status === 'exportado' ? 'fila-card--exportado' : ''
+      }`}
+    >
+      <div className="fila-card__capa-wrap">
         {item.capa ? (
           <img src={item.capa} alt="" className="fila-card__capa" loading="lazy" />
         ) : (
-          <div className="fila-card__capa fila-card__capa--vazia">📕</div>
+          <div className="fila-card__capa fila-card__capa--vazia">
+            <IconeLivro tamanho={20} />
+          </div>
         )}
         <input
           type="checkbox"
           checked={selecionado}
           onChange={aoSelecionar}
-          aria-label="Selecionar"
-          style={{ position: 'absolute', top: -6, left: -6, width: 18, height: 18 }}
+          aria-label="Selecionar este item"
+          className="fila-card__checkbox"
         />
       </div>
-      <div style={{ minWidth: 0 }}>
+
+      <div className="fila-card__conteudo">
         <div className="fila-card__topo">
-          <span className={`selo selo--${destinoTom}`} style={{ fontSize: 11 }}>{destinoLabel}</span>
-          <span style={{ fontSize: 11, color: 'var(--texto-3)' }}>{item.status}</span>
+          <Selo tom={destinoTom} style={{ fontSize: 10 }}>
+            {destinoLabel}
+          </Selo>
+          <span className="fila-card__status-tag">{item.status}</span>
         </div>
+
         <p className={`fila-card__titulo ${!item.titulo ? 'fila-card__titulo--vazio' : ''}`}>
-          {item.titulo || '— sem metadados —'}
+          {item.titulo || '— sem título informado —'}
         </p>
+
         <p className="fila-card__meta">
-          {[item.autor, item.ano].filter(Boolean).join(' · ') || '—'}
+          {[item.autor, item.ano, item.editora].filter(Boolean).join(' · ') || '—'}
         </p>
-        <p className="fila-card__isbn">{item.isbn} · {item.fonte || '—'}</p>
+
+        <p className="fila-card__isbn mono">
+          {item.isbn} {item.fonte ? `· ${item.fonte}` : ''}
+        </p>
+
         <div className="fila-card__rodape">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="fila-card__acao" onClick={() => aoMudarQuantidade(Math.max(1, (Number(item.quantidade)||1)-1))} aria-label="menos">−</button>
-            <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{item.quantidade} ex</span>
-            <button className="fila-card__acao" onClick={() => aoMudarQuantidade((Number(item.quantidade)||1)+1)} aria-label="mais">+</button>
+          <div className="fila-card__stepper">
+            <Stepper
+              valor={item.quantidade}
+              aoMudar={(q) => aoMudarQuantidade(q)}
+              min={1}
+              max={99}
+            />
           </div>
+
           <div className="fila-card__acoes">
-            <button className="fila-card__acao" onClick={aoEditar} aria-label="Editar">✎</button>
-            <button className="fila-card__acao" onClick={aoAlternarRevisado} aria-label="Alternar revisado">{item.status === 'revisado' ? '↺' : '✓'}</button>
-            <button className="fila-card__acao" onClick={aoRemover} aria-label="Remover">🗑</button>
+            <button
+              className="fila-card__acao"
+              onClick={aoEditar}
+              title="Editar metadados"
+              aria-label="Editar"
+            >
+              <IconeEditar tamanho={14} />
+            </button>
+            <button
+              className="fila-card__acao"
+              onClick={aoAlternarRevisado}
+              title={item.status === 'revisado' ? 'Voltar para pendente' : 'Marcar como revisado'}
+              aria-label="Alternar revisado"
+            >
+              {item.status === 'revisado' ? <IconePendente tamanho={14} /> : <IconeCheck tamanho={14} />}
+            </button>
+            <button
+              className="fila-card__acao"
+              onClick={aoRemover}
+              title="Remover da fila"
+              aria-label="Remover"
+            >
+              <IconeRemover tamanho={14} />
+            </button>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function Indicadores({ stats, aba, aoTrocarAba }) {
-  const s = stats
-  const atencao = (s.sem_metadados || 0) + (s.isbn_repetido || 0)
-
-  const cartoes = [
-    { n: s.a_exportar, r: 'A exportar', filtro: 'pendente,revisado' },
-    { n: s.por_status.pendente, r: 'Pendentes', filtro: 'pendente' },
-    { n: s.por_status.revisado, r: 'Revisados', filtro: 'revisado' },
-    { n: s.obras_novas, r: 'Obras novas', tom: 'nova' },
-    { n: s.ja_no_acervo, r: 'Já no acervo', tom: 'existente' },
-    { n: atencao, r: 'Precisam de atenção', tom: atencao ? 'alerta' : undefined },
-    { n: s.por_status.exportado, r: 'Exportados', filtro: 'exportado' },
-  ]
-
-  return (
-    <div className="indicadores">
-      {cartoes.map((c) => {
-        const classe = `indicador${c.tom ? ` indicador--${c.tom}` : ''}`
-        if (!c.filtro) {
-          return (
-            <div key={c.r} className={classe}>
-              <p className="indicador__numero">{c.n}</p>
-              <p className="indicador__rotulo">{c.r}</p>
-            </div>
-          )
-        }
-        return (
-          <button
-            key={c.r}
-            className={classe}
-            aria-pressed={aba === c.filtro}
-            onClick={() => aoTrocarAba(c.filtro)}
-          >
-            <p className="indicador__numero">{c.n}</p>
-            <p className="indicador__rotulo">{c.r}</p>
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -585,12 +685,12 @@ function ResultadoExport({ resultado, aoFechar }) {
   return (
     <Aviso
       tom={falhou ? 'alerta' : gravou ? 'existente' : undefined}
-      icone={falhou ? '⚠' : gravou ? '✓' : '📄'}
+      icone={falhou ? '⚠' : gravou ? <IconeCheck tamanho={18} /> : <IconeLivro tamanho={18} />}
       titulo={
         falhou
-          ? 'Arquivos gerados, mas nada foi gravado'
+          ? 'Arquivos gerados, mas gravação não concluída'
           : gravou
-            ? 'Gravado no BibLivre'
+            ? 'Gravado com sucesso no BibLivre'
             : 'Arquivos gerados'
       }
     >
@@ -609,12 +709,12 @@ function ResultadoExport({ resultado, aoFechar }) {
       )}
       {r.reindex_necessario === false && (
         <p style={{ marginTop: 6 }}>
-          Só entraram exemplares — <strong>não</strong> é preciso reindexar.
+          Só entraram exemplares adicionais — <strong>não</strong> é necessário reindexar.
         </p>
       )}
       <div style={{ marginTop: 'var(--e2)' }}>
         <Botao tamanho="pequeno" variante="fantasma" onClick={aoFechar}>
-          Dispensar
+          Dispensar aviso
         </Botao>
       </div>
     </Aviso>

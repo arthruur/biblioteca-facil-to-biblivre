@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { Botao, Campo, Stepper } from '../../components'
+import {
+  Botao,
+  Campo,
+  IconeCheck,
+  IconeEditar,
+  IconeLivro,
+  IconePendente,
+  IconeRemover,
+  Stepper,
+} from '../../components'
 import { Destino, Situacao } from './Destino'
 
 /** Os 12 campos que a revisão pode corrigir (docs/SPEC_UI.md §4). */
@@ -57,7 +66,7 @@ export function LinhaItem({
             <img className="mini-capa" src={item.capa} alt="" loading="lazy" />
           ) : (
             <span className="mini-capa mini-capa--vazia" aria-hidden="true">
-              📕
+              <IconeLivro tamanho={18} />
             </span>
           )}
         </td>
@@ -68,12 +77,12 @@ export function LinhaItem({
           </p>
           <p className="obra__linha2">
             {[item.autor, item.editora, item.ano].filter(Boolean).join(' · ') ||
-              'nenhum dado veio das bases externas'}
+              'nenhum metadado veio das bases externas'}
           </p>
         </td>
 
         <td>
-          <span className="obra__isbn">{item.isbn || '—'}</span>
+          <span className="obra__isbn mono">{item.isbn || '—'}</span>
           {item.fonte && <p className="obra__fonte">{item.fonte}</p>}
         </td>
 
@@ -103,10 +112,10 @@ export function LinhaItem({
                 variante="fantasma"
                 className="btn--icone"
                 onClick={() => aoEditar(editando ? null : item.id)}
-                title="Editar campos"
+                title="Editar campos da obra"
                 aria-label="Editar campos"
               >
-                ✎
+                <IconeEditar tamanho={14} />
               </Botao>
               <Botao
                 variante="fantasma"
@@ -123,7 +132,11 @@ export function LinhaItem({
                     : 'Marcar como revisado'
                 }
               >
-                {item.status === 'revisado' ? '↺' : '✓'}
+                {item.status === 'revisado' ? (
+                  <IconePendente tamanho={14} />
+                ) : (
+                  <IconeCheck tamanho={14} />
+                )}
               </Botao>
               <Botao
                 variante="fantasma"
@@ -132,7 +145,7 @@ export function LinhaItem({
                 title="Remover da fila"
                 aria-label="Remover da fila"
               >
-                🗑
+                <IconeRemover tamanho={14} />
               </Botao>
             </div>
           )}
@@ -190,7 +203,7 @@ function Editor({ item, aoSalvar, aoFechar }) {
               aoFechar()
             }}
           >
-            Salvar
+            Salvar alterações
           </Botao>
         </div>
       </div>

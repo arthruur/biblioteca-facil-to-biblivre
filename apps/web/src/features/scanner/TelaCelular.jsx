@@ -279,14 +279,30 @@ function VisorCelular({ scanner, ultimoIsbn }) {
           <span className="cel__etiqueta mono" aria-hidden="true">
             Câmera traseira · EAN-13 · {motor}
           </span>
-          <div
-            className={`cel__alvo${
-              scanner.tomStatus === 'ok'
-                ? ' cel__alvo--ok'
-                : ' cel__alvo--varrendo'
-            }`}
-            aria-hidden="true"
-          />
+          {/* Enquadramento automático: caixas reais do BarcodeDetector */}
+          <div className="cel__overlay" aria-hidden="true">
+            {scanner.deteccoes?.map((d, i) => (
+              <div
+                key={d.id || `${d.raw}-${i}`}
+                className={`cel__frame cel__frame--${d.tipo} ${d.dentroAlvo ? 'cel__frame--central' : ''} ${d.pulsando ? 'cel__frame--pulsando' : ''}`}
+                style={{
+                  left: `${d.x * 100}%`,
+                  top: `${d.y * 100}%`,
+                  width: `${d.w * 100}%`,
+                  height: `${d.h * 100}%`,
+                }}
+              >
+                <span
+                  className={`cel__frame-label mono ${d.tipo === 'candidato' ? 'cel__frame-label--candidato' : ''}`}
+                >
+                  {d.raw ? d.raw.slice(-4) : '···'}
+                </span>
+              </div>
+            ))}
+            {!scanner.deteccoes?.length && scanner.escaneando && (
+              <div className="cel__overlay-hint">Centralize o código na tela</div>
+            )}
+          </div>
 
           <div className="cel__controles">
             {scanner.recursos.lanterna && (

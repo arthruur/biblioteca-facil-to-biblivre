@@ -4,30 +4,42 @@ Este documento detalha o comportamento do scanner de código de barras em difere
 
 ---
 
-## 1. Comparativo de Motores: Android vs iOS
+## 1. Comparativo de Recursos: Android vs iOS
 
 O leitor de código de barras utiliza uma arquitetura híbrida de alto desempenho:
 
-| Característica | Android (Chrome / Chromium) | iOS (Safari / Chrome / Firefox) |
+| Recurso | Android (Chrome / Chromium) | iOS (Safari / Chrome / Firefox) |
 |---|---|---|
 | **Motor de Detecção** | BarcodeDetector Nativo (C++) | Polyfill WebAssembly (zxing-wasm) |
 | **Aceleração de Hardware** | Sim (GPU / NPU via Google Play Services) | Sim (compilado C++ via WebAssembly) |
 | **Pipeline Inteligente (ROI)** | Ativo (scannerLoop.js) | Ativo (scannerLoop.js) |
+| **Vibração Tátil (
+avigator.vibrate)** | **Suportada** | **Bloqueada pelo iOS (não implementada pela Apple)** |
+| **Bipe Sonoro (AudioContext)** | **Livre** | **Exige interação prévia e respeita chave silenciosa** |
 | **Controle de Foco Manual** | Suportado em aparelhos compatíveis | Bloqueado pelo WebKit |
 | **Controle de Lanterna (Torch)** | Suportado | Bloqueado pelo WebKit público |
 | **Tolerância a Reflexo/Giro** | Muito Alta | Alta |
 
-### Por que o Android com Chrome é tão rápido?
-No Android, o Google Chrome implementa a especificação W3C [Shape Detection API](https://wicg.github.io/shape-detection-api/#barcode-detection-api). O reconhecimento roda em código binário otimizado do sistema operacional, processando imagens em alta resolução em menos de 15ms.
+---
 
-### Por que o iOS requer WebAssembly?
-A Apple não implementou a API BarcodeDetector no WebKit. Como todos os navegadores no iOS (incluindo o Chrome e o Firefox para iPhone) são obrigados a utilizar o motor WebKit do sistema, nenhum navegador no iOS possui a API nativa.
+## 2. Limitações de Vibração e Som no iPhone / iOS
 
-Para garantir que o iPhone utilize **o mesmo pipeline de candidatos (ROI) e a mesma tela de depuração**, a aplicação carrega transparentemente o polyfill baseado em **WebAssembly (ZXing-C++ em WASM)**. Isso eleva a performance no iPhone a um nível muito próximo do nativo, superando em até 10× bibliotecas legadas em JavaScript puro.
+### A. Vibração (
+avigator.vibrate)
+* **A Apple nunca implementou a Vibration API na Web:** A função 
+avigator.vibrate é simplesmente undefined em qualquer navegador no iOS (Safari, Chrome ou Firefox para iPhone).
+* A política da Apple reserva o motor háptico (Taptic Engine) exclusivamente para apps nativos ou interações do próprio sistema operacional.
+* **Comportamento no app:** O app tenta chamar a vibração com segurança, mas no iPhone ela falha silenciosamente. O retorno sensorial no iOS depende do **bipe sonoro** e do **feedback visual (flash verde no visor)**.
+
+### B. Som / Bipe de Confirmação (AudioContext)
+O som funciona no iOS, porém sujeito a duas regras rígidas do sistema:
+1. **Chave de Modo Silencioso:** Se a chavinha física lateral do iPhone (ou o botão de Ação) estiver no modo silencioso, o iOS silencia completamente todo o áudio web (Web Audio API).
+2. **Gesto Prévio do Usuário:** O iOS suspende a reprodução de áudio se a página não tiver recebido ao menos um toque físico na tela após carregar.
+3. **Gerenciamento de Instâncias:** O Safari limita a quantidade de AudioContext abertos em simultâneo. Por isso, a aplicação reutiliza um AudioContext compartilhado (*singleton*) que é destravado com esume() assim que o usuário interage.
 
 ---
 
-## 2. Limitações Ópticas do iPhone 11
+## 3. Limitações Ópticas do iPhone 11
 
 Durante os testes de bancada, constatou-se que o iPhone 11 apresenta comportamento de foco sensivelmente diferente de aparelhos Android modernos. A causa é **física (óptica da lente)**:
 
@@ -42,7 +54,7 @@ Durante os testes de bancada, constatou-se que o iPhone 11 apresenta comportamen
 
 ---
 
-## 3. Guia Operacional para o Operador
+## 4. Guia Operacional para o Operador
 
 Para garantir ritmo ágil de bipe contínuo na estante:
 
@@ -52,5 +64,5 @@ Para garantir ritmo ágil de bipe contínuo na estante:
 * O algoritmo de ROI localiza o código mesmo que ele ocupe uma porção menor da tela e recorta a região em alta resolução.
 
 ### Recomendações de Aparelhos para Volume Alto
-* **Ideal:** Aparelhos Android com Google Chrome atualizado (leitura instantânea de múltiplos livros).
-* **iPhones:** Funcionam bem com a regra dos 15–20 cm de distância. Se o livro estiver muito amassado ou com plástico brilhante reflexivo, utilizar o recurso de **Entrada Manual de ISBN** ou fotografar pela galeria.
+* **Ideal:** Aparelhos Android com Google Chrome atualizado (vibração tátil ativa, bipe imediato e leitura instantânea de múltiplos livros).
+* **iPhones:** Funcionam bem com a regra dos 15–20 cm de distância. O feedback de leitura no iPhone é dado principalmente pelo **flash verde no visor** e pelo **bipe** (se o aparelho não estiver na chave silenciosa).

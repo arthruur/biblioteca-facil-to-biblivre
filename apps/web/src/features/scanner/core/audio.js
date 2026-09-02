@@ -19,14 +19,33 @@
  * - `navigator.vibrate` não é suportado no iOS Safari nem em navegadores desktop.
  */
 
+let audioCtxCompartilhado = null
+
+function obterAudioContext() {
+  if (typeof window === 'undefined') return null
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  if (!AudioCtx) return null
+  if (!audioCtxCompartilhado || audioCtxCompartilhado.state === 'closed') {
+    try {
+      audioCtxCompartilhado = new AudioCtx()
+    } catch {
+      return null
+    }
+  }
+  if (audioCtxCompartilhado.state === 'suspended') {
+    audioCtxCompartilhado.resume().catch(() => {})
+  }
+  return audioCtxCompartilhado
+}
+
 /**
  * Emite um bipe curto e suave de confirmação (senoidal, 880Hz).
  */
 export function tocarBeepSucesso() {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
-    if (!AudioCtx) return
-    const ctx = new AudioCtx()
+    const ctx = obterAudioContext()
+    if (!ctx) return
+
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
 

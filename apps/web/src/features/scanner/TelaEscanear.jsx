@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Botao, Pilula } from '../../components'
 import { ModalFicha } from './ModalFicha'
 import { useLote } from './useLote'
-import { normalizarIsbnDigitado, useScanner } from './useScanner'
+import { normalizarIsbnDigitado } from './isbn'
+import { useScanner } from './useScanner'
 import './scanner.css'
 
 export function TelaEscanear({ info, conexao, aoIrParaFila }) {
@@ -56,7 +57,10 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
   const adicionarManual = () => {
     const isbn = normalizarIsbnDigitado(manual)
     if (!isbn) {
-      avisar('ISBN inválido — precisa ter 10 ou 13 dígitos', 'erro')
+      avisar(
+        'ISBN inválido — confira os dígitos. São 10 ou 13, e o último é de verificação.',
+        'erro'
+      )
       return
     }
     setManual('')
@@ -218,6 +222,37 @@ function Visor({ scanner }) {
       )}
 
       {scanner.escaneando && <div className="visor__alvo" aria-hidden="true" />}
+
+      {scanner.escaneando && (scanner.recursos.lanterna || scanner.recursos.zoom) && (
+        <div className="visor__controles">
+          {scanner.recursos.lanterna && (
+            <button
+              type="button"
+              className={`visor__botao${
+                scanner.lanternaLigada ? ' visor__botao--ativo' : ''
+              }`}
+              onClick={scanner.alternarLanterna}
+              aria-pressed={scanner.lanternaLigada}
+            >
+              <span aria-hidden="true">◉</span> Lanterna
+            </button>
+          )}
+          {scanner.recursos.zoom && (
+            <label className="visor__zoom">
+              <span aria-hidden="true">🔍</span>
+              <input
+                type="range"
+                min={scanner.recursos.zoom.min}
+                max={scanner.recursos.zoom.max}
+                step={scanner.recursos.zoom.passo}
+                value={scanner.zoom ?? scanner.recursos.zoom.min}
+                onChange={(e) => scanner.mudarZoom(Number(e.target.value))}
+                aria-label="Aproximação da câmera"
+              />
+            </label>
+          )}
+        </div>
+      )}
 
       {scanner.erroCamera ? (
         <p className="visor__erro" role="alert">

@@ -111,6 +111,56 @@
   box-shadow: 0 0 8px var(--erro);
 }
 
+/* --- Controles de câmera: só aparecem se o aparelho tiver o recurso --- */
+/* Ficam sobre a moldura (que projeta a sombra via box-shadow) e acima do
+   status, para não competir com a mensagem de leitura. */
+.visor__controles {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 52px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e3);
+  padding: 0 var(--e4);
+}
+.visor__botao {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 var(--e4);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--visor-texto);
+  font-size: var(--txt-sm);
+  cursor: pointer;
+}
+.visor__botao--ativo {
+  background: rgba(255, 214, 102, 0.9);
+  border-color: transparent;
+  color: #221a00;
+  font-weight: var(--peso-forte);
+}
+.visor__zoom {
+  flex: 1 1 auto;
+  max-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: 0 var(--e3);
+  min-height: 40px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--visor-texto);
+}
+.visor__zoom input {
+  flex: 1;
+  min-width: 0;
+  accent-color: #fff;
+}
+
 .visor__status {
   position: absolute;
   left: 0;

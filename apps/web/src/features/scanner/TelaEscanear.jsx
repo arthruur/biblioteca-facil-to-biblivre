@@ -205,8 +205,28 @@ export function TelaEscanear({ info, conexao, aoIrParaFila }) {
 }
 
 function Visor({ scanner }) {
+  const showFlash = scanner.tomStatus === 'ok' && scanner.escaneando
+  const alvoClasse = [
+    'visor__alvo',
+    scanner.escaneando && scanner.tomStatus !== 'ok' ? 'visor__alvo--varrendo' : '',
+    scanner.tomStatus === 'ok' ? 'visor__alvo--ok' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const statusClasse = [
+    'visor__status',
+    scanner.tomStatus ? `visor__status--${scanner.tomStatus}` : 'visor__status--info',
+    !scanner.status ? 'visor__status--vazio' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className="visor">
+    <div
+      className="visor"
+      onClick={() => scanner.escaneando && scanner.dispararFoco?.()}
+      title={scanner.escaneando ? 'Toque para focar' : undefined}
+    >
       <div id={scanner.elementoId} className="visor__camera" />
 
       {!scanner.escaneando && !scanner.erroCamera && (
@@ -221,35 +241,60 @@ function Visor({ scanner }) {
         </div>
       )}
 
-      {scanner.escaneando && <div className="visor__alvo" aria-hidden="true" />}
+      {scanner.escaneando && <div className={alvoClasse} aria-hidden="true" />}
+      {showFlash && <div className="visor__flash" aria-hidden="true" />}
 
-      {scanner.escaneando && (scanner.recursos.lanterna || scanner.recursos.zoom) && (
+      {scanner.escaneando && (
         <div className="visor__controles">
-          {scanner.recursos.lanterna && (
+          {(scanner.recursos.lanterna || scanner.recursos.zoom) && (
+            <>
+              {scanner.recursos.lanterna && (
+                <button
+                  type="button"
+                  className={`visor__botao${
+                    scanner.lanternaLigada ? ' visor__botao--ativo' : ''
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    scanner.alternarLanterna()
+                  }}
+                  aria-pressed={scanner.lanternaLigada}
+                >
+                  <span aria-hidden="true">◉</span> Lanterna
+                </button>
+              )}
+              {scanner.recursos.zoom && (
+                <label
+                  className="visor__zoom"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span aria-hidden="true">🔍</span>
+                  <input
+                    type="range"
+                    min={scanner.recursos.zoom.min}
+                    max={scanner.recursos.zoom.max}
+                    step={scanner.recursos.zoom.passo}
+                    value={scanner.zoom ?? scanner.recursos.zoom.min}
+                    onChange={(e) => scanner.mudarZoom(Number(e.target.value))}
+                    aria-label="Aproximação da câmera"
+                  />
+                </label>
+              )}
+            </>
+          )}
+          {!scanner.ocrAutoAtivo && (
             <button
               type="button"
-              className={`visor__botao${
-                scanner.lanternaLigada ? ' visor__botao--ativo' : ''
-              }`}
-              onClick={scanner.alternarLanterna}
-              aria-pressed={scanner.lanternaLigada}
+              className="visor__botao"
+              onClick={(e) => {
+                e.stopPropagation()
+                scanner.tentarOcr?.()
+              }}
+              disabled={scanner.ocrAtivo}
+              title="Tentar ler os números impressos (fallback)"
             >
-              <span aria-hidden="true">◉</span> Lanterna
+              {scanner.ocrAtivo ? 'Lendo números…' : 'Tentar pelos números'}
             </button>
-          )}
-          {scanner.recursos.zoom && (
-            <label className="visor__zoom">
-              <span aria-hidden="true">🔍</span>
-              <input
-                type="range"
-                min={scanner.recursos.zoom.min}
-                max={scanner.recursos.zoom.max}
-                step={scanner.recursos.zoom.passo}
-                value={scanner.zoom ?? scanner.recursos.zoom.min}
-                onChange={(e) => scanner.mudarZoom(Number(e.target.value))}
-                aria-label="Aproximação da câmera"
-              />
-            </label>
           )}
         </div>
       )}
@@ -259,12 +304,8 @@ function Visor({ scanner }) {
           {scanner.erroCamera}
         </p>
       ) : (
-        <p
-          className={`visor__status visor__status--${scanner.tomStatus}`}
-          role="status"
-          aria-live="polite"
-        >
-          {scanner.status}
+        <p className={statusClasse} role="status" aria-live="polite">
+          {scanner.status || '\u00A0'}
         </p>
       )}
     </div>

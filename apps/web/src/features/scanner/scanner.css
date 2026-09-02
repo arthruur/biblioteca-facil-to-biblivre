@@ -41,6 +41,13 @@
   white-space: nowrap;
 }
 
+.escanear__corpo {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* --- Visor --- */
 .visor {
   position: relative;
@@ -98,6 +105,7 @@
   border-radius: var(--raio);
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
   pointer-events: none;
+  overflow: hidden;
 }
 .visor__alvo::after {
   content: '';
@@ -109,6 +117,34 @@
   background: var(--erro);
   opacity: 0.75;
   box-shadow: 0 0 8px var(--erro);
+}
+.visor__alvo--varrendo::after {
+  animation: varredura 1.4s ease-in-out infinite;
+}
+@keyframes varredura {
+  0% { transform: translateY(-32px); opacity: 0.3; }
+  50% { opacity: 0.9; }
+  100% { transform: translateY(32px); opacity: 0.3; }
+}
+.visor__alvo--ok {
+  border-color: #62dfae;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35), 0 0 24px rgba(98, 223, 174, 0.9) inset;
+  animation: flashOk 400ms ease-out;
+}
+@keyframes flashOk {
+  0% { border-color: #62dfae; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.35), 0 0 40px rgba(98,223,174,1) inset; }
+  100% { border-color: rgba(255,255,255,0.85); }
+}
+.visor__flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(98, 223, 174, 0.18);
+  pointer-events: none;
+  animation: flashFade 350ms ease-out forwards;
+}
+@keyframes flashFade {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* --- Controles de câmera: só aparecem se o aparelho tiver o recurso --- */
@@ -163,25 +199,43 @@
 
 .visor__status {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: var(--e3) var(--e4);
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75) 45%);
+  left: 50%;
+  right: auto;
+  bottom: 10px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
   color: var(--visor-texto);
   font-size: var(--txt-sm);
   text-align: center;
-  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  gap: 6px;
+  transition: all 180ms ease;
+  pointer-events: none;
 }
 .visor__status--ok {
   color: #62dfae;
   font-weight: var(--peso-forte);
+  background: rgba(16, 48, 32, 0.88);
+  border-color: rgba(98,223,174,0.35);
 }
 .visor__status--erro {
   color: #ff9c90;
+  background: rgba(48, 16, 16, 0.88);
+  border-color: rgba(255,156,144,0.25);
+}
+.visor__status--info {
+  color: #e8eaee;
+}
+.visor__status--vazio {
+  opacity: 0;
+  transform: translateX(-50%) translateY(6px);
 }
 
 .visor__erro {
@@ -373,12 +427,16 @@
   color: var(--erro);
 }
 
-/* Entrada manual e "usar foto" só fazem sentido com teclado/arquivos à mão:
-   no celular, de pé, elas só ocupam espaço que o polegar precisa. */
+/* "Usar foto" e lateral só em desktop; manual fica recolhido no celular atrás de toggle */
 @media (max-width: 767px) {
-  .controles__manual,
   .controles__so-desktop {
     display: none;
+  }
+  .controles__manual {
+    display: flex;
+  }
+  .controles__manual input {
+    font-size: 16px; /* evita zoom do iOS */
   }
 }
 

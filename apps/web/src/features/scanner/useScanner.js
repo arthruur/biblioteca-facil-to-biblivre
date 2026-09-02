@@ -54,9 +54,10 @@ const RESTRICOES_VIDEO = {
  */
 const ALVO = { largura: 0.86, altura: 0.62 }
 
-const INTERVALO_LEITURA = 60 // ~16 tentativas por segundo
-const PAUSA_APOS_LEITURA = 900 // deixa o "Adicionado" parado na tela
-const SEM_LEITURA_ATE_DICA = 3000
+const INTERVALO_LEITURA = 45 // ~22 tentativas por segundo, sem enfileirar (detect é ~15-30ms no nativo)
+const PAUSA_APOS_LEITURA = 450 // fluido: só o tempo do flash; dedup real é JANELA_REPETICAO no useLote
+const SEM_LEITURA_ATE_DICA = 2200
+const OCR_AUTO_ATIVO = false // prioriza barras; OCR virou fallback manual (botão). Deixe true para reativar auto.
 const SEM_LEITURA_ATE_OCR = 6000
 const INTERVALO_ENTRE_OCR = 9000
 
@@ -130,11 +131,22 @@ function maiorDentroDoAlvo(codigos, largura, altura) {
 async function ajustarCamera(track) {
   const caps = track.getCapabilities?.() ?? {}
 
-  if (caps.focusMode?.includes('continuous')) {
+  // Foco/exposição/whiteBalance contínuos = maior nitidez para barras finas.
+  const advanced = []
+  if (caps.focusMode?.includes('continuous')) advanced.push({ focusMode: 'continuous' })
+  if (caps.exposureMode?.includes('continuous')) advanced.push({ exposureMode: 'continuous' })
+  if (caps.whiteBalanceMode?.includes('continuous')) advanced.push({ whiteBalanceMode: 'continuous' })
+  // Alguns Android precisam de focusDistance explícito para macro.
+  if (advanced.length) {
     try {
-      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+      await track.applyConstraints({ advanced })
     } catch {
-      /* aparelho que recusa: segue com o foco automático padrão */
+      // tenta só focusMode isolado
+      try {
+        if (caps.focusMode?.includes('continuous')) {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+        }
+      } catch { /* segue com padrão */ }
     }
   }
 
@@ -146,6 +158,21 @@ async function ajustarCamera(track) {
         ? { min: zoom.min, max: zoom.max, passo: zoom.step || 0.1 }
         : null,
   }
+}
+
+function beepOk() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.type = 'sine'
+    o.frequency.value = 880
+    g.gain.value = 0.12
+    o.connect(g).connect(ctx.destination)
+    o.start()
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18)
+    o.stop(ctx.currentTime + 0.19)
+  } catch { /* sem áudio */ }
 }
 
 function mensagemDeErro(e) {
@@ -188,6 +215,7 @@ export function useScanner({ aoLer }) {
   const ultimoAvisoEan = useRef(0)
   const ultimoOcr = useRef(0)
   const ocrRodando = useRef(false)
+  const [ocrAtivo, setOcrAtivo] = useState(false)
   const aoLerRef = useRef(aoLer)
   aoLerRef.current = aoLer
 
@@ -209,13 +237,20 @@ export function useScanner({ aoLer }) {
 
       if (tipo === 'isbn') {
         ultimaLeitura.current = Date.now()
+        // feedback imediato no visor (antes da rede)
+        beepOk()
+        try { navigator.vibrate?.([40, 30, 40]) } catch {}
         aoLerRef.current?.(codigo, { via })
         return true
       }
 
       if (tipo === 'ean' && Date.now() - ultimoAvisoEan.current > 2500) {
         ultimoAvisoEan.current = Date.now()
-        anunciar(`${codigo} não é ISBN — parece o código de preço. Use o de cima.`)
+        try { navigator.vibrate?.(25) } catch {}
+        anunciar(`${codigo} não é ISBN — parece o código de preço. Use o de cima.`, 'erro')
+      } else if (tipo === 'invalido' && Date.now() - ultimoAvisoEan.current > 2500) {
+        ultimoAvisoEan.current = Date.now()
+        anunciar('Código inválido — aproxime e centralize nas barras', 'erro')
       }
       return false
     },
@@ -228,26 +263,49 @@ export function useScanner({ aoLer }) {
     if (!video?.videoWidth) return
 
     ocrRodando.current = true
+    setOcrAtivo(true)
     ultimoOcr.current = Date.now()
-    anunciar('Sem leitura pelas barras — lendo os números…')
+    anunciar('Sem leitura pelas barras — lendo os números…', 'info')
     try {
       const isbn = await lerNumerosDoVideo(video)
       if (isbn) {
         anunciar(`Lido pelos números: ${isbn}`, 'ok')
         entregar(isbn, 'ocr')
       } else {
-        anunciar('Não deu para ler os números — aproxime e segure firme')
+        anunciar('Não deu para ler os números — aproxime e segure firme', 'erro')
       }
     } catch {
-      // OCR é socorro, não caminho principal: falhar aqui não vira erro na tela.
-      anunciar('Não deu para ler os números — aproxime e segure firme')
+      anunciar('Não deu para ler os números — aproxime e segure firme', 'erro')
     } finally {
       ocrRodando.current = false
+      setOcrAtivo(false)
       ultimoOcr.current = Date.now()
     }
   }, [anunciar, entregar])
 
   // --- Motor nativo: BarcodeDetector sobre o vídeo, em resolução nativa ---
+
+  const ultimoCodigoVistoRef = useRef('')
+
+  const dispararFoco = useCallback(async () => {
+    const track = trackRef.current
+    const caps = track?.getCapabilities?.()
+    if (!track || !caps?.focusMode) return
+    try {
+      if (caps.focusMode.includes('single-shot')) {
+        await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
+        setTimeout(() => track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}), 900)
+      } else if (caps.focusMode.includes('manual')) {
+        // pulso manual para forçar hunt
+        const d = caps.focusDistance
+        if (d && typeof d.min === 'number') {
+          const meio = (d.min + d.max) / 2
+          await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: meio }] }).catch(() => {})
+          setTimeout(() => track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}), 600)
+        }
+      }
+    } catch {}
+  }, [])
 
   const rodarLacoNativo = useCallback(
     (detector) => {
@@ -259,6 +317,10 @@ export function useScanner({ aoLer }) {
         if (video?.videoWidth && video.readyState >= 2) {
           try {
             const achados = await detector.detect(video)
+            if (achados?.length) {
+              const anyRaw = achados[0]?.rawValue || ''
+              if (anyRaw) ultimoCodigoVistoRef.current = anyRaw
+            }
             const alvo = maiorDentroDoAlvo(
               achados,
               video.videoWidth,
@@ -518,10 +580,14 @@ export function useScanner({ aoLer }) {
         anunciar(
           parado > 12000 && recursos.lanterna && !lanternaLigada
             ? 'Sem leitura — experimente ligar a lanterna'
-            : 'Aproxime até o código preencher a marcação'
+            : 'Aproxime até o código preencher a marcação',
+          'info'
         )
-      } else if (Date.now() - ultimoOcr.current > INTERVALO_ENTRE_OCR) {
+      } else if (OCR_AUTO_ATIVO && Date.now() - ultimoOcr.current > INTERVALO_ENTRE_OCR) {
         tentarOcr()
+      } else if (!OCR_AUTO_ATIVO && parado > SEM_LEITURA_ATE_OCR && Date.now() - ultimoOcr.current > INTERVALO_ENTRE_OCR) {
+        // OCR desativado: só sugere, não dispara sozinho. Evita download de tesseract sem consentimento.
+        anunciar('Sem leitura — toque em “Tentar pelos números” ou ajuste o enquadramento', 'info')
       }
     }, 700)
     return () => clearInterval(id)
@@ -551,9 +617,13 @@ export function useScanner({ aoLer }) {
     recursos,
     lanternaLigada,
     zoom,
+    ocrAtivo,
+    ocrAutoAtivo: OCR_AUTO_ATIVO,
     iniciar,
     parar,
     lerArquivo,
+    tentarOcr,
+    dispararFoco,
     alternarLanterna,
     mudarZoom,
     anunciar,

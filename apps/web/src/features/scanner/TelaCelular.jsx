@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Botao,
   Cantos,
+  IconeInverterCamera,
   IconeLanterna,
   IconeRemover,
   Modal,
@@ -277,7 +278,7 @@ function VisorCelular({ scanner, ultimoIsbn }) {
       ) : (
         <>
           <span className="cel__etiqueta mono" aria-hidden="true">
-            Câmera traseira · EAN-13 · {motor}
+            {scanner.modoCamera === 'user' ? 'Câmera frontal' : 'Câmera traseira'} · EAN-13 · {motor}
           </span>
           {/* Enquadramento automático: caixas reais do BarcodeDetector */}
           <div className="cel__overlay" aria-hidden="true">
@@ -314,10 +315,23 @@ function VisorCelular({ scanner, ultimoIsbn }) {
                   scanner.alternarLanterna()
                 }}
                 aria-pressed={scanner.lanternaLigada}
+                title="Ligar/desligar lanterna"
               >
                 <IconeLanterna tamanho={13} />
               </button>
             )}
+            <button
+              type="button"
+              className="cel__botao"
+              onClick={(e) => {
+                e.stopPropagation()
+                scanner.alternarCamera?.()
+              }}
+              title={scanner.modoCamera === 'user' ? 'Mudar para câmera traseira' : 'Mudar para câmera frontal'}
+              aria-label="Alternar câmera"
+            >
+              <IconeInverterCamera tamanho={16} />
+            </button>
             {!scanner.ocrAutoAtivo && (
               <button
                 type="button"

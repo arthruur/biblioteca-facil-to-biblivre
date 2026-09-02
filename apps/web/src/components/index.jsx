@@ -35,6 +35,28 @@ export function Moldura({ como: Como = 'div', className, children, ...resto }) {
 
 /* --- Ícones SVG limpos e modernos --- */
 
+export function IconeInverterCamera({ tamanho = 18, className = '' }) {
+  return (
+    <svg
+      width={tamanho}
+      height={tamanho}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M20 10V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3" />
+      <path d="M4 14v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+      <polyline points="1 10 4 7 7 10" />
+      <polyline points="23 14 20 17 17 14" />
+    </svg>
+  )
+}
+
 export function IconeScanner({ tamanho = 18, className = '' }) {
   return (
     <svg

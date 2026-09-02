@@ -24,7 +24,7 @@
  */
 
 export const RESTRICOES_VIDEO = Object.freeze({
-  facingMode: { ideal: 'environment' },
+  facingMode: { exact: 'environment' },
   width: { ideal: 1920 },
   height: { ideal: 1080 },
   frameRate: { ideal: 30 },
@@ -34,14 +34,24 @@ export const RESTRICOES_VIDEO = Object.freeze({
  * Cria o elemento de vídeo, anexa o stream da câmera e inicia a reprodução.
  *
  * @param {string} elementoId - ID do container HTML do visor
- * @param {object} [restricoes=RESTRICOES_VIDEO]
+ * @param {string | object} [modoCamera='environment']
  * @returns {Promise<{ stream: MediaStream, video: HTMLVideoElement, track: MediaStreamTrack }>}
  */
-export async function abrirCamera(elementoId, restricoes = RESTRICOES_VIDEO) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: restricoes,
-  })
+export async function abrirCamera(elementoId, modoCamera = 'environment') {
+  const base = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
+  let stream = null
+
+  try {
+    const videoConstraint = typeof modoCamera === 'string'
+      ? { facingMode: { exact: modoCamera }, ...base }
+      : (modoCamera || RESTRICOES_VIDEO)
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraint })
+  } catch {
+    const videoConstraint = typeof modoCamera === 'string'
+      ? { facingMode: { ideal: modoCamera }, ...base }
+      : RESTRICOES_VIDEO
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraint })
+  }
 
   const video = document.createElement('video')
   video.autoplay = true

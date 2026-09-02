@@ -87,7 +87,7 @@ export async function iniciarLeitorReserva(elementoId, restricoesVideo, aoLer) {
 
   const instancia = new Html5Qrcode(elementoId, { formatsToSupport: formatos })
   await instancia.start(
-    { facingMode: 'environment' },
+    { facingMode: restricoesVideo?.facingMode || 'environment' },
     {
       fps: 15,
       qrbox: (w, h) => {

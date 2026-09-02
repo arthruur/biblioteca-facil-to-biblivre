@@ -60,7 +60,7 @@ function calcularTransicoesLinha(bw, linhas, colunas) {
     let count = 0
     const offset = y * colunas
     for (let x = 1; x < colunas; x++) {
-      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 35) count++
+      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 24) count++
     }
     transicoes[y] = count
   }
@@ -72,12 +72,12 @@ function limitesHorizontais(bw, y1, y2, colunas, altura) {
   for (let y = y1; y < y2; y++) {
     const offset = y * colunas
     for (let x = 1; x < colunas; x++) {
-      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 35) colTrans[x]++
+      if (Math.abs(bw[offset + x - 1] - bw[offset + x]) > 24) colTrans[x]++
     }
   }
   let x1 = -1
   let x2 = -1
-  const minV = Math.max(2, Math.round(altura * 0.22))
+  const minV = Math.max(2, Math.round(altura * 0.15))
   for (let x = 0; x < colunas; x++) {
     if (colTrans[x] > minV) {
       if (x1 === -1) x1 = x

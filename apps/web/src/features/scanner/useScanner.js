@@ -32,10 +32,9 @@ export function useScanner({ aoLer }) {
   const [status, setStatus] = useState(''); const [tomStatus, setTomStatus] = useState('')
   const [erroCamera, setErroCamera] = useState(''); const [motor, setMotor] = useState('')
   const [recursos, setRecursos] = useState({ lanterna: false, zoom: null })
-  const [lanternaLigada, setLanternaLigada] = useState(false)
-  const [zoom, setZoom] = useState(null)
-  const [deteccoes, setDeteccoes] = useState([])
-  const [ocrAtivo, setOcrAtivo] = useState(false)
+  const [lanternaLigada, setLanternaLigada] = useState(false); const [zoom, setZoom] = useState(null)
+  const [deteccoes, setDeteccoes] = useState([]); const [ocrAtivo, setOcrAtivo] = useState(false)
+  const [modoCamera, setModoCamera] = useState('environment'); const modoCameraRef = useRef('environment')
 
   const videoRef = useRef(null); const trackRef = useRef(null); const streamRef = useRef(null)
   const leitorRef = useRef(null); const lacoRef = useRef(null); const ativoRef = useRef(false)
@@ -75,19 +74,19 @@ export function useScanner({ aoLer }) {
     anunciar('Câmera fechada')
   }, [anunciar])
 
-  const iniciar = useCallback(async () => {
+  const iniciar = useCallback(async (modo = modoCameraRef.current) => {
     if (ativoRef.current) return
     setErroCamera(''); ativoRef.current = true; anunciar('Abrindo a câmera…')
     try {
       const formatos = await formatosNativos()
       if (formatos) {
-        const { stream, video, track } = await abrirCamera(ELEMENTO)
+        const { stream, video, track } = await abrirCamera(ELEMENTO, modo)
         streamRef.current = stream; videoRef.current = video; trackRef.current = track
         const caps = await ajustarCamera(track)
         setRecursos(caps); setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null); setMotor('nativo')
         rodarLaco(criarDetectorNativo(formatos))
       } else {
-        leitorRef.current = await iniciarLeitorReserva(ELEMENTO, {}, (t) => entregar(t, 'codigo'))
+        leitorRef.current = await iniciarLeitorReserva(ELEMENTO, { facingMode: modo }, (t) => entregar(t, 'codigo'))
         setMotor('zxing')
       }
       setEscaneando(true); anunciar('Aponte para o código de barras')
@@ -96,11 +95,17 @@ export function useScanner({ aoLer }) {
     }
   }, [anunciar, entregar, parar, rodarLaco])
 
+  const alternarCamera = useCallback(() => {
+    const prox = modoCameraRef.current === 'environment' ? 'user' : 'environment'
+    modoCameraRef.current = prox; setModoCamera(prox)
+    parar()
+    setTimeout(() => iniciar(prox), 120)
+  }, [parar, iniciar])
+
   const tentarOcr = useCallback(() => {
     executarTentativaOcr({
       video: videoRef.current, regiao: ultimoCandidatoRef.current,
-      ocrRodandoRef: ocrRodando, ultimoOcrRef: ultimoOcr, setOcrAtivo,
-      anunciar, entregar,
+      ocrRodandoRef: ocrRodando, ultimoOcrRef: ultimoOcr, setOcrAtivo, anunciar, entregar,
     })
   }, [anunciar, entregar])
 
@@ -124,9 +129,9 @@ export function useScanner({ aoLer }) {
   }, [])
 
   return {
-    elementoId: ELEMENTO, escaneando, status, tomStatus, erroCamera, motor,
+    elementoId: ELEMENTO, escaneando, status, tomStatus, erroCamera, motor, modoCamera,
     recursos, lanternaLigada, zoom, ocrAtivo, ocrAutoAtivo: false, deteccoes,
-    iniciar, parar, lerArquivo, tentarOcr, dispararFoco: dispararFocoHook,
+    iniciar, parar, alternarCamera, lerArquivo, tentarOcr, dispararFoco: dispararFocoHook,
     alternarLanterna: alternarLanternaHook, mudarZoom: mudarZoomHook, anunciar,
   }
 }

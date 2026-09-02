@@ -36,6 +36,10 @@ export function TelaDebugScanner() {
   const [diag, setDiag] = useState(estadoInicial)
   const [lidos, setLidos] = useState([])
   const [mostrarRecorte, setMostrarRecorte] = useState(true)
+  const [evitarRepeticao, setEvitarRepeticao] = useState(true)
+  const [pausarAoLer, setPausarAoLer] = useState(false)
+  const [ultimoReconhecido, setUltimoReconhecido] = useState(null)
+  const [flash, setFlash] = useState(false)
 
   const acumuladoRef = useRef(estadoInicial())
   const ultimoRenderRef = useRef(0)
@@ -70,12 +74,32 @@ export function TelaDebugScanner() {
 
   const scanner = useScanner({
     aoDepurar,
+    janelaRepeticao: evitarRepeticao ? 3000 : 0,
     aoLer: (isbn) => {
-      setLidos((atual) => [
-        { isbn, hora: new Date().toLocaleTimeString('pt-BR') },
-        ...atual.slice(0, 9),
-      ])
+      const agora = Date.now()
+      const hora = new Date().toLocaleTimeString('pt-BR')
+      setUltimoReconhecido({ isbn, hora, t: agora })
+      setFlash(true)
+      setTimeout(() => setFlash(false), 550)
+
+      setLidos((atual) => {
+        const idx = atual.findIndex((item) => item.isbn === isbn)
+        if (idx !== -1) {
+          const copia = [...atual]
+          copia[idx] = {
+            ...copia[idx],
+            hora,
+            vezes: (copia[idx].vezes || 1) + 1,
+          }
+          return copia
+        }
+        return [{ isbn, hora, vezes: 1 }, ...atual.slice(0, 9)]
+      })
       scanner.anunciar(`ISBN aceito · ${isbn}`, 'ok')
+
+      if (pausarAoLer) {
+        scanner.pausar(true)
+      }
     },
   })
 
@@ -90,6 +114,9 @@ export function TelaDebugScanner() {
     acumuladoRef.current = estadoInicial()
     setDiag(acumuladoRef.current)
     setLidos([])
+    setUltimoReconhecido(null)
+    setFlash(false)
+    scanner.limparUltimoIsbn?.()
   }
 
   const etapas = scanner.etapas || {}
@@ -124,9 +151,34 @@ export function TelaDebugScanner() {
             deteccoes={scanner.deteccoes}
             quadro={scanner.quadro}
             alvo={scanner.alvo}
+            escaneando={scanner.escaneando}
+            pausado={scanner.pausado}
+            flash={flash}
             depurando
           />
         )}
+
+        <div className="dbg__visor-badges">
+          {ultimoReconhecido && Date.now() - ultimoReconhecido.t < 3500 ? (
+            <div className="dbg__badge dbg__badge--sucesso">
+              <span className="dbg__badge-icone">✓</span>
+              <span>
+                ISBN: <strong className="mono">{ultimoReconhecido.isbn}</strong>
+              </span>
+            </div>
+          ) : scanner.pausado ? (
+            <div className="dbg__badge dbg__badge--pausado">
+              <span>⏸ Laço congelado</span>
+            </div>
+          ) : scanner.escaneando ? (
+            <div className="dbg__badge dbg__badge--ativo">
+              <span className="dbg__badge-ponto" />
+              <span>
+                Varredura ativa {diag.fps ? `(${diag.fps.toFixed(1)}/s)` : ''}
+              </span>
+            </div>
+          ) : null}
+        </div>
 
         <div className="cel__controles">
           <button
@@ -185,6 +237,25 @@ export function TelaDebugScanner() {
           <button className="dbg__btn" onClick={zerar}>
             Zerar
           </button>
+        </div>
+
+        <div className="dbg__opcoes">
+          <label className="dbg__caixa">
+            <input
+              type="checkbox"
+              checked={evitarRepeticao}
+              onChange={(e) => setEvitarRepeticao(e.target.checked)}
+            />
+            <span>Evitar leituras repetidas contínuas (cooldown 3s)</span>
+          </label>
+          <label className="dbg__caixa">
+            <input
+              type="checkbox"
+              checked={pausarAoLer}
+              onChange={(e) => setPausarAoLer(e.target.checked)}
+            />
+            <span>Congelar após leitura (inspecionar recorte)</span>
+          </label>
         </div>
 
         <p className="dbg__veredito">{diagnosticarEtapa(diag)}</p>
@@ -257,7 +328,19 @@ export function TelaDebugScanner() {
               />
               <span>espelhar o recorte</span>
             </label>
-            <canvas ref={recorteRef} className="dbg__recorte" width={320} height={200} />
+            <div className="dbg__recorte-wrap">
+              <canvas
+                ref={recorteRef}
+                className={`dbg__recorte ${flash ? 'dbg__recorte--sucesso' : ''}`}
+                width={320}
+                height={200}
+              />
+              {ultimoReconhecido && (
+                <span className="dbg__recorte-tag mono">
+                  ✓ Decodificado: {ultimoReconhecido.isbn}
+                </span>
+              )}
+            </div>
             <p className="dbg__nota">
               Recorte borrado com quadradinho no lugar certo = foco. Recorte
               nítido e nada lido = o código não é EAN-13/ISBN ou está torto.
@@ -290,6 +373,9 @@ export function TelaDebugScanner() {
                   <li key={`${l.isbn}-${l.hora}`} className="dbg__item dbg__item--isbn">
                     <span className="mono">{l.isbn}</span>
                     <span className="dbg__tag">{l.hora}</span>
+                    {l.vezes > 1 && (
+                      <span className="dbg__tag dbg__tag--mult">×{l.vezes}</span>
+                    )}
                   </li>
                 ))}
               </ul>

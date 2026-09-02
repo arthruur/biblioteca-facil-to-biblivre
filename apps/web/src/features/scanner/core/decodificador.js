@@ -22,6 +22,7 @@
  * ter `ean_13` caso a biblioteca do sistema operacional não esteja presente.
  */
 
+import { BarcodeDetector as BarcodeDetectorPolyfill } from 'barcode-detector'
 import { maiorArea } from './geometria.js'
 
 export const FORMATOS_NATIVOS = Object.freeze([
@@ -36,16 +37,39 @@ export const FORMATOS_NATIVOS = Object.freeze([
 let suporteNativoPromessa = null
 
 /**
- * Consulta os formatos realmente suportados pelo BarcodeDetector deste sistema.
+ * Retorna a classe BarcodeDetector adequada: nativa se existir, ou polyfill WASM.
+ */
+export function obterClasseDetector() {
+  if (typeof window !== 'undefined' && window.BarcodeDetector) {
+    return window.BarcodeDetector
+  }
+  return BarcodeDetectorPolyfill
+}
+
+/**
+ * Identifica se o motor em uso é o nativo do navegador ou o polyfill WebAssembly.
+ *
+ * @returns {'nativo' | 'wasm'}
+ */
+export function tipoMotor() {
+  if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+    return 'nativo'
+  }
+  return 'wasm'
+}
+
+/**
+ * Consulta os formatos realmente suportados pelo BarcodeDetector deste sistema (ou polyfill WASM).
  *
  * @returns {Promise<string[] | null>}
  */
 export function formatosNativos() {
   if (!suporteNativoPromessa) {
     suporteNativoPromessa = (async () => {
-      if (typeof window === 'undefined' || !('BarcodeDetector' in window)) return null
       try {
-        const disponiveis = await window.BarcodeDetector.getSupportedFormats()
+        const Detector = obterClasseDetector()
+        if (!Detector?.getSupportedFormats) return null
+        const disponiveis = await Detector.getSupportedFormats()
         const uteis = FORMATOS_NATIVOS.filter((f) => disponiveis.includes(f))
         return uteis.includes('ean_13') ? uteis : null
       } catch {
@@ -63,7 +87,8 @@ export function formatosNativos() {
  * @returns {any}
  */
 export function criarDetectorNativo(formatos) {
-  return new window.BarcodeDetector({ formats: formatos })
+  const Detector = obterClasseDetector()
+  return new Detector({ formats: formatos })
 }
 
 /**
@@ -129,7 +154,7 @@ async function decodificarFotoReserva(arquivo) {
  * @returns {Promise<string | null>}
  */
 export async function decodificarFoto(arquivo, formatos) {
-  if (formatos && typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+  if (formatos && typeof window !== 'undefined') {
     try {
       const bitmap = await createImageBitmap(arquivo)
       const detector = criarDetectorNativo(formatos)

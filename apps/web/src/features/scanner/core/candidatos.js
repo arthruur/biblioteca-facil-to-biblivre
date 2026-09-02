@@ -131,33 +131,64 @@ export function encontrarCandidatos(video, alvo) {
 
   const bw = converterCinza(ctx.getImageData(0, 0, colunas, linhas).data, colunas * linhas)
   const transLinha = calcularTransicoesLinha(bw, linhas, colunas)
-  const LIMIAR = Math.max(8, Math.round(colunas * 0.035))
+  // Limiar de transições mais seletivo: códigos EAN-13 têm entre 30 e 60 barras.
+  // Evita que linhas simples de texto ou ruídos de textura disparem como candidatos.
+  const LIMIAR = Math.max(16, Math.round(colunas * 0.048))
   const candidatos = []
   let fInicio = -1
+
+  const minAlturaFaixa = Math.max(8, Math.round(linhas * 0.04))
+  const minLarguraFaixa = Math.max(26, Math.round(colunas * 0.08))
 
   for (let y = 0; y <= linhas; y++) {
     const alto = y < linhas && transLinha[y] > LIMIAR
     if (alto && fInicio === -1) fInicio = y
     else if (!alto && fInicio !== -1) {
       const hFaixa = y - fInicio
-      if (hFaixa >= Math.max(3, Math.round(linhas * 0.02))) {
+      if (hFaixa >= minAlturaFaixa) {
         const { x1, x2 } = limitesHorizontais(bw, fInicio, y, colunas, hFaixa)
-        if (x1 !== -1 && (x2 - x1) >= Math.max(14, Math.round(colunas * 0.05))) {
-          candidatos.push(expandirQuadrado(x1, x2, fInicio, y, colunas, linhas, transLinha[(fInicio + y) >> 1]))
+        const wBarras = x2 - x1
+        if (x1 !== -1 && wBarras >= minLarguraFaixa) {
+          const proporcao = wBarras / hFaixa
+          // Códigos de barras 1D mantêm proporção largura/altura entre 0.6 e 5.5.
+          // Filtra parágrafos de texto longos (proporção > 6) e artefatos verticais finos.
+          if (proporcao >= 0.6 && proporcao <= 5.5) {
+            candidatos.push(
+              expandirQuadrado(
+                x1,
+                x2,
+                fInicio,
+                y,
+                colunas,
+                linhas,
+                transLinha[(fInicio + y) >> 1]
+              )
+            )
+          }
         }
       }
       fInicio = -1
     }
   }
 
-  candidatos.sort((a, b) => b.densidade - a.densidade)
-  if (!alvo) return candidatos
-  return candidatos.map((c) => {
+  const comAlvo = candidatos.map((c) => {
+    if (!alvo) return { ...c, dentroAlvo: true }
     const cx = c.x + c.largura / 2
     const cy = c.y + c.altura / 2
-    const dentro = Math.abs(cx - 0.5) <= (alvo.largura / 2) + 0.10 && Math.abs(cy - 0.5) <= (alvo.altura / 2) + 0.10
+    const dentro =
+      Math.abs(cx - 0.5) <= alvo.largura / 2 + 0.08 &&
+      Math.abs(cy - 0.5) <= alvo.altura / 2 + 0.08
     return { ...c, dentroAlvo: dentro }
   })
+
+  // Prioriza candidatos dentro do alvo e com maior densidade de contraste
+  comAlvo.sort((a, b) => {
+    if (a.dentroAlvo && !b.dentroAlvo) return -1
+    if (!a.dentroAlvo && b.dentroAlvo) return 1
+    return b.densidade - a.densidade
+  })
+
+  return comAlvo
 }
 
 /**

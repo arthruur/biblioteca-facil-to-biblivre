@@ -24,6 +24,9 @@ export function OverlayDeteccoes({
   alvo,
   depurando = false,
   dica = '',
+  escaneando = true,
+  pausado = false,
+  flash = false,
 }) {
   const ref = useRef(null)
   const [caixa, setCaixa] = useState({ largura: 0, altura: 0 })
@@ -59,10 +62,12 @@ export function OverlayDeteccoes({
 
   return (
     <div className="cel__overlay" ref={ref} aria-hidden="true">
+      {flash && <div className="ov__flash-sucesso" />}
+
       <div className="ov__quadro" style={estiloQuadro}>
         {depurando && alvo && (
           <div
-            className="ov__alvo"
+            className={`ov__alvo ${pausado ? 'ov__alvo--pausado' : ''}`}
             style={{
               left: `${(0.5 - alvo.largura / 2) * 100}%`,
               top: `${(0.5 - alvo.altura / 2) * 100}%`,
@@ -71,13 +76,18 @@ export function OverlayDeteccoes({
             }}
           >
             <span className="ov__alvo-rotulo mono">alvo</span>
+            <span className="ov__alvo-canto ov__alvo-canto--se" />
+            <span className="ov__alvo-canto ov__alvo-canto--sd" />
+            <span className="ov__alvo-canto ov__alvo-canto--ie" />
+            <span className="ov__alvo-canto ov__alvo-canto--id" />
+            {escaneando && !pausado && <div className="ov__laser" />}
           </div>
         )}
 
         {deteccoes.map((d, i) => (
           <div
             key={d.id || `${d.raw}-${i}`}
-            className={`cel__frame cel__frame--${d.tipo} ${d.dentroAlvo ? 'cel__frame--central' : ''} ${d.pulsando ? 'cel__frame--pulsando' : ''} ${depurando ? 'ov__frame--depuracao' : ''}`}
+            className={`cel__frame cel__frame--${d.tipo} ${d.dentroAlvo ? 'cel__frame--central' : ''} ${d.pulsando ? 'cel__frame--pulsando' : ''} ${d.tipo === 'isbn' ? 'cel__frame--sucesso' : ''} ${depurando && pausado ? 'ov__frame--depuracao' : ''}`}
             style={{
               left: `${d.x * 100}%`,
               top: `${d.y * 100}%`,
@@ -103,7 +113,9 @@ export function OverlayDeteccoes({
             )}
 
             {d.raw ? (
-              <span className="cel__frame-label mono">{d.raw.slice(-4)}</span>
+              <span className="cel__frame-label mono">
+                {d.tipo === 'isbn' ? `✓ ISBN ${d.raw}` : d.raw.slice(-4)}
+              </span>
             ) : depurando && d.densidade ? (
               <span className="cel__frame-label mono">
                 #{(d.ordem ?? i) + 1} · d{Math.round(d.densidade)}

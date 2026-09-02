@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { tocarBeepSucesso, vibrar } from './core/audio.js'
 import { abrirCamera, ajustarCamera, alternarLanterna, aplicarZoom, dispararPulsoFoco, fecharCamera, obterTrackDoVideo, RESTRICOES_VIDEO } from './core/camera.js'
-import { criarDetectorNativo, executarLeituraFoto, formatosNativos, iniciarLeitorReserva } from './core/decodificador.js'
+import { criarDetectorNativo, executarLeituraFoto, formatosNativos, iniciarLeitorReserva, tipoMotor } from './core/decodificador.js'
 import { ALVO } from './core/geometria.js'
 import { encerrarWorkerOcr, executarTentativaOcr } from './core/ocr.js'
 import { ETAPAS_PADRAO, iniciarLacoNativo } from './core/scannerLoop.js'
@@ -29,7 +29,7 @@ import { formatarErroCamera } from './utils/erros.js'
 
 const ELEMENTO = 'visor-camera'
 
-export function useScanner({ aoLer, aoDepurar } = {}) {
+export function useScanner({ aoLer, aoDepurar, janelaRepeticao = 2500 } = {}) {
   const [escaneando, setEscaneando] = useState(false)
   const [status, setStatus] = useState(''); const [tomStatus, setTomStatus] = useState('')
   const [erroCamera, setErroCamera] = useState(''); const [motor, setMotor] = useState('')
@@ -47,6 +47,8 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
   const ultimaLeitura = useRef(0); const ultimoOcr = useRef(0); const ocrRodando = useRef(false)
   const ultimoCandidatoRef = useRef(null); const candidatoEstavelInicioRef = useRef(0); const ultimoFullScanRef = useRef(0)
   const pausadoRef = useRef(false); const passoPedidoRef = useRef(false)
+  const caixasEstaveisRef = useRef([]); const ultimoRenderCaixasRef = useRef(0)
+  const ultimoIsbnEntregue = useRef({ codigo: '', t: 0 })
   // Cada abertura de câmera tem sua geração: `abrirCamera` é assíncrono e a tela
   // pode desmontar (ou o StrictMode remontar) no meio. Sem isso, a abertura que
   // chega atrasada instala a si mesma sobre a atual e deixa um stream aceso.
@@ -78,12 +80,23 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
     const { tipo, codigo } = classificarCodigo(texto)
     if (tipo === 'isbn') {
       ultimaLeitura.current = Date.now()
-      tocarBeepSucesso(); vibrar(); aoLerRef.current?.(codigo, { via })
+      const agora = Date.now()
+      const ehRepetido =
+        janelaRepeticao > 0 &&
+        ultimoIsbnEntregue.current.codigo === codigo &&
+        agora - ultimoIsbnEntregue.current.t < janelaRepeticao
+
+      if (!ehRepetido) {
+        ultimoIsbnEntregue.current = { codigo, t: agora }
+        tocarBeepSucesso()
+        vibrar()
+        aoLerRef.current?.(codigo, { via })
+      }
       return true
     }
     if (tipo === 'ean') anunciar(`${codigo} não é ISBN — parece código de preço`, 'erro')
     return false
-  }, [anunciar])
+  }, [anunciar, janelaRepeticao])
 
   const rodarLaco = useCallback((detector) => {
     iniciarLacoNativo({
@@ -91,6 +104,7 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
       refs: {
         ultimoCandidatoRef, candidatoEstavelInicioRef, ultimoFullScanRef, ultimaLeitura,
         pausadoRef, passoPedidoRef, etapasRef, maxCaixasRef,
+        caixasEstaveisRef, ultimoRenderCaixasRef,
       },
       setDeteccoes, entregar, classificarCodigo, ativoRef, lacoRef,
       aoDiagnosticar: (registro) => aoDepurarRef.current?.(registro),
@@ -125,7 +139,7 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
         if (!minha()) { fecharCamera(stream, video, ELEMENTO); return }
         streamRef.current = stream; videoRef.current = video; trackRef.current = track
         const caps = await ajustarCamera(track)
-        setRecursos(caps); setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null); setMotor('nativo')
+        setRecursos(caps); setZoom(track.getSettings?.().zoom ?? caps.zoom?.min ?? null); setMotor(tipoMotor())
         monitorarQuadro(video)
         rodarLaco(criarDetectorNativo(formatos))
       } else {
@@ -195,6 +209,16 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
     anunciar(pausadoRef.current ? 'Laço congelado' : 'Laço rodando')
   }, [anunciar])
 
+  const pausar = useCallback((valor = true) => {
+    pausadoRef.current = Boolean(valor)
+    setPausado(Boolean(valor))
+    anunciar(valor ? 'Laço congelado' : 'Laço rodando')
+  }, [anunciar])
+
+  const limparUltimoIsbn = useCallback(() => {
+    ultimoIsbnEntregue.current = { codigo: '', t: 0 }
+  }, [])
+
   const passoUnico = useCallback(() => { passoPedidoRef.current = true }, [])
 
   const definirEtapas = useCallback((mudanca) => {
@@ -224,6 +248,6 @@ export function useScanner({ aoLer, aoDepurar } = {}) {
     quadro, alvo: ALVO, pausado, etapas,
     iniciar, parar, lerArquivo, tentarOcr, dispararFoco: dispararFocoHook,
     alternarLanterna: alternarLanternaHook, mudarZoom: mudarZoomHook, anunciar,
-    alternarPausa, passoUnico, definirEtapas, definirMaxCaixas,
+    alternarPausa, pausar, limparUltimoIsbn, passoUnico, definirEtapas, definirMaxCaixas,
   }
 }

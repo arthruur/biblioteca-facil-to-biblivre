@@ -74,6 +74,29 @@ async function tentarDecodificarRecorte(video, regiao, detector, aoLerCodigo, ag
   return aoLerCodigo(escolhido.rawValue, regiao, agora)
 }
 
+function estabilizarCaixas(novas, anteriores) {
+  if (!anteriores?.length || !novas?.length) return novas
+  return novas.map((nova, i) => {
+    const ant = anteriores[i]
+    if (!ant) return nova
+    const dx = Math.abs(nova.x - ant.x)
+    const dy = Math.abs(nova.y - ant.y)
+    const dw = Math.abs(nova.w - ant.w)
+    const dh = Math.abs(nova.h - ant.h)
+    // Se a variação for sutil (< 3%), aplica amortecimento (LERP) para eliminar tremor visual
+    if (dx < 0.03 && dy < 0.03 && dw < 0.04 && dh < 0.04) {
+      return {
+        ...nova,
+        x: ant.x * 0.65 + nova.x * 0.35,
+        y: ant.y * 0.65 + nova.y * 0.35,
+        w: ant.w * 0.65 + nova.w * 0.35,
+        h: ant.h * 0.65 + nova.h * 0.35,
+      }
+    }
+    return nova
+  })
+}
+
 async function processarCandidatos({ video, detector, candidatos, ctx, agora, registro }) {
   const melhor = candidatos[0]
   ctx.ultimoCandidatoRef.current = melhor
@@ -81,14 +104,24 @@ async function processarCandidatos({ video, detector, candidatos, ctx, agora, re
   registro.candidatos = candidatos.length
   registro.densidade = melhor?.densidade || 0
 
-  const caixas = candidatos.slice(0, ctx.maxCaixas || 3).map((c, i) => ({
+  const caixasBrutas = candidatos.slice(0, ctx.maxCaixas || 3).map((c, i) => ({
     x: c.x, y: c.y, w: c.largura, h: c.altura,
     dentroAlvo: c.dentroAlvo !== false, tipo: 'candidato', pulsando: true,
     miolo: c.mioloBarras, densidade: c.densidade, ordem: i,
     id: `cand-${i}`,
   }))
+
+  const caixas = estabilizarCaixas(caixasBrutas, ctx.caixasEstaveisRef?.current)
+  if (ctx.caixasEstaveisRef) ctx.caixasEstaveisRef.current = caixas
   registro.caixas = caixas
-  ctx.aoAtualizarDeteccoes(caixas)
+
+  // Rate limiter visual para evitar sobrecarga de renderização no React (~110ms)
+  const agoraMs = performance.now()
+  const ultimoRender = ctx.ultimoRenderCaixasRef?.current || 0
+  if (agoraMs - ultimoRender > 110) {
+    if (ctx.ultimoRenderCaixasRef) ctx.ultimoRenderCaixasRef.current = agoraMs
+    ctx.aoAtualizarDeteccoes(caixas)
+  }
 
   let leu = await tentarDecodificarRecorte(video, melhor, detector, ctx.aoLerCodigo, agora, registro)
   if (!leu && candidatos.length > 1) {
@@ -236,10 +269,13 @@ export function iniciarLacoNativo({
       ultimoCandidatoRef: refs.ultimoCandidatoRef,
       candidatoEstavelInicioRef: refs.candidatoEstavelInicioRef,
       ultimoFullScanRef: refs.ultimoFullScanRef,
+      caixasEstaveisRef: refs.caixasEstaveisRef,
+      ultimoRenderCaixasRef: refs.ultimoRenderCaixasRef,
       aoAtualizarDeteccoes: setDeteccoes,
       aoLimparDeteccoesDebounced: () =>
         setTimeout(() => {
           if (Date.now() - refs.ultimaLeitura.current > 450 && !refs.ultimoCandidatoRef.current) {
+            if (refs.caixasEstaveisRef) refs.caixasEstaveisRef.current = []
             setDeteccoes([])
           }
         }, 350),

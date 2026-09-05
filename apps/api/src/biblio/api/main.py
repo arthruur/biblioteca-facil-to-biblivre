@@ -20,7 +20,8 @@ from biblio.catalogacao import config
 from biblio.catalogacao.fila import carregar_do_disco, reconsultar_acervo
 from biblio.migracao import execucao as migracao_execucao
 
-from .routers import acervo, catalogacao, fila, lotes, migracao, sistema
+from .routers import (acervo, catalogacao, circulacao, fila, lotes, manutencao,
+                      migracao, sessao, sistema)
 
 # O bundle do Vite. Em dev o front roda no dev server (porta 5173) e fala com
 # esta API por proxy, então a pasta pode não existir — a API sobe do mesmo jeito.
@@ -34,13 +35,18 @@ API do sistema de gestão de acervo.
 * **catalogacao** — o bipe do celular: ISBN → metadados → lote → fila
 * **fila** — revisão no PC e o caminho diário que grava no BibLivre
 * **migracao** — o acervo legado inteiro: `.bkp` → conferência → gravação
+* **circulacao** — o balcão: empréstimo, devolução, renovação, pendências
+* **sessao** — quem está no balcão (autenticado contra o `logins` do BibLivre)
+* **manutencao** — reindexar, caches, conferência e o backup `.b5bz`
 * **acervo** — "este ISBN já está catalogado?" e a conexão que responde
 * **sistema** — URL de acesso, QR code, saúde
 
-Dois caminhos escrevem no BibLivre, e eles têm ritmos diferentes. A fila é o do
-dia a dia, item a item. A migração é o do primeiro dia, uma vez por biblioteca:
-os mesmos módulos que os CLIs de `scripts/` usam, agora com relatório na tela
-antes da transação — porque o que ela grava não tem desfazer.
+Três caminhos escrevem no BibLivre, e eles têm ritmos diferentes. A fila é o da
+catalogação, item a item. A migração é a do primeiro dia, uma vez por
+biblioteca: relatório na tela antes da transação, porque o que ela grava não
+tem desfazer. A circulação é a do minuto a minuto, com alguém esperando no
+balcão — e é a única que trava o exemplar, porque o BibLivre pode estar aberto
+na mesma base no PC ao lado.
 """
 
 
@@ -115,6 +121,9 @@ def create_app() -> FastAPI:
             {"name": "catalogacao", "description": "Captura por código de barras."},
             {"name": "fila", "description": "Revisão e gravação no BibLivre."},
             {"name": "migracao", "description": "Acervo legado: .bkp → BibLivre."},
+            {"name": "circulacao", "description": "Balcão: empréstimo e devolução."},
+            {"name": "sessao", "description": "Quem opera o balcão."},
+            {"name": "manutencao", "description": "Reindex, caches, conferência, backup."},
             {"name": "acervo", "description": "Dedup por ISBN e conexão."},
             {"name": "sistema", "description": "Diagnóstico do servidor."},
         ],
@@ -125,6 +134,9 @@ def create_app() -> FastAPI:
     app.include_router(fila.router, prefix="/api")
     app.include_router(lotes.router, prefix="/api")
     app.include_router(migracao.router, prefix="/api")
+    app.include_router(circulacao.router, prefix="/api")
+    app.include_router(sessao.router, prefix="/api")
+    app.include_router(manutencao.router, prefix="/api")
     app.include_router(acervo.router, prefix="/api")
     app.include_router(sistema.router, prefix="/api")
 
@@ -136,10 +148,11 @@ def _montar_frontend(app: FastAPI) -> None:
     """
     Serve o bundle do Vite, com fallback de SPA.
 
-    `/`, `/fila`, `/migracao` e `/scanner-debug` são rotas do cliente, não do
-    servidor: as quatro devolvem o mesmo index.html e o React decide o que
-    renderizar. A lista é explícita de propósito — um catch-all engoliria erro
-    de digitação em `/api/...` e devolveria HTML onde o celular espera JSON.
+    `/`, `/fila`, `/migracao`, `/circulacao` e `/scanner-debug` são rotas do
+    cliente, não do servidor: todas devolvem o mesmo index.html e o React
+    decide o que renderizar. A lista é explícita de propósito — um catch-all
+    engoliria erro de digitação em `/api/...` e devolveria HTML onde o celular
+    espera JSON.
     """
     index = WEB_DIST / "index.html"
 
@@ -150,6 +163,7 @@ def _montar_frontend(app: FastAPI) -> None:
     @app.get("/", include_in_schema=False)
     @app.get("/fila", include_in_schema=False)
     @app.get("/migracao", include_in_schema=False)
+    @app.get("/circulacao", include_in_schema=False)
     @app.get("/scanner-debug", include_in_schema=False)
     async def spa():
         if not index.exists():

@@ -372,6 +372,29 @@ export function IconeMigracao({ tamanho = 18, className = '' }) {
   )
 }
 
+/** Circulação: o que sai e o que volta. Duas setas, dois sentidos. */
+export function IconeCirculacao({ tamanho = 18, className = '' }) {
+  return (
+    <svg
+      width={tamanho}
+      height={tamanho}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <polyline points="17 2 21 6 17 10" />
+      <path d="M21 6H8a4 4 0 0 0-4 4v1" />
+      <polyline points="7 22 3 18 7 14" />
+      <path d="M3 18h13a4 4 0 0 0 4-4v-1" />
+    </svg>
+  )
+}
+
 export function Botao({
   variante = 'secundario',
   tamanho,
@@ -636,6 +659,10 @@ export function Navbar({
   aoNavegar,
   loteQtd = 0,
   filaQtd = 0,
+  // Atrasos em aberto. Como o badge da fila, conta o que PEDE AÇÃO — quem quer
+  // saber o total de empréstimos abre a tela. Fica 0 enquanto a circulação não
+  // estiver implementada, e o badge simplesmente não aparece.
+  atrasosQtd = 0,
   conexao,
   aoAbrirBanco,
   aoAbrirExport,
@@ -680,6 +707,21 @@ export function Navbar({
               continua na fila para consulta, e um "7" ao lado de uma fila sem
               nada a fazer e so um alarme falso. */}
           {filaQtd > 0 && <span className="badge-fila">{filaQtd}</span>}
+        </button>
+
+        {/* Circulação é a tela do dia seguinte ao primeiro dia: depois que o
+            acervo entrou, é ela que a biblioteca abre de manhã e fecha à
+            noite. Fica entre a fila e a migração porque é trabalho diário,
+            não instalação. */}
+        <button
+          className={juntar('app-nav__item', rotaAtiva === 'circulacao' && 'app-nav__item--ativo')}
+          onClick={() => aoNavegar('circulacao')}
+          aria-current={rotaAtiva === 'circulacao' ? 'page' : undefined}
+          title="Emprestar, devolver e consultar o leitor"
+        >
+          <IconeCirculacao tamanho={16} />
+          <span>Circulação</span>
+          {atrasosQtd > 0 && <span className="badge-fila">{atrasosQtd}</span>}
         </button>
 
         {/* Migração fica ao lado das duas telas de trabalho, e não escondida

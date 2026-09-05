@@ -38,6 +38,31 @@ function cabecalhosDispositivo() {
   return { 'X-Dispositivo': _dispositivo.id }
 }
 
+/**
+ * Identidade de QUEM opera, que e outra coisa do que em QUAL aparelho.
+ *
+ * O dispositivo separa bandejas de captura; a sessao diz quem esta no balcao, e
+ * e ela que vira `lendings.created_by`. Um mesmo celular troca de operador no
+ * meio do turno, e o mesmo operador atende em dois aparelhos — por isso sao
+ * dois cabecalhos, nao um.
+ *
+ * Vive so em memoria, como a senha do Postgres do lado do servidor. Se a tela
+ * quiser sobreviver a um F5, quem decide guardar (e onde) e ela.
+ */
+let _sessao = null
+
+export function definirSessao(token) {
+  _sessao = token || null
+}
+
+export function temSessao() {
+  return !!_sessao
+}
+
+function cabecalhosSessao() {
+  return _sessao ? { 'X-Sessao': _sessao } : {}
+}
+
 async function pedir(caminho, opcoes = {}) {
   let resposta
   try {
@@ -48,6 +73,7 @@ async function pedir(caminho, opcoes = {}) {
         // ilegivel do outro lado.
         ...(opcoes.corpo ? { 'Content-Type': 'application/json' } : {}),
         ...(opcoes.comDispositivo ? cabecalhosDispositivo() : {}),
+        ...(opcoes.comSessao ? cabecalhosSessao() : {}),
       },
       method: opcoes.metodo || 'GET',
       body: opcoes.formulario || (opcoes.corpo ? JSON.stringify(opcoes.corpo) : undefined),
@@ -164,6 +190,66 @@ export const api = {
   acervo: {
     status: () => json('/acervo/status'),
     reindexarCache: () => post('/acervo/reindexar-cache'),
+  },
+
+  /**
+   * Quem esta no balcao. O token volta no corpo e vai em `X-Sessao` daqui para
+   * frente — `definirSessao` e quem liga uma coisa na outra.
+   */
+  sessao: {
+    entrar: (usuario, senha) => post('/sessao', { usuario, senha }),
+    atual: () => json('/sessao', { comSessao: true }),
+    sair: () => del('/sessao', { comSessao: true }),
+  },
+
+  /**
+   * O balcao: emprestimo, devolucao, renovacao e consulta.
+   *
+   * Aqui a tela ESPERA a resposta — ao contrario da captura, onde bipe e
+   * rascunho e o servidor reconcilia depois. Dizer "levou" antes do commit
+   * seria mentir para quem esta na frente do balcao (docs/SPEC_UI.md).
+   *
+   * `resolver` existe para que ninguem precise escolher "tipo" antes de bipar:
+   * manda o codigo cru, o servidor diz se e tombo, ISBN ou leitor.
+   */
+  circulacao: {
+    resolver: (codigo) =>
+      json(`/circulacao/resolver?codigo=${encodeURIComponent(codigo)}`, { comSessao: true }),
+    leitor: (userId) => json(`/circulacao/leitor/${userId}`, { comSessao: true }),
+    leitores: (busca) =>
+      json(`/circulacao/leitores?busca=${encodeURIComponent(busca)}`, { comSessao: true }),
+    exemplar: (holdingId) =>
+      json(`/circulacao/exemplar/${holdingId}`, { comSessao: true }),
+    emprestar: ({ holding_id, user_id, forcar_avisos = false }) =>
+      post('/circulacao/emprestimos', { holding_id, user_id, forcar_avisos },
+           { comSessao: true }),
+    devolver: ({ holding_id = null, lending_id = null }) =>
+      post('/circulacao/devolucoes', { holding_id, lending_id }, { comSessao: true }),
+    renovar: (lendingId) =>
+      post('/circulacao/renovacoes', { lending_id: lendingId }, { comSessao: true }),
+    pendencias: (tipo = 'atrasados', signal) =>
+      json(`/circulacao/pendencias?tipo=${encodeURIComponent(tipo)}`,
+           { comSessao: true, signal }),
+  },
+
+  /**
+   * O que sobrava fora do app depois de gravar: reindexar a base, derrubar os
+   * caches estaticos, conferir e gerar o `.b5bz`.
+   *
+   * Reindex e backup DISPARAM e voltam na hora; quem acompanha e o GET
+   * correspondente, num laco — sao minutos de trabalho do lado do Tomcat.
+   */
+  manutencao: {
+    estado: (signal) => json('/manutencao', { signal, comSessao: true }),
+    configurarBiblivre: ({ url, usuario, senha }) =>
+      post('/manutencao/biblivre', { url, usuario, senha }, { comSessao: true }),
+    reindexar: () => post('/manutencao/reindexar', null, { comSessao: true }),
+    progressoReindex: (signal) =>
+      json('/manutencao/reindexar', { signal, comSessao: true }),
+    caches: () => post('/manutencao/caches', null, { comSessao: true }),
+    conferencia: () => post('/manutencao/conferencia', null, { comSessao: true }),
+    backup: (tipo = 'full') => post('/manutencao/backup', { tipo }, { comSessao: true }),
+    estadoBackup: (signal) => json('/manutencao/backup', { signal, comSessao: true }),
   },
 
   db: {

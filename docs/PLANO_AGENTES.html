@@ -1,0 +1,1200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plano de agentes — Circulação e Manutenção</title>
+<style>
+  :root{
+    --fundo:#f7f6f3; --papel:#fffefb; --tinta:#1b1a17; --tinta-fraca:#5d5a52;
+    --linha:#e2ded4; --acento:#7a4b1e; --acento-fraco:#f0e6d8;
+    --ok:#2f6b3f; --alerta:#8a5a00; --perigo:#963232;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+    --texto:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --fundo:#15140f; --papel:#1d1c17; --tinta:#eae6dc; --tinta-fraca:#a29c8e;
+      --linha:#33302a; --acento:#d9a066; --acento-fraco:#2a251c;
+      --ok:#7cc08c; --alerta:#d9b25e; --perigo:#e08a8a;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fundo);color:var(--tinta);font:15px/1.6 var(--texto)}
+  .capa{padding:48px 24px 32px;border-bottom:1px solid var(--linha);background:var(--papel)}
+  .larg{max-width:1080px;margin:0 auto}
+  h1{font-size:30px;margin:0 0 8px;letter-spacing:-.02em}
+  h2{font-size:22px;margin:44px 0 12px;padding-top:14px;border-top:2px solid var(--linha);letter-spacing:-.01em}
+  h3{font-size:17px;margin:26px 0 8px}
+  h4{font-size:14px;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-fraca)}
+  p{margin:10px 0}
+  main{padding:0 24px 80px}
+  .sub{color:var(--tinta-fraca);max-width:70ch}
+  .selo{display:inline-block;font:600 11px/1 var(--mono);text-transform:uppercase;letter-spacing:.1em;
+        padding:5px 8px;border:1px solid var(--linha);border-radius:3px;color:var(--tinta-fraca);background:var(--fundo)}
+  .selo.onda1{border-color:var(--acento);color:var(--acento)}
+  .selo.onda2{border-color:var(--tinta-fraca)}
+  .selo.onda0{border-color:var(--ok);color:var(--ok)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+  th,td{border:1px solid var(--linha);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--acento-fraco);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  td code,p code,li code{font:13px/1.4 var(--mono);background:var(--acento-fraco);padding:1px 4px;border-radius:3px}
+  pre{background:var(--papel);border:1px solid var(--linha);border-radius:6px;padding:14px 16px;
+      overflow-x:auto;font:13px/1.55 var(--mono);margin:12px 0}
+  .cartao{background:var(--papel);border:1px solid var(--linha);border-radius:6px;padding:16px 18px;margin:12px 0}
+  .cartao h3{margin-top:0}
+  .grade{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .agente{background:var(--papel);border:1px solid var(--linha);border-left:3px solid var(--acento);
+          border-radius:6px;margin:20px 0;overflow:hidden}
+  .agente > header{padding:14px 18px;border-bottom:1px solid var(--linha);display:flex;
+          align-items:center;gap:12px;flex-wrap:wrap}
+  .agente > header h3{margin:0;flex:1;min-width:240px}
+  .agente .corpo{padding:0 18px 18px}
+  .agente pre{margin-top:14px;max-height:none}
+  button.copiar{font:600 12px var(--texto);padding:6px 12px;border:1px solid var(--linha);
+          background:var(--fundo);color:var(--tinta);border-radius:4px;cursor:pointer}
+  button.copiar:hover{border-color:var(--acento);color:var(--acento)}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:4px 0}
+  .nota{border-left:3px solid var(--alerta);padding:2px 0 2px 14px;color:var(--tinta-fraca);margin:14px 0}
+  .perigo{border-left-color:var(--perigo)}
+  .indice{columns:2;column-gap:32px;font-size:14px}
+  .indice a{color:var(--acento);text-decoration:none}
+  .indice a:hover{text-decoration:underline}
+  .rodape{color:var(--tinta-fraca);font-size:13px;margin-top:40px;padding-top:14px;border-top:1px solid var(--linha)}
+</style>
+</head>
+<body>
+
+<div class="capa"><div class="larg">
+  <h1>Circulação pelo app + manutenção automática do BibLivre</h1>
+  <p class="sub">Plano de execução dividido em 10 pacotes com propriedade exclusiva de arquivos,
+  o contrato que os mantém coerentes, e o prompt pronto de cada agente.
+  Repositório: <code>biblioteca-facil-to-biblivre</code>.</p>
+  <p class="sub">Duas entregas no mesmo movimento: <strong>(1)</strong> os três passos manuais que hoje
+  sobram depois da migração (reindexar, reiniciar o Tomcat, conferir) viram botão;
+  <strong>(2)</strong> o balcão da biblioteca — empréstimo, devolução, renovação e consulta — sai do
+  BibLivre e entra no app, com o celular bipando o livro pelo mesmo scanner já em produção.</p>
+</div></div>
+
+<main class="larg">
+
+<h2 id="indice">Índice</h2>
+<div class="indice">
+  <a href="#decisoes">1. Decisões que fecham o desenho</a><br>
+  <a href="#escopo">2. O que substitui o BibLivre — e o que não</a><br>
+  <a href="#arquivos">3. Mapa de propriedade de arquivos</a><br>
+  <a href="#contrato">4. Contrato compartilhado</a><br>
+  <a href="#ondas">5. Ondas de execução</a><br>
+  <a href="#prompts">6. Prompts dos agentes</a><br>
+  <a href="#integracao">7. Integração e verificação</a><br>
+  <a href="#riscos">8. Riscos conhecidos</a>
+</div>
+
+<h2 id="decisoes">1. Decisões que fecham o desenho</h2>
+<p class="sub">Estas decisões estão tomadas e são premissa de todos os prompts. Um agente que
+discordar de alguma deve <em>relatar</em>, não mudar sozinho — a divergência silenciosa entre dois
+pacotes é o único jeito de esse plano falhar.</p>
+
+<div class="grade">
+  <div class="cartao">
+    <h3>1.1 A identidade na circulação é o tombo</h3>
+    <p>Empréstimo é contra <strong>exemplar</strong>, e a identidade do exemplar é o
+    <code>accession_number</code> (<code>Bib.&lt;ano&gt;.&lt;n&gt;</code>), não o ISBN — dez cópias do
+    mesmo livro dividem o ISBN e só o tombo diz qual saiu da estante.</p>
+    <p>O scanner passa a ler também a etiqueta (Code 39 / Code 128) além do EAN-13 da capa.
+    <strong>Caminho alternativo obrigatório:</strong> bipar o ISBN devolve a lista de exemplares
+    daquela obra com o estado de cada um, e o operador escolhe. Livro sem etiqueta impressa é
+    o caso comum no acervo migrado — os 16.251 tombos existem no banco, nem todos no papel.</p>
+  </div>
+  <div class="cartao">
+    <h3>1.2 Escreve no Postgres do BibLivre, reproduzindo <code>LendingBO</code></h3>
+    <p>Nada de tabela nova, nada de schema paralelo. O empréstimo gravado pelo app precisa ser
+    <em>indistinguível</em> de um feito pela tela do BibLivre, porque o <code>.b5bz</code> continua
+    sendo a verdade e o BibLivre continua instalado.</p>
+    <p>Diferença deliberada em relação à migração: aqui os ids saem da <strong>sequence</strong>
+    (<code>nextval</code>), não são atribuídos por nós.</p>
+  </div>
+  <div class="cartao">
+    <h3>1.3 Uma transação por operação, com trava no exemplar</h3>
+    <p>O BibLivre pode estar aberto na mesma base, no PC ao lado. Toda gravação faz
+    <code>SELECT … FOR UPDATE</code> no <code>biblio_holdings</code> e revalida "está emprestado?"
+    <em>dentro</em> da transação. A regra do repositório continua: <strong>os pacotes não commitam</strong>
+    — quem commita é o router.</p>
+  </div>
+  <div class="cartao">
+    <h3>1.4 <code>created_by</code> passa a ser o operador de verdade</h3>
+    <p>A migração grava <code>created_by = 1</code> (o admin do instalador). Para o dia a dia isso não
+    serve: quem emprestou é informação de balcão. O app autentica contra a tabela
+    <code>logins</code> do próprio BibLivre (SHA-1 + Base64) e usa o <code>logins.id</code> real.</p>
+    <p>É também o mínimo de segurança que o recurso exige: sem isso, qualquer celular no wi-fi
+    da biblioteca registra empréstimo.</p>
+  </div>
+  <div class="cartao">
+    <h3>1.5 Na circulação o celular <em>espera</em> — exceção explícita ao SPEC §7</h3>
+    <p>Na captura o celular nunca bloqueia: bipe é rascunho, e o servidor reconcilia depois.
+    No empréstimo é o contrário — dizer "levou" antes do commit é mentir para o leitor que está na
+    frente do balcão. Cada bipe de circulação espera a resposta e mostra confirmação
+    (visual + som distinto de ok/erro). Isso precisa estar escrito no SPEC_UI, não implícito no código.</p>
+  </div>
+  <div class="cartao">
+    <h3>1.6 Reindex e backup pelo próprio BibLivre, via HTTP</h3>
+    <p>Reimplementar o indexador em SQL seria copiar a tokenização Java e falhar em silêncio.
+    Em vez disso o app loga como admin e chama as ações que já existem —
+    <code>administration.indexing</code> (<code>reindex</code> + <code>progress</code>) e o módulo de backup.
+    Verificado no fonte 5.x; a rota exata sai do WAR instalado.</p>
+  </div>
+</div>
+
+<h2 id="escopo">2. O que substitui o BibLivre — e o que não</h2>
+<table>
+  <tr><th>Passa para o app</th><th>Continua no BibLivre</th></tr>
+  <tr>
+    <td>
+      <ul>
+        <li>Empréstimo (celular e PC)</li>
+        <li>Devolução, com multa e reserva pendente</li>
+        <li>Renovação</li>
+        <li>Consulta de exemplar por tombo ou ISBN</li>
+        <li>Ficha do leitor: pendências, atrasos, histórico</li>
+        <li>Painel de atrasados do dia</li>
+        <li>Reindexar, limpar caches, conferir a base, gerar o <code>.b5bz</code></li>
+      </ul>
+    </td>
+    <td>
+      <ul>
+        <li>Catalogação avançada e edição de MARC</li>
+        <li>Cadastro e edição de leitor <em>(fase 2 — ver Riscos)</em></li>
+        <li>Relatórios, etiquetas, cartões de acesso</li>
+        <li>Configuração, permissões, tipos de usuário, Z39.50</li>
+        <li>Restore do <code>.b5bz</code></li>
+      </ul>
+    </td>
+  </tr>
+</table>
+<p class="nota">O corte é deliberado: o balcão é 90% do uso diário e é onde a tela do BibLivre pesa;
+o resto é uso ocasional, de gente sentada, e reescrever aquilo seria refazer um sistema inteiro
+para ganhar pouco.</p>
+
+<h2 id="arquivos">3. Mapa de propriedade de arquivos</h2>
+<p class="sub">Cada arquivo tem <strong>um</strong> dono. Arquivo compartilhado (App.jsx, client.js,
+main.py, schemas.py, os <code>__init__.py</code>) é do <strong>integrador</strong> — nenhum agente encosta.
+O andaime da Onda 0 existe justamente para que ninguém precise.</p>
+<table>
+  <tr><th>Pacote</th><th>Agente</th><th>Arquivos que ele cria/edita (exclusivo)</th><th>Onda</th></tr>
+  <tr><td>A1</td><td>Cliente HTTP do BibLivre</td>
+      <td><code>packages/biblivre-client/src/biblio/biblivre/web.py</code><br><code>tests/teste_web_biblivre.py</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A2</td><td>Conferência pós-carga (SQL)</td>
+      <td><code>packages/biblivre-client/src/biblio/biblivre/verificacao.py</code><br><code>scripts/conferir.py</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A3</td><td>Núcleo de circulação</td>
+      <td><code>packages/biblivre-client/src/biblio/biblivre/emprestimo.py</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A4</td><td>Operador / sessão</td>
+      <td><code>packages/biblivre-client/src/biblio/biblivre/operador.py</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A5</td><td>Scanner em modo circulação</td>
+      <td><code>apps/web/src/features/scanner/core/decodificador.js</code><br><code>apps/web/src/features/scanner/useScanner.js</code><br><code>apps/web/src/features/scanner/codigos.js</code> (novo)<br><code>…/core/__tests__/codigos.test.js</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A6</td><td>Tela do celular — circulação</td>
+      <td><code>apps/web/src/features/circulacao/TelaCirculacaoCelular.jsx</code><br><code>…/features/circulacao/circulacao.css</code><br><code>…/features/circulacao/useCirculacao.js</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A7</td><td>Tela do PC — balcão</td>
+      <td><code>apps/web/src/features/circulacao/TelaBalcaoCirculacao.jsx</code><br><code>…/features/circulacao/FichaLeitor.jsx</code><br><code>…/features/circulacao/balcao-circulacao.css</code></td><td><span class="selo onda1">1</span></td></tr>
+  <tr><td>A8</td><td>Routers da API</td>
+      <td><code>apps/api/src/biblio/api/routers/circulacao.py</code><br><code>…/routers/manutencao.py</code><br><code>…/routers/sessao.py</code><br><code>…/schemas.py</code> (só acrescenta)</td><td><span class="selo onda2">2</span></td></tr>
+  <tr><td>A9</td><td>Verificação de fumaça</td>
+      <td><code>tests/verificar.py</code><br><code>tests/banco_falso.py</code></td><td><span class="selo onda2">2</span></td></tr>
+  <tr><td>A10</td><td>Documentação</td>
+      <td><code>docs/SPEC_UI.md</code><br><code>docs/ROADMAP.md</code><br><code>docs/IMPORTACAO_BIBLIVRE.md</code><br><code>README.md</code></td><td><span class="selo onda2">2</span></td></tr>
+  <tr><td>—</td><td><strong>Integrador</strong> (andaime + costura)</td>
+      <td><code>apps/web/src/App.jsx</code><br><code>apps/web/src/api/client.js</code><br><code>apps/web/src/components/index.jsx</code><br><code>apps/api/src/biblio/api/main.py</code><br><code>packages/biblivre-client/src/biblio/biblivre/__init__.py</code></td><td><span class="selo onda0">0 e 3</span></td></tr>
+</table>
+
+<h2 id="contrato">4. Contrato compartilhado</h2>
+<p class="sub">Isto é o que permite backend e frontend andarem ao mesmo tempo. Assinatura ou rota que
+precisar mudar: avise o integrador antes de mudar, porque tem alguém do outro lado codificando contra ela.</p>
+
+<h3>4.1 Assinaturas Python</h3>
+<pre># biblio.biblivre.emprestimo  (A3) — nenhuma função commita
+resolver(con, codigo)                  -> dict   # {"tipo": "tombo"|"isbn"|"leitor"|"desconhecido", ...}
+buscar_exemplar(con, holding_id)       -> dict   # exemplar + obra + empréstimo aberto, se houver
+exemplares_da_obra(con, record_id)     -> list   # para o caminho do ISBN
+buscar_leitor(con, user_id)            -> dict   # ficha + situação
+procurar_leitores(con, busca, limite=20) -> list
+situacao(con, user_id)                 -> dict   # {"abertos": n, "atrasados": n, "multas": v, "limite": n, "pode_levar": bool}
+checar(con, holding_id, user_id)       -> dict   # {"pode": bool, "impedimentos": [...], "avisos": [...], "previsto_para": "AAAA-MM-DD"}
+emprestar(con, holding_id, user_id, operador_id, previsto_para=None, forcar_avisos=False) -> dict
+devolver(con, holding_id=None, lending_id=None, operador_id=1) -> dict
+renovar(con, lending_id, operador_id)  -> dict
+pendencias(con, tipo="atrasados", limite=50) -> dict
+
+# biblio.biblivre.operador  (A4)
+autenticar(con, usuario, senha)        -> dict | None    # {"id", "login", "nome"}
+hash_senha(senha)                      -> str            # SHA-1 + Base64, igual ao BibLivre
+abrir_sessao(operador)                 -> str            # token; vive em memória
+sessao(token)                          -> dict | None
+encerrar(token)                        -> None
+
+# biblio.biblivre.web  (A1) — estado (URL/credenciais/cookie) em memória, nunca em disco
+configurar(url, usuario, senha)        -> dict
+estado()                               -> dict   # {"configurado", "url", "conectado", "erro"}
+entrar()                               -> dict
+reindexar(record_type="biblio")        -> dict   # dispara; não bloqueia o event loop
+progresso_reindex()                    -> dict   # {"rodando", "atual", "total", "pct"}
+resetar_caches()                       -> dict   # traduções + campos de usuário, sem restart
+gerar_backup(tipo="full")              -> dict
+estado_backup()                        -> dict
+
+# biblio.biblivre.verificacao  (A2)
+conferir(con)                          -> dict
+# {"checagens": [{"chave","rotulo","ok","valor","esperado","detalhe"}], "resumo": {"ok": n, "falhas": n}}</pre>
+
+<h3>4.2 Rotas HTTP</h3>
+<table>
+  <tr><th>Método e rota</th><th>Corpo / query</th><th>Resposta</th></tr>
+  <tr><td><code>POST /api/sessao</code></td><td><code>{usuario, senha}</code></td><td><code>{token, operador:{id,login,nome}}</code> · 401 se falhar</td></tr>
+  <tr><td><code>GET /api/sessao</code></td><td>header <code>X-Sessao</code></td><td><code>{operador}</code> · 401</td></tr>
+  <tr><td><code>DELETE /api/sessao</code></td><td>header <code>X-Sessao</code></td><td><code>{ok:true}</code></td></tr>
+  <tr><td><code>GET /api/circulacao/resolver</code></td><td><code>?codigo=</code></td><td><code>{tipo, exemplar?, obra?, exemplares?, leitor?}</code></td></tr>
+  <tr><td><code>GET /api/circulacao/leitor/{id}</code></td><td>—</td><td><code>{leitor, situacao, emprestimos:[…]}</code></td></tr>
+  <tr><td><code>GET /api/circulacao/leitores</code></td><td><code>?busca=</code></td><td><code>{leitores:[…]}</code></td></tr>
+  <tr><td><code>GET /api/circulacao/exemplar/{holding_id}</code></td><td>—</td><td><code>{exemplar, obra, emprestimo|null}</code></td></tr>
+  <tr><td><code>POST /api/circulacao/emprestimos</code></td><td><code>{holding_id, user_id, forcar_avisos?}</code></td><td>201 <code>{emprestimo:{id,tombo,titulo,leitor,previsto_para}}</code> · 409 <code>{codigo, mensagem, impedimentos, avisos}</code></td></tr>
+  <tr><td><code>POST /api/circulacao/devolucoes</code></td><td><code>{holding_id?, lending_id?}</code></td><td><code>{devolucao, multa|null, reserva|null, atraso_dias}</code></td></tr>
+  <tr><td><code>POST /api/circulacao/renovacoes</code></td><td><code>{lending_id}</code></td><td><code>{emprestimo}</code> · 409</td></tr>
+  <tr><td><code>GET /api/circulacao/pendencias</code></td><td><code>?tipo=atrasados|hoje</code></td><td><code>{itens:[…], total}</code></td></tr>
+  <tr><td><code>GET /api/manutencao</code></td><td>—</td><td><code>{biblivre:{configurado,url,conectado}, reindex:{…}, backup:{…}}</code></td></tr>
+  <tr><td><code>POST /api/manutencao/biblivre</code></td><td><code>{url, usuario, senha}</code></td><td><code>{configurado:true, conectado:bool}</code></td></tr>
+  <tr><td><code>POST /api/manutencao/reindexar</code></td><td>—</td><td><code>{iniciado:true}</code></td></tr>
+  <tr><td><code>GET /api/manutencao/reindexar</code></td><td>—</td><td><code>{rodando, atual, total, pct}</code></td></tr>
+  <tr><td><code>POST /api/manutencao/caches</code></td><td>—</td><td><code>{ok, detalhe}</code></td></tr>
+  <tr><td><code>POST /api/manutencao/conferencia</code></td><td>—</td><td><code>{checagens:[…], resumo}</code></td></tr>
+  <tr><td><code>POST /api/manutencao/backup</code></td><td><code>{tipo:"full"}</code></td><td><code>{iniciado:true}</code></td></tr>
+  <tr><td><code>GET /api/manutencao/backup</code></td><td>—</td><td><code>{rodando, arquivo, criado_em}</code></td></tr>
+</table>
+
+<h3>4.3 Códigos de impedimento (o vocabulário do 409)</h3>
+<pre>leitor_nao_encontrado   leitor_inativo        leitor_bloqueado      leitor_com_atraso
+limite_atingido         multa_em_aberto       exemplar_nao_encontrado
+exemplar_emprestado     exemplar_indisponivel reserva_de_outro_leitor
+sem_operador            sem_banco             conflito</pre>
+<p>Regra: <strong>impedimento</strong> barra a operação (409). <strong>Aviso</strong> deixa passar com
+<code>forcar_avisos: true</code> e uma confirmação na tela — e a tela precisa deixar claro o que está
+ignorando. Quem decide o que é qual é o A3, com a regra do <code>LendingBO</code> na mão.</p>
+
+<h2 id="ondas">5. Ondas de execução</h2>
+<ol>
+  <li><strong>Onda 0 — andaime (integrador, antes de despachar).</strong> Cria os stubs dos módulos
+  com assinatura e docstring, registra os routers em <code>main.py</code>, acrescenta os grupos
+  <code>sessao</code>/<code>circulacao</code>/<code>manutencao</code> em <code>client.js</code>, a rota
+  <code>/circulacao</code> em <code>App.jsx</code> e o item na Navbar. Depois disso ninguém mais precisa
+  de arquivo compartilhado.</li>
+  <li><strong>Onda 1 — sete agentes em paralelo:</strong> A1, A2, A3, A4 (Python, sem sobreposição),
+  A5, A6, A7 (React, sem sobreposição). As telas codificam contra a §4, não contra o código do backend.</li>
+  <li><strong>Onda 2 — três agentes:</strong> A8 (routers, agora que os módulos existem),
+  A9 (fumaça), A10 (docs). A8 antes de A9.</li>
+  <li><strong>Onda 3 — integrador:</strong> costura, roda a verificação, resolve divergências de contrato,
+  e só então liga contra um BibLivre real.</li>
+</ol>
+
+<h2 id="prompts">6. Prompts dos agentes</h2>
+<p class="sub">Cada bloco é autocontido: pode ser colado sozinho numa sessão nova.
+O preâmbulo repetido não é desperdício — é o que impede um agente de "consertar" arquivo dos outros.</p>
+
+<div class="agente">
+<header><h3>A1 — Cliente HTTP do BibLivre</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">Único pacote que fala com o BibLivre por HTTP em vez de SQL. É o que transforma
+"reindexe na mão depois" em botão.</p>
+<pre>Você vai escrever UM módulo novo no monorepo `biblioteca-facil-to-biblivre`
+(Python, namespace `biblio`, tudo em português).
+
+CONTEXTO
+O app hoje só fala com o PostgreSQL do BibLivre 5. Inserir em `biblio_records` por
+SQL não preenche as tabelas `biblio_idx_*`, então depois de gravar obra nova alguém
+precisa ir em Administração -> Manutenção -> Reindexar, senão o registro existe e
+não aparece na busca. Idem para o Tomcat: `UserFields` e `Translations` são caches
+estáticos (StaticBO) e campo de leitor criado por SQL só aparece depois de reiniciar.
+Seu módulo mata os dois passos manuais fazendo o próprio BibLivre trabalhar.
+
+LEIA ANTES (nesta ordem)
+  packages/biblivre-client/src/biblio/biblivre/__init__.py   (invariantes do pacote)
+  packages/biblivre-client/src/biblio/biblivre/obras.py      (docstring do topo: por que reindex)
+  packages/biblivre-client/src/biblio/biblivre/conexao.py    (padrão de credencial em memória — copie a postura)
+  docs/IMPORTACAO_BIBLIVRE.md                                (seções de reindex e de .b5bz)
+
+VOCÊ É DONO DE (só edite estes arquivos)
+  packages/biblivre-client/src/biblio/biblivre/web.py    (novo)
+  tests/teste_web_biblivre.py                            (novo, roda sem rede)
+NÃO TOQUE em nenhum outro arquivo. `__init__.py`, `main.py`, `schemas.py` e os routers
+são do integrador; se precisar de algo lá, escreva no relatório final.
+
+PESQUISA DE FONTE (faça primeiro, é o que dá segurança ao resto)
+Leia o fonte do BibLivre 5 em https://github.com/cleydyr/Biblivre-5 (`src/java/biblivre/...`)
+e confirme:
+  - `biblivre/login/Handler.java` — a ação de login lê `username` e `password` e guarda
+    `&lt;schema&gt;.logged_user` na sessão (cookie JSESSIONID).
+  - `biblivre/administration/indexing/Handler.java` — ações `reindex` (parâmetro
+    `record_type`, default "biblio") e `progress` (devolve [atual, total]).
+  - `biblivre/administration/translations/Handler.java` — a ação `list` chama
+    `Languages.reset(schema)` + `Translations.reset(schema, language)`; ou seja, dá para
+    derrubar o cache de tradução sem reiniciar o Tomcat.
+  - PROCURE quem chama `UserFields.reset(...)`. Se existir ação alcançável por HTTP que
+    derrube esse cache, o restart do Tomcat deixa de ser necessário — é o achado mais
+    valioso deste pacote. Se não existir, diga isso com todas as letras no relatório.
+  - O módulo `biblivre/administration/backup` — quais ações disparam o backup Full que
+    produz o `.b5bz`, e como se recupera o arquivo gerado.
+  - Como as requisições são roteadas (parâmetros de controller/módulo/ação e a URL base
+    típica de uma instalação Windows: algo como http://localhost:8080/Biblivre5/).
+Anote no docstring do módulo o que você VERIFICOU no fonte e o que ficou por confirmar
+contra o WAR instalado — a instalação da biblioteca é 5.0.x e você está lendo um fork.
+
+ENTREGA (assinaturas fixadas pelo contrato, não mude sem avisar)
+  configurar(url, usuario, senha) -> dict
+  estado() -> dict            # {"configurado","url","conectado","erro"}
+  entrar() -> dict            # login; guarda o cookie de sessão em memória
+  reindexar(record_type="biblio") -> dict
+  progresso_reindex() -> dict # {"rodando","atual","total","pct"}
+  resetar_caches() -> dict
+  gerar_backup(tipo="full") -> dict
+  estado_backup() -> dict
+
+REGRAS
+  - Só `urllib` da stdlib. Não acrescente dependência (o `requirements.txt` é curto de propósito).
+  - A senha do admin do BibLivre vive só em memória, como a do Postgres em `conexao.py`.
+    Nunca em disco, nunca em log, nunca na resposta de `estado()`.
+  - `reindexar()` NÃO pode bloquear: 14 mil registros em lotes de 30 é chamada longa.
+    Rode a chamada numa thread e devolva na hora; quem acompanha é `progresso_reindex()`.
+    Guarde o estado (rodando/erro/terminado_em) em memória, com lock — só uma por vez.
+  - Falha de rede, HTML de login em vez de JSON, sessão expirada: tudo vira dict com `erro`
+    legível em português, nunca exceção crua subindo para a tela. Sessão expirada deve
+    tentar `entrar()` uma vez e repetir a chamada.
+  - Docstring no topo explicando POR QUE HTTP e não SQL aqui (o indexador é tokenização
+    Java; copiar isso falha em silêncio) — leia o estilo dos outros módulos e siga.
+
+VERIFICAÇÃO
+  `python tests/verificar.py` precisa continuar passando (seu módulo não pode ser importado
+  por ele ainda, mas nada pode quebrar). Seu `tests/teste_web_biblivre.py` roda offline:
+  suba um `http.server` de mentira numa porta local e teste login ok/falho, reindex,
+  polling de progresso e sessão expirada.
+
+RELATÓRIO FINAL
+  O que você confirmou no fonte (com o caminho do arquivo), a URL/rota exata que o módulo
+  monta, o que precisa ser confirmado no WAR instalado, e o veredito sobre o
+  `UserFields.reset` — o restart do Tomcat pode morrer ou não?</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A2 — Conferência pós-carga (SQL puro)</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">Troca a olhada manual de um exemplar por uma varredura das 16 mil linhas. Não depende
+de ninguém — pode ser o primeiro a entregar.</p>
+<pre>Você vai escrever UM módulo novo + UM CLI no monorepo `biblioteca-facil-to-biblivre`
+(Python, namespace `biblio`, tudo em português).
+
+CONTEXTO
+Depois que a migração grava o acervo, o roteiro manda "conferir em Catalogação ->
+Exemplares e imprimir uma etiqueta de teste". A parte de olhar dados é automatizável e
+cobre muito mais que a olhada manual: são 14.866 obras e 16.251 exemplares.
+Seu módulo é essa conferência, em SQL, sem escrever nada.
+
+LEIA ANTES
+  packages/biblivre-client/src/biblio/biblivre/__init__.py
+  packages/biblivre-client/src/biblio/biblivre/conexao.py     (conectar, schema, search_path)
+  packages/biblivre-client/src/biblio/biblivre/exemplares.py  (formato do tombo)
+  docs/IMPORTACAO_BIBLIVRE.md                                 (tabelas, o que a carga real verificou)
+  scripts/inserir_obras.py e scripts/_comum.py                (o formato dos CLIs — casca fina, dry-run)
+
+VOCÊ É DONO DE
+  packages/biblivre-client/src/biblio/biblivre/verificacao.py  (novo)
+  scripts/conferir.py                                          (novo)
+NÃO TOQUE em nenhum outro arquivo.
+
+ENTREGA
+  conferir(con) -> dict
+  {"checagens": [{"chave","rotulo","ok","valor","esperado","detalhe"}], "resumo": {"ok","falhas"}}
+Só leitura. Nenhum INSERT/UPDATE, nenhum commit.
+
+AS CHECAGENS (mínimo; acrescente o que o fonte justificar)
+  1. exemplares órfãos: biblio_holdings sem biblio_records correspondente         -> 0
+  2. obras sem exemplar: biblio_records (database='main') sem holding             -> 0
+  3. tombos duplicados em biblio_holdings.accession_number                        -> 0
+  4. INDICE: registros em biblio_records sem linha em biblio_idx_fields           -> 0
+     Esta é a única que responde "o reindex funcionou?" — hoje ninguém sabe
+     sem abrir a busca do BibLivre. Trate como a checagem principal.
+  5. SEQUENCES atrás do max(id): biblio_records, biblio_holdings, lendings, users.
+     A migração grava id explícito; se a sequence ficou atrás, o PRIMEIRO empréstimo
+     feito pelo app estoura chave duplicada. Diga qual sequence e qual valor.
+  6. users_values com chave que não existe em users_fields                         -> 0
+  7. lendings apontando para holding ou user inexistente                           -> 0
+  8. exemplar com dois empréstimos em aberto (return_date IS NULL)                 -> 0
+  9. contagens de referência: obras, exemplares, leitores (ativos/inativos),
+     empréstimos (abertos/fechados), multas, reservas — sem "esperado", são informativas.
+ 10. distribuição de tombos por ano e o prefixo em vigor
+     (configurations['cataloging.accession_number_prefix']).
+
+REGRAS
+  - Cada checagem é uma query que sobrevive a base grande: nada de trazer 16 mil linhas
+    para contar em Python. Em falha, traga uma AMOSTRA (até 10 exemplos) no `detalhe` —
+    "3 órfãos" sem dizer quais não ajuda ninguém.
+  - Nunca deixe uma checagem derrubar as outras: tabela ausente ou erro de permissão vira
+    `ok=None` com o motivo, e as demais seguem.
+  - `scripts/conferir.py`: CLI fino igual aos outros de `scripts/`, imprime o relatório
+    legível, sai com código 1 se houver falha (serve para rodar antes de gerar o .b5bz).
+  - Docstring do topo explicando por que a checagem 4 existe e por que a 5 é armadilha real.
+
+VERIFICAÇÃO
+  `python tests/verificar.py` continua passando. Sem banco você não roda as queries de
+  verdade — garanta pelo menos que o módulo importa, que `conferir` monta a lista de
+  checagens e que o CLI responde a `--help`. Se conseguir, teste contra o banco de mentira
+  em `tests/banco_falso.py` (leia antes; ele é simples e pode não responder tudo — se não
+  responder, NÃO o edite, ele é do agente A9; relate o que faltou).
+
+RELATÓRIO FINAL
+  A lista de checagens implementadas, quais dependem de tabela que pode não existir, e o
+  que você recomenda que vire bloqueio antes do backup .b5bz.</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A3 — Núcleo de circulação (o pacote maior)</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">É aqui que mora a regra de negócio do balcão. Tudo que as telas fazem é chamar isto.</p>
+<pre>Você vai escrever UM módulo novo no monorepo `biblioteca-facil-to-biblivre`
+(Python, namespace `biblio`, tudo em português). É o núcleo da circulação do dia a dia:
+emprestar, devolver, renovar e consultar, gravando no PostgreSQL do BibLivre 5.
+
+CONTEXTO
+O repositório já carrega circulação em massa (`circulacao.py`), mas aquilo é MIGRAÇÃO:
+lê o backup do sistema antigo e grava 19 mil empréstimos com id explícito, numa transação.
+O seu módulo é o oposto: UMA operação por vez, no balcão, com o BibLivre possivelmente
+aberto na mesma base, no PC ao lado. Ids saem da sequence (nextval), não de contador nosso.
+O empréstimo que você gravar precisa ser indistinguível de um feito pela tela do BibLivre.
+
+LEIA ANTES (nesta ordem)
+  packages/biblivre-client/src/biblio/biblivre/__init__.py    (invariante: nada aqui commita)
+  packages/biblivre-client/src/biblio/biblivre/circulacao.py  (docstring inteiro: o modelo de lendings)
+  packages/biblivre-client/src/biblio/biblivre/exemplares.py  (biblio_holdings, tombo, MARC do exemplar)
+  packages/biblivre-client/src/biblio/biblivre/leitores.py    (users + users_values + users_fields)
+  packages/biblivre-client/src/biblio/biblivre/obras.py       (biblio_records, iso2709)
+  packages/biblivre-client/src/biblio/biblivre/marc.py        (ler o iso2709 para tirar título/autor)
+  docs/IMPORTACAO_BIBLIVRE.md                                 (tabelas e o que já foi verificado no fonte)
+
+VOCÊ É DONO DE
+  packages/biblivre-client/src/biblio/biblivre/emprestimo.py   (novo)
+NÃO TOQUE em nenhum outro arquivo — nem em `circulacao.py`, nem nos routers, nem no
+`__init__.py`. Se precisar de algo em outro módulo, escreva no relatório final.
+
+PESQUISA DE FONTE (obrigatória antes de codar)
+Fonte do BibLivre 5: https://github.com/cleydyr/Biblivre-5 (`src/java/biblivre/circulation/...`).
+Levante e ANOTE no docstring, com o caminho do arquivo:
+  - `LendingBO.doLend` / `checkLending`: quais condições barram um empréstimo
+    (status do usuário, atraso, limite por tipo de usuário, multa em aberto, reserva de
+    terceiro, disponibilidade do exemplar).
+  - De onde sai o PRAZO: tabela de tipos de usuário (limite de itens e dias de empréstimo)
+    e/ou `configurations`. Qual coluna, qual default.
+  - `LendingBO.doReturn` / `LendingFineBO`: como a multa é calculada (valor por dia? por
+    item?), quando `lending_fines` é gravado, e o que acontece com `payment_date`.
+  - Renovação: o BibLivre grava linha nova com `previous_lending_id`, ou faz UPDATE de
+    `expected_return_date`? Reproduza o que ele faz, não o que parece mais limpo.
+  - CONFIRME o que o repositório já afirma: empréstimo em aberto NÃO altera
+    `biblio_holdings.availability` — "emprestado" é derivado de `return_date IS NULL`.
+  - Feriados/dias úteis entram no cálculo do prazo? Se sim, como.
+Onde o fonte for ambíguo, escolha o comportamento conservador (barrar) e diga no relatório.
+
+ENTREGA (assinaturas fixadas pelo contrato — não mude sem avisar)
+  resolver(con, codigo) -> dict
+      Recebe o que veio do scanner ou do teclado e diz o que é. Ordem de tentativa:
+      tombo exato (accession_number) -> ISBN (usa biblio.biblivre.acervo, que indexa o
+      020 $a e casa ISBN-10 com ISBN-13) -> id/matrícula de leitor. Devolve
+      {"tipo": "tombo"|"isbn"|"leitor"|"desconhecido"} com o payload correspondente:
+      no ISBN, TODOS os exemplares da obra com o estado de cada um (é assim que o
+      balcão empresta livro cuja etiqueta não foi impressa).
+  buscar_exemplar(con, holding_id) -> dict         # exemplar + obra + empréstimo aberto
+  exemplares_da_obra(con, record_id) -> list
+  buscar_leitor(con, user_id) -> dict              # ficha + situação + empréstimos
+  procurar_leitores(con, busca, limite=20) -> list # por nome; use name_ascii/ilike, como o UserDAO
+  situacao(con, user_id) -> dict                   # abertos, atrasados, multas, limite, pode_levar
+  checar(con, holding_id, user_id) -> dict         # {"pode","impedimentos","avisos","previsto_para"}
+  emprestar(con, holding_id, user_id, operador_id, previsto_para=None, forcar_avisos=False) -> dict
+  devolver(con, holding_id=None, lending_id=None, operador_id=1) -> dict
+  renovar(con, lending_id, operador_id) -> dict
+  pendencias(con, tipo="atrasados", limite=50) -> dict
+
+CÓDIGOS DE IMPEDIMENTO (vocabulário fechado, a tela depende dele)
+  leitor_nao_encontrado leitor_inativo leitor_bloqueado leitor_com_atraso
+  limite_atingido multa_em_aberto exemplar_nao_encontrado exemplar_emprestado
+  exemplar_indisponivel reserva_de_outro_leitor conflito
+IMPEDIMENTO barra (o router devolve 409). AVISO passa com `forcar_avisos=True`.
+Você decide o que é qual, com base no fonte, e justifica no docstring.
+
+REGRAS INEGOCIÁVEIS
+  - NADA COMMITA. Toda função recebe `con` e devolve; quem commita é o router. É a regra
+    que atravessa o pacote inteiro.
+  - Concorrência: `emprestar` e `devolver` fazem `SELECT ... FROM biblio_holdings WHERE id=%s
+    FOR UPDATE` e REVALIDAM dentro da transação (o exemplar pode ter sido emprestado pelo
+    BibLivre entre a leitura e o clique). Levante `conflito` se a revalidação falhar.
+  - Ids pela sequence do Postgres (`nextval`/DEFAULT), nunca calculados. `created_by` é o
+    `operador_id` recebido — não fixe 1.
+  - Datas: `expected_return_date` conforme a regra que você levantou no fonte, não um
+    "+15 dias" inventado. Se o fonte disser que vem de configuração, LEIA a configuração.
+  - Título e autor saem do `iso2709` via `biblio.biblivre.marc` — não invente coluna que
+    não existe. Não faça N+1: uma query por operação, com join.
+  - Erro de domínio é dict com `codigo` e `mensagem` em português, não exceção crua.
+  - Docstring do topo no estilo do repositório: o POR QUÊ de cada decisão, o que foi
+    verificado no fonte, e a diferença explícita entre este módulo e `circulacao.py`.
+
+VERIFICAÇÃO
+  `python tests/verificar.py` precisa continuar passando. Sem banco real você não testa de
+  ponta a ponta — leia `tests/banco_falso.py` para entender o que existe, mas NÃO o edite
+  (é do agente A9). Relate quais consultas o banco de mentira precisará responder para
+  que a fumaça cubra empréstimo e devolução.
+
+RELATÓRIO FINAL
+  Tabela do que você verificou no fonte (arquivo -> conclusão), a lista final de
+  impedimentos vs avisos com a justificativa, a regra de prazo e a de multa, e o que ficou
+  em aberto para confirmar contra a instalação real.</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A4 — Operador e sessão</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">Pequeno, mas é pré-requisito de tudo que grava: sem operador, não há
+<code>created_by</code> — e qualquer celular no wi-fi empresta livro.</p>
+<pre>Você vai escrever UM módulo novo no monorepo `biblioteca-facil-to-biblivre`
+(Python, namespace `biblio`, tudo em português): a identidade de quem opera o balcão.
+
+CONTEXTO
+Até agora o app não tinha login: ele cataloga, e catalogar errado se conserta. Agora ele
+vai registrar empréstimo e devolução, e duas coisas mudam. (1) `lendings.created_by`
+precisa dizer QUEM emprestou — a migração usa `1`, o admin do instalador, e para o dia a
+dia isso não serve. (2) sem nenhuma barreira, qualquer celular na rede da biblioteca
+registra empréstimo em nome de qualquer leitor.
+A solução é não inventar cadastro: o BibLivre já tem a tabela `logins`. Autentique contra
+ela e use o `logins.id` real.
+
+LEIA ANTES
+  packages/biblivre-client/src/biblio/biblivre/conexao.py   (USUARIO_PADRAO=1, credencial em memória)
+  packages/biblivre-client/src/biblio/biblivre/leitores.py  (estilo de acesso a users/users_values)
+  docs/IMPORTACAO_BIBLIVRE.md                               (login inicial admin/abracadabra, SHA-1+Base64)
+  packages/catalogacao/src/biblio/catalogacao/config.py     (como o app guarda estado de processo)
+
+VOCÊ É DONO DE
+  packages/biblivre-client/src/biblio/biblivre/operador.py   (novo)
+NÃO TOQUE em nenhum outro arquivo (o router de sessão é do agente A8).
+
+PESQUISA DE FONTE
+Em https://github.com/cleydyr/Biblivre-5, confirme em `biblivre/login/` e no SQL de criação:
+  - o formato exato do hash em `logins.password` (o repositório afirma SHA-1 + Base64 —
+    confirme, inclusive o encoding do texto antes do digest);
+  - as colunas de `logins` (id, login, name, status/ativo?) e o que marca um login desativado;
+  - se existe bloqueio por tentativas ou expiração — se existir, diga; não precisa implementar.
+
+ENTREGA
+  hash_senha(senha) -> str                       # idêntico ao do BibLivre
+  autenticar(con, usuario, senha) -> dict | None  # {"id","login","nome"}; None se falhar
+  abrir_sessao(operador) -> str                   # token opaco (secrets.token_urlsafe)
+  sessao(token) -> dict | None                    # renova o "visto por último"
+  encerrar(token) -> None
+  ativas() -> list                                # para a tela do PC mostrar quem está no balcão
+
+REGRAS
+  - Sessões vivem EM MEMÓRIA, com lock, com expiração por inatividade (padrão 12h, o turno
+    da biblioteca) — mesma postura da senha do Postgres: nada em disco. Reiniciar o servidor
+    desloga todo mundo, e isso é aceitável; diga por quê no docstring.
+  - `autenticar` não vaza qual metade falhou (usuário ou senha) na mensagem.
+  - Nunca guarde a senha em claro, nem no dict de sessão, nem em log.
+  - Comparação de hash com `hmac.compare_digest`.
+  - Só stdlib (`hashlib`, `base64`, `secrets`, `hmac`, `threading`, `time`).
+  - Docstring do topo explicando por que reusar `logins` do BibLivre em vez de criar
+    cadastro próprio (uma senha a menos para a biblioteca administrar, e o `created_by`
+    passa a ser verdade dentro do BibLivre também).
+
+VERIFICAÇÃO
+  `python tests/verificar.py` continua passando. Teste `hash_senha` contra o par conhecido
+  do instalador (admin / abracadabra) — se o hash bater com o que o SQL de criação do
+  BibLivre traz, você provou a implementação inteira. Ponha isso como teste no docstring
+  ou num bloco `if __name__ == "__main__"`, já que o arquivo de fumaça é de outro agente.
+
+RELATÓRIO FINAL
+  Como o hash é montado (com a referência no fonte), o que `logins` tem de colunas úteis,
+  e o que o A8 precisa saber para escrever o router de sessão.</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A5 — Scanner em modo circulação</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">O scanner já lê EAN-13 da capa. Precisa passar a ler a etiqueta do tombo — sem
+regredir um milímetro do que já funciona em campo.</p>
+<pre>Você vai estender o scanner do app web do monorepo `biblioteca-facil-to-biblivre`
+(React + Vite, tudo em português) para servir também à circulação.
+
+CONTEXTO
+Hoje o celular bipa o código de barras da CAPA (EAN-13 = ISBN) para catalogar. Para
+emprestar e devolver, o que identifica o livro é o TOMBO — o `accession_number` do
+BibLivre, no formato `Bib.&lt;ano&gt;.&lt;n&gt;`, impresso na etiqueta colada no exemplar,
+tipicamente em Code 39 ou Code 128. O motor nativo (`BarcodeDetector`) já é criado com
+`code_128` e `code_39` na lista, mas o motor de reserva (html5-qrcode, usado em iOS
+Safari e desktop) está limitado a EAN_13, e a classificação do que foi lido é
+exclusivamente de ISBN.
+
+LEIA ANTES
+  apps/web/src/features/scanner/core/decodificador.js   (os dois motores)
+  apps/web/src/features/scanner/useScanner.js           (laço, dedup por janela, entrega)
+  apps/web/src/features/scanner/isbn.js                 (classificarCodigo — o padrão a seguir)
+  apps/web/src/features/scanner/core/scannerLoop.js
+  apps/web/src/features/scanner/core/__tests__/decodificador.test.js  (o estilo dos testes)
+  docs/COMPATIBILIDADE_DISPOSITIVOS.md
+
+VOCÊ É DONO DE
+  apps/web/src/features/scanner/core/decodificador.js       (editar)
+  apps/web/src/features/scanner/useScanner.js               (editar)
+  apps/web/src/features/scanner/codigos.js                  (novo)
+  apps/web/src/features/scanner/core/__tests__/codigos.test.js  (novo)
+NÃO TOQUE em `isbn.js`, `TelaCelular.jsx`, `App.jsx`, `client.js` nem em nada de
+`features/circulacao/` (é de outros dois agentes, que consomem o que você expõe).
+
+ENTREGA
+1. `codigos.js` — classificação local e barata, só para o FEEDBACK imediato do visor:
+     classificarCirculacao(texto) -> { tipo: 'tombo'|'isbn'|'numero'|'desconhecido', valor }
+   Tombo: prefixo alfanumérico + ano + contador (ex.: `Bib.2019.842`), tolerante a
+   maiúsculas/minúsculas e a espaço em volta. NÃO fixe o prefixo "Bib" no código: ele vem
+   de configuração do BibLivre e pode ser outro. ISBN: reuse `isbn.js`, não reimplemente.
+   `numero`: dígitos soltos que podem ser matrícula/carteirinha de leitor.
+   IMPORTANTE: quem decide de verdade o que o código é será o servidor
+   (`GET /api/circulacao/resolver`). Sua classificação é dica de UI, e o docstring
+   precisa dizer isso — duas fontes de verdade divergindo seria bug garantido.
+2. `decodificador.js` — um conjunto de formatos por modo:
+     FORMATOS_ISBN (o de hoje) e FORMATOS_CIRCULACAO (ean_13 + code_128 + code_39),
+   valendo para o motor NATIVO e para o de RESERVA (html5-qrcode: acrescente
+   CODE_39 e CODE_128 em `formatsToSupport` quando o modo for circulação).
+3. `useScanner.js` — aceitar `{ modo: 'isbn' | 'circulacao' }`, com 'isbn' como default.
+   O modo escolhe o conjunto de formatos e o classificador. A janela anti-repetição
+   precisa valer para qualquer código, não só para ISBN (hoje há um `ultimoIsbnEntregue`;
+   generalize sem mudar o comportamento do modo isbn).
+
+INVESTIGUE E RELATE (não bloqueie por isso)
+  Qual simbologia o BibLivre 5 imprime na etiqueta de exemplar (fonte:
+  https://github.com/cleydyr/Biblivre-5, módulo de relatórios/etiquetas). Se for Code 39
+  com dígito de verificação ou com delimitadores `*`, o texto lido pode vir com sujeira —
+  normalize em `codigos.js` e documente. Enquanto não confirmar, habilitar Code 39 E
+  Code 128 juntos é barato e cobre os dois casos.
+
+REGRAS
+  - REGRESSÃO ZERO no modo isbn: mesmos formatos, mesma classificação, mesmo comportamento.
+    Se um teste existente precisar mudar, é sinal de que você mudou o que não devia.
+  - Sem dependência nova.
+  - Comentários no estilo do arquivo (bloco `@fileoverview` explicando propósito e limitações).
+
+VERIFICAÇÃO
+  cd apps/web && npm test      (node --test; TODOS os testes existentes precisam passar)
+  Escreva casos para: tombo válido com prefixos diferentes, tombo com espaço/caixa trocada,
+  EAN-13 de preço (não é ISBN), ISBN-13 válido, número solto, lixo.
+
+RELATÓRIO FINAL
+  O que mudou em cada arquivo, o que descobriu sobre a etiqueta do BibLivre, e a API exata
+  que as telas de circulação vão consumir (assinatura de `useScanner` no modo novo).</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A6 — Tela do celular: emprestar e devolver</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">A tela que o usuário pediu: bipar para levar e bipar para devolver, de pé, com o
+leitor na frente.</p>
+<pre>Você vai escrever a tela de circulação do CELULAR no app web do monorepo
+`biblioteca-facil-to-biblivre` (React + Vite, tudo em português).
+
+CONTEXTO
+O celular hoje tem uma tela só: a câmera que bipa ISBN para catalogar. Agora ele ganha a
+segunda: o balcão móvel — emprestar e devolver bipando o livro. O scanner, o visor, o
+overlay e o retorno sonoro já existem e são reaproveitados; o que você escreve é o fluxo.
+
+POSTURA (leia com atenção, é o oposto da tela de captura)
+Na captura o celular NUNCA bloqueia: bipe é rascunho. Na circulação ele ESPERA a
+confirmação do servidor, porque dizer "levou" antes do commit é mentir para quem está na
+sua frente. Cada bipe: estado "gravando" -> confirmação (verde + som de ok) ou recusa
+(vermelho + som de erro + motivo em uma linha). Isso é exceção deliberada ao §7 do
+docs/SPEC_UI.md; não a corrija.
+
+LEIA ANTES
+  docs/SPEC_UI.md  (seções 3 e 7 — o vocabulário e as regras que a interface não quebra)
+  apps/web/src/features/scanner/TelaCelular.jsx    (a tela irmã: visor, bandeja, feedback)
+  apps/web/src/features/scanner/useScanner.js      (o hook; o agente A5 acrescenta `{modo:'circulacao'}`)
+  apps/web/src/features/scanner/core/audio.js      (feedback sonoro)
+  apps/web/src/components/index.jsx                (Botao, Selo, Moldura, Cantos, Stepper — REUSE)
+  apps/web/src/api/client.js                       (o integrador já criou `api.circulacao` e `api.sessao`)
+  apps/web/src/styles/tokens.css                   (cores e espaçamentos — nada de valor solto)
+
+VOCÊ É DONO DE
+  apps/web/src/features/circulacao/TelaCirculacaoCelular.jsx   (novo)
+  apps/web/src/features/circulacao/useCirculacao.js            (novo — estado e chamadas)
+  apps/web/src/features/circulacao/circulacao.css              (novo)
+NÃO TOQUE em App.jsx, client.js, components/index.jsx, nem em nada de `features/scanner/`
+(o modo circulação do scanner é do agente A5; consuma, não edite).
+
+O FLUXO
+  Topo: dois modos grandes, mutuamente exclusivos — [ EMPRESTAR ] [ DEVOLVER ].
+  O modo escolhido tem que ser óbvio à distância de um braço: cor e rótulo, não um ícone.
+
+  DEVOLVER (mais simples, faça primeiro)
+    Bipa o tombo -> POST /api/circulacao/devolucoes -> confirmação com título, leitor que
+    devolveu e, quando houver, MULTA (valor e dias de atraso) e RESERVA pendente de outro
+    leitor ("separe este livro"). Sem escolher leitor, sem passo intermediário.
+    Livro que não estava emprestado: aviso claro, não erro vermelho de falha.
+
+  EMPRESTAR (duas etapas)
+    1. Identifica o LEITOR: bipa a carteirinha, digita o número, ou busca por nome
+       (GET /api/circulacao/leitores?busca=). O leitor identificado fica FIXO no topo,
+       como sessão, com a situação dele: em aberto, atrasados, multa.
+    2. Bipa os livros, um a um, cada um confirmando na hora. A lista do que já saiu fica
+       visível. Botão para encerrar a sessão do leitor e voltar ao passo 1.
+    Leitor impedido (inativo, bloqueado, com atraso, no limite): a tela BARRA na etapa 1,
+    dizendo o motivo em português, e não deixa nem bipar livro.
+    Aviso (não impedimento): mostra e pede confirmação explícita, que reenvia com
+    `forcar_avisos: true`. A tela precisa dizer O QUE está sendo ignorado.
+
+  Exemplar sem etiqueta: se o código bipado for ISBN, a resposta traz os exemplares
+  daquela obra com o estado de cada um — mostre a lista e deixe escolher. É o caso comum
+  do acervo migrado, não uma exceção rara; trate como caminho de primeira classe.
+
+CONTRATO (rotas e códigos que a tela consome)
+  POST /api/sessao {usuario, senha} -> {token, operador}   (o app envia X-Sessao depois)
+  GET  /api/circulacao/resolver?codigo=
+  GET  /api/circulacao/leitor/{id}          GET /api/circulacao/leitores?busca=
+  POST /api/circulacao/emprestimos {holding_id, user_id, forcar_avisos?}
+       201 {emprestimo:{id,tombo,titulo,leitor,previsto_para}}
+       409 {codigo, mensagem, impedimentos:[...], avisos:[...]}
+  POST /api/circulacao/devolucoes {holding_id}
+       200 {devolucao, multa|null, reserva|null, atraso_dias}
+  Códigos de impedimento: leitor_nao_encontrado leitor_inativo leitor_bloqueado
+  leitor_com_atraso limite_atingido multa_em_aberto exemplar_nao_encontrado
+  exemplar_emprestado exemplar_indisponivel reserva_de_outro_leitor sem_operador
+  sem_banco conflito
+  Traduza CADA um para uma frase que o balcão entenda. Nada de "erro 409".
+
+REGRAS
+  - Uma mão só: alvo de toque grande, nada essencial no topo da tela, o visor é a área nobre.
+  - Sem operador logado (401), a tela pede login antes de qualquer coisa — e o login é
+    a única coisa na tela nesse estado.
+  - Rede caiu no meio: diga "não deu para confirmar" e NÃO afirme que emprestou. O
+    empréstimo é do servidor; a tela não tem estado próprio de verdade.
+  - Reuse os componentes e os tokens de estilo. CSS novo só no seu arquivo.
+  - Sem dependência nova.
+
+VERIFICAÇÃO
+  cd apps/web && npm test      (os testes existentes precisam continuar passando)
+  cd apps/web && npm run build (a tela precisa compilar; ela é carregada com lazy())
+  Se `useScanner({modo:'circulacao'})` ainda não existir quando você começar, programe
+  contra essa assinatura e deixe um comentário apontando para o agente A5.
+
+RELATÓRIO FINAL
+  Os estados que a tela cobre (liste-os), as frases que você escolheu para cada código de
+  impedimento, e o que precisa ser desenhado no docs/SPEC_UI.md pelo agente A10.</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A7 — Tela do PC: balcão de circulação</h3><span class="selo onda1">Onda 1</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">A tela que substitui, de fato, o dia a dia do BibLivre para quem está sentado.</p>
+<pre>Você vai escrever a tela de circulação do PC no app web do monorepo
+`biblioteca-facil-to-biblivre` (React + Vite, tudo em português).
+
+CONTEXTO
+O PC do balcão hoje tem duas telas: a de captura (gerencia os celulares que bipam) e a
+fila de revisão. Agora ganha a terceira, e é a que tira o BibLivre do caminho no dia a
+dia: empréstimo, devolução, ficha do leitor e atrasos. Quem está aqui está sentado, com
+teclado — então esta tela é de LEITURA e DECISÃO, com muito mais informação por pixel que
+a do celular, e o campo de digitação vale tanto quanto o leitor de código de barras USB
+(que, para o navegador, digita e aperta Enter — trate como campo de texto com foco
+permanente).
+
+LEIA ANTES
+  apps/web/src/features/balcao/TelaBalcao.jsx      (o irmão: painel, polling por versão, layout do PC)
+  apps/web/src/features/fila/TelaFila.jsx          (indicadores, filtros, tabela — o padrão visual do PC)
+  apps/web/src/components/index.jsx                (componentes a reusar)
+  apps/web/src/api/client.js                       (o integrador já criou `api.circulacao` e `api.sessao`)
+  apps/web/src/styles/tokens.css
+  docs/SPEC_UI.md  (seções 4 e 7)
+
+VOCÊ É DONO DE
+  apps/web/src/features/circulacao/TelaBalcaoCirculacao.jsx    (novo)
+  apps/web/src/features/circulacao/FichaLeitor.jsx             (novo)
+  apps/web/src/features/circulacao/balcao-circulacao.css       (novo)
+NÃO TOQUE em App.jsx, client.js, components/index.jsx, nem nos arquivos do agente A6
+(`TelaCirculacaoCelular.jsx`, `useCirculacao.js`, `circulacao.css`). Se precisar de lógica
+que o A6 também precisa, DUPLIQUE o mínimo e relate — melhor duplicar 20 linhas que ter
+dois agentes editando o mesmo arquivo.
+
+A TELA
+  Uma barra de comando no topo, sempre com foco: um campo só, que aceita tombo, ISBN ou
+  número de leitor, resolvido por GET /api/circulacao/resolver?codigo=. É assim que o leitor
+  USB funciona — o bibliotecário nunca escolhe "tipo" antes de bipar.
+
+  Três regiões:
+  1. ATENDIMENTO — o leitor corrente (ficha compacta: nome, situação, em aberto,
+     atrasados, multa) e o que está sendo emprestado agora. Devolução também acontece
+     aqui: bipou tombo emprestado, oferece devolver; bipou tombo livre com leitor na tela,
+     oferece emprestar. Ação sempre explícita, nunca automática — este é o PC, não o
+     celular.
+  2. FICHA DO LEITOR (`FichaLeitor.jsx`) — empréstimos em aberto com data prevista e
+     destaque para atraso, histórico paginado, multas, e renovar por item
+     (POST /api/circulacao/renovacoes).
+  3. ATRASOS — GET /api/circulacao/pendencias?tipo=atrasados: quem está devendo o quê e há
+     quantos dias, ordenável, com busca. É o relatório que hoje obriga a abrir o BibLivre.
+
+CONTRATO
+  GET  /api/circulacao/resolver?codigo=
+  GET  /api/circulacao/leitor/{id}           GET /api/circulacao/leitores?busca=
+  GET  /api/circulacao/exemplar/{holding_id}
+  POST /api/circulacao/emprestimos {holding_id, user_id, forcar_avisos?}   201 | 409
+  POST /api/circulacao/devolucoes {holding_id?, lending_id?}
+  POST /api/circulacao/renovacoes {lending_id}
+  GET  /api/circulacao/pendencias?tipo=atrasados|hoje
+  Sessão: POST /api/sessao, header X-Sessao; 401 -> a tela pede login e não mostra mais nada.
+  Códigos de impedimento (traduza todos para o balcão): leitor_nao_encontrado
+  leitor_inativo leitor_bloqueado leitor_com_atraso limite_atingido multa_em_aberto
+  exemplar_nao_encontrado exemplar_emprestado exemplar_indisponivel
+  reserva_de_outro_leitor sem_operador sem_banco conflito
+
+REGRAS
+  - Sem banco (`sem_banco`), a tela diz isso e desabilita as ações — não degrada em
+    silêncio. É a mesma postura da pílula de conexão que já existe no app.
+  - `conflito` (alguém emprestou o mesmo exemplar pelo BibLivre no meio) tem mensagem
+    própria: "o exemplar mudou de estado; confira antes de repetir".
+  - A lista de atrasos atualiza por polling leve, no padrão que `TelaBalcao.jsx` já usa
+    (contador de versão em vez de substituir o estado a cada resposta).
+  - Reuse componentes e tokens; CSS novo só no seu arquivo. Sem dependência nova.
+
+VERIFICAÇÃO
+  cd apps/web && npm test && npm run build
+
+RELATÓRIO FINAL
+  As regiões e estados implementados, o que a tela ainda manda o bibliotecário fazer no
+  BibLivre (e por quê), e o que o agente A10 precisa documentar no SPEC_UI.</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A8 — Routers da API</h3><span class="selo onda2">Onda 2</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">Casca fina, como todos os outros routers do projeto. É quem commita — e é o único
+lugar do sistema que commita.</p>
+<pre>Você vai escrever os routers da API do monorepo `biblioteca-facil-to-biblivre`
+(FastAPI, namespace `biblio`, tudo em português). Os módulos de domínio já existem.
+
+CONTEXTO
+O padrão do projeto: router é CASCA FINA. Quem sabe fazer é o pacote; o router valida
+entrada, chama, commita e traduz erro de domínio em status HTTP. Você está costurando
+três módulos novos: `biblio.biblivre.emprestimo` (circulação), `biblio.biblivre.operador`
+(sessão), `biblio.biblivre.web` (reindex/backup) e `biblio.biblivre.verificacao`
+(conferência).
+
+LEIA ANTES
+  apps/api/src/biblio/api/routers/migracao.py    (o modelo mais próximo: erro, credencial, em_thread)
+  apps/api/src/biblio/api/routers/fila.py
+  apps/api/src/biblio/api/deps.py                (em_thread — TUDO que é bloqueante passa por aqui)
+  apps/api/src/biblio/api/schemas.py             (corpos em Pydantic; respostas continuam dicts)
+  apps/api/src/biblio/api/main.py                (o integrador JÁ registrou seus routers — não edite)
+  packages/biblivre-client/src/biblio/biblivre/emprestimo.py   (assinaturas reais)
+  packages/biblivre-client/src/biblio/biblivre/operador.py
+  packages/biblivre-client/src/biblio/biblivre/web.py
+  packages/biblivre-client/src/biblio/biblivre/verificacao.py
+
+VOCÊ É DONO DE
+  apps/api/src/biblio/api/routers/circulacao.py   (novo)
+  apps/api/src/biblio/api/routers/manutencao.py   (novo)
+  apps/api/src/biblio/api/routers/sessao.py       (novo)
+  apps/api/src/biblio/api/schemas.py              (SÓ ACRESCENTAR classes; não mexa nas existentes)
+NÃO TOQUE em main.py, nos módulos de `packages/`, nem no frontend.
+
+ROTAS (contrato fechado — as telas já foram escritas contra ele)
+  POST   /api/sessao                {usuario, senha} -> {token, operador} | 401
+  GET    /api/sessao                header X-Sessao -> {operador} | 401
+  DELETE /api/sessao
+  GET    /api/circulacao/resolver?codigo=
+  GET    /api/circulacao/leitor/{user_id}
+  GET    /api/circulacao/leitores?busca=
+  GET    /api/circulacao/exemplar/{holding_id}
+  POST   /api/circulacao/emprestimos  {holding_id, user_id, forcar_avisos?} -> 201 | 409
+  POST   /api/circulacao/devolucoes   {holding_id?, lending_id?}
+  POST   /api/circulacao/renovacoes   {lending_id}
+  GET    /api/circulacao/pendencias?tipo=atrasados|hoje
+  GET    /api/manutencao
+  POST   /api/manutencao/biblivre     {url, usuario, senha}
+  POST   /api/manutencao/reindexar        GET /api/manutencao/reindexar
+  POST   /api/manutencao/caches
+  POST   /api/manutencao/conferencia
+  POST   /api/manutencao/backup           GET /api/manutencao/backup
+
+REGRAS INEGOCIÁVEIS
+  - O ROUTER COMMITA, e é o único que commita. Uma transação por requisição:
+    abre conexão, chama, `con.commit()` no sucesso, `con.rollback()` em qualquer exceção,
+    fecha sempre. Nada de conexão global compartilhada entre requisições.
+  - TUDO que toca banco ou rede vai por `em_thread` (deps.py). Bloquear o event loop
+    trava a tela de todo mundo — inclusive a captura, que não pode esperar.
+  - Erro de domínio (dict com `codigo`) vira 409 com o corpo
+    {"status":"erro","codigo":...,"mensagem":...,"impedimentos":[...],"avisos":[...]}.
+    Sem operador -> 401 com `codigo: "sem_operador"`. Sem banco -> 503 com `sem_banco`.
+    Exceção inesperada NUNCA vira 500 com stack: vira mensagem em português.
+  - Autenticação: gravação em `/api/circulacao/*` exige `X-Sessao` válido, e o
+    `operador_id` que vai para o domínio sai da sessão — nunca do corpo da requisição.
+    Consulta (GET) pode ficar liberada; diga no docstring o que você decidiu e por quê.
+  - A senha do admin do BibLivre (rota de manutenção) segue a regra da senha do Postgres:
+    memória, nunca disco, nunca de volta na resposta.
+  - Reindex e backup NÃO bloqueiam: dispare e devolva; o progresso é rota separada.
+
+VERIFICAÇÃO
+  python tests/verificar.py    (precisa continuar passando)
+  python scripts/servidor.py --sem-ssl  e confira /docs: as rotas aparecem e respondem
+  o erro certo sem banco (503, não 500).
+
+RELATÓRIO FINAL
+  A tabela rota -> função de domínio -> status de erro, o que você decidiu sobre GET sem
+  sessão, e qualquer divergência entre o contrato acima e as assinaturas reais dos módulos
+  (isso é informação para o integrador, não conserte sozinho do lado do pacote).</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A9 — Verificação de fumaça</h3><span class="selo onda2">Onda 2</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">Um botão que grava empréstimo no banco da biblioteca não pode ter como única
+garantia "rodou uma vez".</p>
+<pre>Você vai estender a verificação de fumaça do monorepo `biblioteca-facil-to-biblivre`
+para cobrir a circulação do dia a dia. Roda sem banco, sem rede e sem câmera.
+
+CONTEXTO
+`tests/verificar.py` já cobre as rotas que as telas consomem, a persistência da fila, o
+MARC gerado e a migração inteira do `.bkp` ao commit — esta última usando um backup
+sintético (`tests/amostra_bkp.py`) e um PostgreSQL de mentira (`tests/banco_falso.py`).
+Agora existe circulação: empréstimo, devolução, renovação, sessão de operador,
+conferência e cliente HTTP do BibLivre. O mesmo argumento vale, mais forte: aqui o erro
+não é "importou errado", é "emprestou o livro errado para a pessoa errada".
+
+LEIA ANTES
+  tests/verificar.py            (inteiro — inclusive o porquê no docstring)
+  tests/banco_falso.py          (o que ele já sabe responder)
+  tests/amostra_bkp.py
+  packages/biblivre-client/src/biblio/biblivre/emprestimo.py
+  packages/biblivre-client/src/biblio/biblivre/operador.py
+  packages/biblivre-client/src/biblio/biblivre/verificacao.py
+  packages/biblivre-client/src/biblio/biblivre/web.py
+  apps/api/src/biblio/api/routers/circulacao.py e sessao.py e manutencao.py
+
+VOCÊ É DONO DE
+  tests/verificar.py     (editar — ACRESCENTE seções, não reescreva as existentes)
+  tests/banco_falso.py   (editar — ensine-o a responder as consultas novas)
+NÃO TOQUE em mais nada. Se um módulo estiver com defeito, RELATE; não conserte o código
+de outro agente — o teste que falha é informação, o teste ajustado para passar é ruído.
+
+O QUE COBRIR
+  1. Sessão: login com senha errada não abre sessão; login certo abre; token inválido em
+     rota de gravação devolve 401; `hash_senha` bate com o par conhecido do instalador.
+  2. Empréstimo feliz: exemplar livre + leitor ativo -> grava uma linha em `lendings`,
+     com `created_by` do operador e `expected_return_date` preenchida.
+  3. Cada impedimento, um caso: leitor inativo, leitor com atraso, limite atingido,
+     exemplar já emprestado, exemplar inexistente. Todos precisam BARRAR (409) e NÃO
+     deixar linha no banco de mentira.
+  4. Aviso com `forcar_avisos`: barra sem a flag, passa com ela.
+  5. Devolução: fecha o empréstimo (return_date), calcula atraso, gera multa quando é o
+     caso, e devolver duas vezes o mesmo exemplar não gera duas devoluções.
+  6. Renovação, no comportamento que o módulo implementa.
+  7. Resolver: tombo, ISBN (que devolve a lista de exemplares) e código desconhecido.
+  8. Conferência: `verificacao.conferir` roda contra o banco de mentira e devolve a lista
+     de checagens com o formato do contrato.
+  9. Cliente HTTP do BibLivre: contra um `http.server` local de mentira — login, reindex,
+     progresso e sessão expirada. Sem sair da máquina.
+ 10. ROLLBACK: uma falha no meio de uma gravação não deixa linha pela metade.
+
+REGRAS
+  - Mantenha o estilo: `checar(rotulo, condicao, extra)`, seções nomeadas, saída legível,
+    pasta de dados temporária, `BIBLIO_SEM_ENV=1` (nada do `.env` da máquina pode vazar
+    para o teste).
+  - `banco_falso.py` continua sendo mentira SIMPLES e previsível: um dicionário de tabelas,
+    não um Postgres. Se uma consulta do domínio for complexa demais para ele responder,
+    isso é achado — relate, porque provavelmente a consulta pode ser mais simples.
+  - Nada de rede, nada de banco real, nada de sleep longo. O arquivo inteiro roda em segundos.
+
+VERIFICAÇÃO
+  python tests/verificar.py     (tudo verde, incluindo o que já existia)
+
+RELATÓRIO FINAL
+  O que passou, o que falhou e por quê (defeito real ou lacuna do banco de mentira), e as
+  consultas que o `banco_falso` teve dificuldade de responder.</pre>
+</div></div>
+
+<div class="agente">
+<header><h3>A10 — Documentação</h3><span class="selo onda2">Onda 2</span>
+<button class="copiar">copiar</button></header>
+<div class="corpo">
+<p class="sub">Neste repositório a documentação é parte do produto: ela guarda o <em>porquê</em>,
+que é o que não dá para reconstruir lendo o código.</p>
+<pre>Você vai atualizar a documentação do monorepo `biblioteca-facil-to-biblivre`
+(tudo em português) depois que a circulação e a manutenção entraram no app.
+
+CONTEXTO
+Este repositório documenta decisão, não funcionalidade: os arquivos em `docs/` explicam
+POR QUE cada coisa é como é, com referência ao fonte do BibLivre. Duas mudanças grandes
+acabaram de entrar e a documentação ainda descreve o mundo anterior:
+  1. Os três passos manuais do fim da migração (reindexar, reiniciar o Tomcat, conferir)
+     viraram botão — reindex e backup por HTTP contra o próprio BibLivre, conferência em SQL.
+  2. O balcão saiu do BibLivre e entrou no app: empréstimo, devolução, renovação e
+     consulta, pelo celular (bipando o tombo) e pelo PC.
+
+LEIA ANTES (e leia o código que entrou — não documente de ouvido)
+  README.md, docs/SPEC_UI.md, docs/ROADMAP.md, docs/IMPORTACAO_BIBLIVRE.md
+  packages/biblivre-client/src/biblio/biblivre/{emprestimo,operador,web,verificacao}.py
+  apps/api/src/biblio/api/routers/{circulacao,manutencao,sessao}.py
+  apps/web/src/features/circulacao/*
+  Os relatórios finais dos agentes A1 a A9 (é onde está o que foi verificado no fonte).
+
+VOCÊ É DONO DE
+  README.md, docs/SPEC_UI.md, docs/ROADMAP.md, docs/IMPORTACAO_BIBLIVRE.md
+NÃO TOQUE em código. Se achar divergência entre código e contrato, RELATE.
+
+O QUE ESCREVER
+  docs/SPEC_UI.md
+    - Seção nova: "Circulação — celular e PC". Objetivo, regiões, estados, o fluxo de
+      empréstimo em duas etapas, o de devolução em uma, e o caminho do ISBN quando o
+      exemplar não tem etiqueta.
+    - Registre a EXCEÇÃO à seção 7: na circulação o celular espera confirmação do
+      servidor. Explique por quê — e por que isso não vale para a captura.
+    - Seção nova: "Manutenção" (reindexar, caches, conferência, backup).
+    - Acrescente ao contrato de API (seção 6) as rotas novas.
+    - Vocabulário (seção 8): tombo, exemplar, empréstimo em aberto, impedimento vs aviso,
+      operador. Um leitor que só lê essa seção precisa entender o resto.
+  docs/IMPORTACAO_BIBLIVRE.md
+    - O roteiro de importação hoje termina em passos manuais. Marque quais o app passou a
+      fazer e como (com o que foi verificado no fonte do BibLivre: ações `reindex`/`progress`,
+      reset de cache de traduções, backup).
+    - Acrescente o que se descobriu sobre `LendingBO`/multas/prazo — é a mesma natureza do
+      que já está lá sobre `HoldingBO` e `UserDAO`, e é o que sustenta a circulação.
+    - A armadilha das sequences depois da migração (id explícito) merece parágrafo próprio:
+      é o que quebraria o primeiro empréstimo feito pelo app.
+  docs/ROADMAP.md
+    - Mova para "Feito" o que foi feito (inclusive o item "reindex automático depois de
+      gravar obra nova", que estava aberto). Escreva os "Próximos passos" reais que
+      sobraram — em especial o que ainda obriga a abrir o BibLivre.
+  README.md
+    - A seção 1 diz que o projeto faz duas coisas. Agora são três: catalogação, migração e
+      CIRCULAÇÃO. Ajuste a abertura, o mapa de pacotes e as rotas listadas.
+
+REGRAS
+  - O estilo do repositório: prosa densa, primeira pessoa do plural, o porquê antes do quê,
+    tabelas para contrato. NADA de "agora com nova funcionalidade incrível".
+  - Não invente número. Se não houver medição em campo, diga que não houve.
+  - Marque claramente o que foi verificado no fonte do BibLivre e o que ainda precisa ser
+    confirmado contra a instalação real (versão 5.0.x; o fonte lido é de um fork).
+  - Nada de dado pessoal de leitor em exemplo. Use nomes inventados.
+
+RELATÓRIO FINAL
+  O que mudou em cada arquivo e a lista de afirmações que ficaram marcadas como
+  "a confirmar" — ela vira a pauta do primeiro teste contra o BibLivre real.</pre>
+</div></div>
+
+<h2 id="integracao">7. Integração e verificação</h2>
+<div class="cartao">
+  <h3>Estado: Onda 0 <span class="selo onda0">feita</span></h3>
+  <p>Os stubs, os routers-esqueleto e a costura estão no repositório. Verificação registrada
+  no momento em que os agentes pegam o trabalho — é a linha de base deles:</p>
+  <ul>
+    <li><code>python tests/verificar.py</code> → <strong>tudo certo</strong>.</li>
+    <li><code>npm run build</code> → <strong>ok</strong>, com os dois chunks novos de circulação.</li>
+    <li><code>npm test</code> → <strong>58 passam, 2 falham em <code>core/audio</code></strong>.
+    As duas <strong>já falhavam antes do andaime</strong> (verificado com o HEAD limpo): são
+    pré-existentes, ninguém deve tentar consertá-las como se tivesse quebrado algo.</li>
+    <li>O script de teste era <code>node --test "src/**/__tests__/**/*.test.js"</code>, e o glob
+    não expande no Windows — <code>npm test</code> não achava arquivo nenhum. Passou a ser
+    <code>node --test src</code>, que descobre os 60 testes nos dois sistemas.</li>
+  </ul>
+</div>
+
+<h4>Onda 0 — o andaime, antes de despachar</h4>
+<ol>
+  <li><code>packages/biblivre-client/.../__init__.py</code>: exportar <code>emprestimo</code>,
+  <code>operador</code>, <code>web</code>, <code>verificacao</code> e escrever, no docstring, o invariante
+  novo (uma operação = uma transação = um commit no router).</li>
+  <li>Stubs dos quatro módulos com as assinaturas da §4.1 e <code>NotImplementedError</code> —
+  assim as telas e os routers podem ser escritos contra algo que existe.</li>
+  <li><code>main.py</code>: <code>include_router</code> de circulação, manutenção e sessão.</li>
+  <li><code>client.js</code>: grupos <code>api.sessao</code>, <code>api.circulacao</code>,
+  <code>api.manutencao</code>, e o header <code>X-Sessao</code> no <code>pedir()</code> (mesma mecânica
+  do <code>X-Dispositivo</code> que já existe).</li>
+  <li><code>App.jsx</code>: rota <code>/circulacao</code> resolvendo para a tela do celular ou a do PC,
+  como <code>/</code> já faz; item na Navbar.</li>
+</ol>
+<h4>Onda 3 — costura</h4>
+<ul>
+  <li>Conferir cada relatório final contra o contrato da §4; divergência se resolve no
+  contrato, não no arquivo de quem gritou mais alto.</li>
+  <li><code>python tests/verificar.py</code> e <code>cd apps/web &amp;&amp; npm test &amp;&amp; npm run build</code>.</li>
+  <li>Contra um BibLivre real, nesta ordem: <code>scripts/conferir.py</code> (sequences!) →
+  login de operador → um empréstimo de teste → devolução → reindex pelo botão → backup.</li>
+  <li>Só depois disso: encostar num acervo de produção.</li>
+</ul>
+
+<h2 id="riscos">8. Riscos conhecidos</h2>
+<table>
+  <tr><th>Risco</th><th>Por que dói</th><th>Mitigação neste plano</th></tr>
+  <tr><td>Sequences atrás do <code>max(id)</code> depois da migração</td>
+      <td>O primeiro empréstimo gravado pelo app estoura chave duplicada — e estoura no balcão, com fila</td>
+      <td>Checagem 5 do A2, bloqueante antes de liberar a circulação</td></tr>
+  <tr><td>Exemplares sem etiqueta impressa</td>
+      <td>Não há o que bipar; a promessa "empresta bipando" falha em boa parte do acervo migrado</td>
+      <td>Caminho do ISBN é de primeira classe (A3 e A6), não plano B</td></tr>
+  <tr><td>BibLivre aberto na mesma base</td>
+      <td>Dois empréstimos do mesmo exemplar, ou devolução perdida</td>
+      <td><code>FOR UPDATE</code> + revalidação na transação (A3), código <code>conflito</code> com mensagem própria</td></tr>
+  <tr><td>Regra de prazo/multa reproduzida errado</td>
+      <td>Multa errada é dinheiro de leitor; e o erro só aparece semanas depois</td>
+      <td>A3 lê o fonte antes de codar e documenta arquivo→conclusão; A9 cobre com casos</td></tr>
+  <tr><td>Restart do Tomcat ainda necessário</td>
+      <td>É o único passo que exige poder de parar o servidor da biblioteca</td>
+      <td>A1 investiga o reset de <code>UserFields</code>; enquanto não confirmar, continua sendo aviso na tela — não vira botão</td></tr>
+  <tr><td>Cadastro de leitor continua no BibLivre</td>
+      <td>Leitor novo no balcão obriga a abrir o outro sistema — o app não substitui o dia a dia por completo</td>
+      <td>Fora do escopo desta rodada, e dito na tela; é o primeiro candidato à fase 2</td></tr>
+  <tr><td>Fonte lido é de um fork</td>
+      <td>A instalação é 5.0.x; rota ou coluna pode diferir</td>
+      <td>Todo agente marca "verificado no fonte" vs "a confirmar no WAR"; A10 consolida a pauta</td></tr>
+</table>
+
+<p class="rodape">Gerado para o repositório <code>biblioteca-facil-to-biblivre</code>.
+Os prompts são autocontidos: cada um pode ser colado numa sessão nova.
+A disciplina que faz o plano funcionar é uma só — <strong>um arquivo, um dono</strong>.</p>
+
+</main>
+
+<script>
+document.querySelectorAll('.agente').forEach(function (bloco) {
+  var botao = bloco.querySelector('button.copiar');
+  var pre = bloco.querySelector('.corpo pre');
+  if (!botao || !pre) return;
+  botao.addEventListener('click', function () {
+    var texto = pre.innerText;
+    var pronto = function () {
+      botao.textContent = 'copiado';
+      setTimeout(function () { botao.textContent = 'copiar'; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(pronto, function () { fallback(texto, pronto); });
+    } else {
+      fallback(texto, pronto);
+    }
+  });
+});
+function fallback(texto, pronto) {
+  var area = document.createElement('textarea');
+  area.value = texto;
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  try { document.execCommand('copy'); pronto(); } catch (e) { /* sem clipboard: o usuário seleciona à mão */ }
+  document.body.removeChild(area);
+}
+</script>
+</body>
+</html>

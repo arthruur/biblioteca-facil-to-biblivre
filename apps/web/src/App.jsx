@@ -40,6 +40,27 @@ const TelaMigracao = lazy(() =>
   import('./features/migracao/TelaMigracao').then((m) => ({ default: m.TelaMigracao }))
 )
 /*
+  Circulação é a segunda rota que resolve para telas diferentes conforme o
+  aparelho, e pelo mesmo motivo de `/`: no celular é o balcão móvel (bipa o
+  tombo, de pé, com o leitor na frente); no PC é o balcão sentado, com a barra
+  de comando que o leitor USB alimenta e a ficha do leitor por perto.
+
+  É também a primeira vez que o celular tem uma SEGUNDA tela — até aqui a
+  captura era a tela única dele, e por isso não existe barra de navegação no
+  celular. Como se vai de uma para a outra é decisão da tela de circulação
+  (recebe `aoNavegar`), não deste arquivo.
+*/
+const TelaCirculacaoCelular = lazy(() =>
+  import('./features/circulacao/TelaCirculacaoCelular').then((m) => ({
+    default: m.TelaCirculacaoCelular,
+  }))
+)
+const TelaBalcaoCirculacao = lazy(() =>
+  import('./features/circulacao/TelaBalcaoCirculacao').then((m) => ({
+    default: m.TelaBalcaoCirculacao,
+  }))
+)
+/*
   A bancada do scanner é uma tela de conferência, não do fluxo: só se chega nela
   digitando /scanner-debug ou pelo atalho no painel de ajustes do celular. Fica
   fora da barra de navegação de propósito.
@@ -48,10 +69,20 @@ const TelaDebugScanner = lazy(() =>
   import('./features/scanner/TelaDebugScanner').then((m) => ({ default: m.TelaDebugScanner }))
 )
 
+// Rota do cliente -> caminho na URL. A lista é a mesma que o `_montar_frontend`
+// do backend serve com o index.html; um destino novo precisa entrar nos dois.
+const CAMINHOS = {
+  captura: '/',
+  fila: '/fila',
+  migracao: '/migracao',
+  circulacao: '/circulacao',
+}
+
 function rotaAtual() {
   const caminho = window.location.pathname.replace(/\/+$/, '')
   if (caminho === '/fila') return 'fila'
   if (caminho === '/migracao') return 'migracao'
+  if (caminho === '/circulacao') return 'circulacao'
   if (caminho === '/scanner-debug') return 'debug'
   return 'captura'
 }
@@ -74,9 +105,7 @@ export default function App() {
   const dispositivo = useDispositivo({ ativo: !ehPc })
 
   const irPara = useCallback((destino) => {
-    const caminho =
-      destino === 'fila' ? '/fila' : destino === 'migracao' ? '/migracao' : '/'
-    window.history.pushState({}, '', caminho)
+    window.history.pushState({}, '', CAMINHOS[destino] || '/')
     setRota(destino)
   }, [])
 
@@ -192,6 +221,9 @@ export default function App() {
   const naFila = rota === 'fila' && ehPc
   const naMigracao = rota === 'migracao' && ehPc
   const naBancada = rota === 'debug'
+  // Sem `&& ehPc`: circulação é a única rota que o celular também abre — é para
+  // ele que ela foi feita.
+  const naCirculacao = rota === 'circulacao'
 
   return (
     <div className="app-shell">
@@ -218,6 +250,15 @@ export default function App() {
         <Suspense fallback={<Carregando />}>
           {naBancada ? (
             <TelaDebugScanner />
+          ) : naCirculacao ? (
+            ehPc ? (
+              <TelaBalcaoCirculacao
+                conexao={conexao}
+                aoAbrirBanco={() => setModalGlobal('banco')}
+              />
+            ) : (
+              <TelaCirculacaoCelular conexao={conexao} aoNavegar={irPara} />
+            )
           ) : naMigracao ? (
             <TelaMigracao
               conexao={conexao}

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biblio-migracao"
+version = "0.1.0"
+description = "Migracao de acervo legado (Biblioteca Facil -> BibLivre 5) como operacao de tela"
+requires-python = ">=3.11"
+# Depende de `biblio-catalogacao` por um motivo so: `config.DATA_DIR`, que e
+# onde a fila, os exports e agora as execucoes de migracao vivem. Duplicar a
+# resolucao da pasta de dados daria duas verdades sobre onde o trabalho de
+# gente e gravado — e o BIBLIO_DATA_DIR dos testes deixaria de valer para uma
+# delas.
+dependencies = [
+    "biblio-legado",
+    "biblio-biblivre-client",
+    "biblio-catalogacao",
+    "pandas>=2.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

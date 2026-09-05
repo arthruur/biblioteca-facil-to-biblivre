@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "biblio-catalogacao",
     "biblio-biblivre-client",
+    "biblio-migracao",
     "fastapi>=0.100",
     "uvicorn>=0.20",
     "python-multipart>=0.0.6",

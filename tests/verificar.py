@@ -11,7 +11,11 @@ que doeriam mais se regredissem:
      contrato — inclusive o alias /api/carrinho, que ainda tem cliente;
   2. a fila sobrevive a reinício (é trabalho de gente, não cache);
   3. o MARC gerado agrupa por obra, separa volumes e monta o exemplar no
-     formato que o BibLivre espera.
+     formato que o BibLivre espera;
+  4. a migração pela tela vai do `.bkp` ao commit — com um backup sintético
+     (`amostra_bkp.py`) e um banco de mentira (`banco_falso.py`), porque um
+     botão que grava dezenas de milhares de linhas não pode ter como única
+     verificação "rodou uma vez em campo".
 
 Usa uma pasta de dados temporária, então pode rodar com o servidor de pé.
 """
@@ -21,9 +25,14 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
+
+# `amostra_bkp` e `banco_falso` são deste diretório: o backup sintético e o
+# banco de mentira que a verificação da migração usa.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Antes de qualquer import de `biblio.*`: sem isto o `.env` da maquina entra no
 # ambiente, a checagem de ISBN liga sozinha e os casos de "obra nova" passam a
@@ -262,6 +271,149 @@ def verificar_migracao():
            and tabela.data_para_iso(0) == "")
 
 
+# ------------------------------------------------- Migração pela tela
+
+def _esperar(execucao, segundos=60):
+    """A conferência roda numa thread; a tela busca em laço, o teste também."""
+    limite = time.time() + segundos
+    while execucao.ocupado() and time.time() < limite:
+        time.sleep(0.05)
+    return execucao.estado()
+
+
+def verificar_migracao_pela_tela():
+    """
+    Do `.bkp` ao commit, com um backup sintético e um banco de mentira.
+
+    A migração virou botão de tela, e um botão que grava dezenas de milhares de
+    linhas no PostgreSQL da biblioteca precisa de mais garantia do que "rodou
+    uma vez em campo". Backup real não entra no repositório (tem dado pessoal),
+    então `tests/amostra_bkp.py` escreve um com a mesma forma, e
+    `tests/banco_falso.py` responde ao que a carga pergunta — ver os dois
+    módulos para o que este teste NÃO cobre.
+    """
+    from fastapi.testclient import TestClient
+
+    from biblio.api.main import app
+    from biblio.migracao import execucao, pipeline
+
+    from amostra_bkp import amostra
+    from banco_falso import BancoFalso
+
+    secao("Migração pela tela — .bkp → conferência → gravação")
+    c = TestClient(app)
+    backup = amostra()
+
+    checar("estado vazio antes de qualquer envio",
+           c.get("/api/migracao").json()["fase"] == "vazio")
+    checar("conferir sem backup é 409",
+           c.post("/api/migracao/conferir", json={}).status_code == 409)
+
+    r = c.post("/api/migracao/backup",
+               files={"arquivo": ("acervo.bkp", backup, "application/octet-stream")})
+    enviado = r.json()
+    checar("backup aceito e extraído",
+           r.status_code == 200 and enviado["fase"] == "pronto", enviado)
+    checar("inventário lista as 11 tabelas da amostra",
+           len(enviado["tabelas"]) == 11, len(enviado.get("tabelas", [])))
+    checar("cabeçalho do .dat traz a descrição da tabela",
+           any(t["descricao"] == "Cadastro do Acervo"
+               for t in enviado["tabelas"]))
+
+    # §7.2 vale aqui também: nada escreve sem confirmação explícita.
+    checar("gravar sem confirmação é recusado",
+           c.post("/api/migracao/executar", json={}).status_code == 400)
+    checar("gravar sem conferência é recusado",
+           c.post("/api/migracao/executar",
+                  json={"confirmado": True}).status_code == 409)
+
+    c.post("/api/migracao/conferir", json={})
+    estado = _esperar(execucao)
+    checar("conferência termina sem erro",
+           estado["fase"] == "conferido", estado.get("erro"))
+    checar("todos os passos fecharam",
+           all(p["status"] in ("ok", "pulado") for p in estado["passos"]),
+           [(p["chave"], p["status"]) for p in estado["passos"]])
+
+    rel = estado["relatorio"]
+    checar("registro excluído na origem fica de fora",
+           rel["acervo"]["registros_origem"] == 4, rel["acervo"])
+    checar("4 exemplares viram 3 obras (cópias juntas, volumes separados)",
+           rel["acervo"]["obras"] == 3 and rel["acervo"]["exemplares"] == 4)
+    checar("leitor desativado entra como inativo",
+           rel["leitores"]["ativos"] == 1 and rel["leitores"]["inativos"] == 1)
+    checar("data de nascimento impossível é descartada",
+           rel["leitores"]["nascimentos_invalidos"] == 1)
+    checar("circulação casa os dois empréstimos",
+           rel["circulacao"]["emprestimos"] == 2
+           and rel["circulacao"]["abertos"] == 1
+           and not rel["circulacao"]["descartes"], rel["circulacao"])
+    checar("sem banco, a conferência avisa o que não verificou",
+           rel["destino"] is None and any("Postgres" in a for a in rel["avisos"]))
+    checar("arquivos de conferência em disco",
+           {a["nome"] for a in estado["artefatos"]}
+           >= {"obras.mrc", "exemplares.csv"}, estado["artefatos"])
+    checar("download só aceita artefato conhecido",
+           c.get("/api/migracao/arquivos/../estado.json").status_code in (404, 400))
+    checar("download do MRC responde",
+           c.get("/api/migracao/arquivos/obras.mrc").status_code == 200)
+
+    # A gravação em si, contra o banco de mentira: é o caminho que não dá para
+    # exercitar pela API sem um PostgreSQL de pé.
+    pasta = Path(estado["pasta"])
+    banco = BancoFalso()
+    r = pipeline.gravar(pasta, pipeline.Opcoes(), banco)
+    checar("grava 3 obras e 4 exemplares",
+           r["obras"] == 3 and r["exemplares"] == 4, r)
+    checar("uma transação só, commitada no fim",
+           banco.commits == 1 and banco.rollbacks == 0)
+    checar("o exemplar acha a obra pelo 035 $a",
+           [a[0] for _, a in banco.holdings] == [1, 1, 2, 3],
+           [a[0] for _, a in banco.holdings])
+    checar("tombos no formato do BibLivre",
+           [a[5] for _, a in banco.holdings][0] == "Bib.2026.1")
+    checar("9 campos novos com tradução nos 3 idiomas",
+           len(r["campos_criados"]) == 9 and len(banco.traducoes) == 27)
+    checar("empréstimo aponta para o exemplar certo",
+           banco.emprestimos[0][1] == 1 and banco.emprestimos[1][1] == 3,
+           banco.emprestimos)
+    checar("multa e reserva entram com o vínculo",
+           len(banco.multas) == 1 and banco.reservas[0][0] == 3)
+    checar("mapas de conferência escritos depois do commit",
+           (pasta / "exemplares_mapa.csv").exists()
+           and (pasta / "leitores_mapa.csv").exists())
+    checar("reindex e restart do Tomcat aparecem como próximo passo",
+           any("Reindexar" in p for p in r["proximos_passos"])
+           and any("Tomcat" in p for p in r["proximos_passos"]))
+
+    # Falha no meio: a promessa é "ou entra tudo, ou não entra nada".
+    quebrado = BancoFalso()
+    quebrado.escrever = _explodir
+    try:
+        pipeline.gravar(pasta, pipeline.Opcoes(), quebrado)
+        checar("falha no meio da carga levanta", False)
+    except Exception:
+        checar("falha no meio da carga levanta", True)
+    checar("falha desfaz a transação e não commita",
+           quebrado.rollbacks == 1 and quebrado.commits == 0)
+
+    # Gravar duas vezes a mesma etapa duplicaria um acervo inteiro. A checagem
+    # de base ocupada pega isso quando há banco; esta não depende de banco
+    # nenhum, e é a que vale no caminho comum (conferência sem senha).
+    with execucao._lock:
+        execucao._estado["gravadas"] = ["acervo"]
+    repetida = c.post("/api/migracao/executar", json={"confirmado": True})
+    checar("etapa já gravada não grava de novo",
+           repetida.status_code == 409, repetida.json())
+
+    checar("descartar apaga a pasta da execução",
+           c.delete("/api/migracao").status_code == 200 and not pasta.exists())
+
+
+def _explodir(*_args, **_kwargs):
+    raise RuntimeError("banco caiu no meio da carga")
+
+
 # ------------------------------------------------------------ CLIs
 
 def verificar_clis():
@@ -280,6 +432,7 @@ def main():
     print(f"dados de teste em {DADOS}")
     verificar_api()
     verificar_migracao()
+    verificar_migracao_pela_tela()
     verificar_clis()
 
     print()

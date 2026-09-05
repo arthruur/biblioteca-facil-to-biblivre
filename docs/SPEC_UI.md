@@ -1,7 +1,9 @@
 # Spec de UI/UX — Catalogação por ISBN
 
-Contrato das duas telas. Descreve o que cada uma precisa mostrar, em que
-estado ela pode estar e por quê — não o CSS que a implementação usa.
+Contrato das telas. Descreve o que cada uma precisa mostrar, em que estado ela
+pode estar e por quê — não o CSS que a implementação usa. As seções 1 a 8 são
+da catalogação por ISBN, o trabalho de todo dia; a 9 é da migração de acervo
+legado, o trabalho do primeiro dia.
 
 As telas vivem em `apps/web` (React); as rotas que elas consomem, em
 `apps/api`. Quem for redesenhar pode trocar a aparência inteira; o que não pode
@@ -426,9 +428,84 @@ Um termo por conceito, em toda a interface e no código:
 | Termo | É | Não é |
 |---|---|---|
 | **Lote** | a bandeja do scanner, volátil | "carrinho" (nome antigo, só nos aliases de API) |
+| **Execução** | uma migração de acervo legado, do `.bkp` ao commit | "importação", "job" |
+| **Conferência** | o dry-run da migração, que não toca no banco | "prévia", "simulação" |
 | **Fila** | trabalho pendente de revisão, em disco | "lista", "pendências" |
 | **Obra** | registro bibliográfico (`biblio_records`) | "livro", "título" |
 | **Exemplar** | cópia física (`biblio_holdings`) | "cópia", "volume" |
 | **Tombo** | `accession_number`, `Bib.2026.687` | "código", "registro" |
 | **Destino** | obra nova ou +N exemplares | — |
 | **Acervo** | o que já está no BibLivre | "base", "catálogo" |
+
+---
+
+## 9. Tela de migração — `/migracao`
+
+### Objetivo
+
+Trazer o acervo inteiro de uma biblioteca que vem do *Biblioteca Fácil*: obras,
+exemplares, leitores, empréstimos, multas e reservas. Roda **uma vez por
+biblioteca**, no primeiro dia, e sai do caminho depois.
+
+É o oposto da catalogação em ritmo e em risco. Lá são segundos por livro e o
+erro caro é perder um bipe; aqui são minutos de leitura antes de um clique que
+escreve dezenas de milhares de linhas e não tem desfazer pela tela. Por isso
+ela é uma tela separada — e por isso fica no PC, como a fila.
+
+### Os três passos
+
+| Passo | O que faz | Toca no banco? |
+|---|---|---|
+| **1. Enviar o `.bkp`** | extrai as 16 tabelas e lista o que veio dentro: nome, descrição do próprio cabeçalho, nº de registros, layout válido | não |
+| **2. Conferir** | gera `obras.mrc` e `exemplares.csv` e conta o que a gravação faria, com os descartes e seus motivos | só leitura |
+| **3. Gravar** | uma transação, do primeiro registro bibliográfico à última reserva | sim |
+
+O passo 2 existe porque o 3 não tem desfazer. É o mesmo dry-run que os CLIs de
+`scripts/` imprimem no terminal, em números na tela.
+
+### Estados
+
+| Estado | A tela mostra |
+|---|---|
+| `vazio` | a área de arrastar o `.bkp`, com o aviso de que o arquivo tem dado pessoal |
+| `pronto` | o inventário das tabelas e as opções do que migrar |
+| `conferindo` / `gravando` | os passos, um deles marcado como em curso |
+| `conferido` | indicadores, cartões por bloco, avisos, impedimentos e os arquivos para baixar |
+| `concluido` | o que entrou, o que ficou de fora e os próximos passos fora do app |
+| `erro` | o que falhou e, na gravação, a frase que responde "entrou metade?" |
+
+### Garantias (além das da seção 7, que continuam valendo)
+
+1. **A gravação é uma transação só, e a tela promete isso por escrito.** Acervo
+   e circulação fecham juntos: não existe empréstimo sem exemplar nem exemplar
+   sem obra.
+2. **Base ocupada é impedimento, não aviso.** Migração é carga de base nova.
+   Prosseguir mesmo assim existe (o `--permitir-existentes` dos CLIs), é uma
+   caixa marcada à mão e é a única em âmbar na tela.
+3. **Nada é gravado sem conferência.** O MRC que entra no banco é o que a
+   conferência gerou — gravar sem conferir seria gravar o que ninguém viu.
+4. **A conferência roda sem banco.** O que ela não pôde verificar aparece
+   listado, nunca omitido (a mesma regra da pílula do acervo).
+5. **A execução sobrevive a reinício**, como a fila. Uma que morreu no meio da
+   gravação volta dizendo que não é possível afirmar daqui se a transação
+   commitou — a tela não adivinha, manda conferir no BibLivre.
+6. **Descartar apaga os arquivos**, não só a referência: o `.bkp` e os CSVs têm
+   nome, CPF e endereço de leitores dentro.
+7. **O que a tela não pode fazer, ela diz.** Reindexar é ação do BibLivre e
+   reiniciar o Tomcat é da máquina; os dois aparecem como próximos passos
+   depois da carga.
+
+### Contrato de API
+
+```
+GET    /api/migracao                   estado (fase, passos, relatório, artefatos)
+GET    /api/migracao/versao            só o contador, para o laço
+POST   /api/migracao/backup            multipart: o .bkp
+POST   /api/migracao/conferir          dispara o dry-run em segundo plano
+POST   /api/migracao/executar          grava — exige confirmado=true
+DELETE /api/migracao                   descarta a execução e apaga a pasta
+GET    /api/migracao/arquivos/{nome}   baixa um arquivo de conferência
+```
+
+Uma execução por vez: um segundo disparo responde 409, em vez de gravar ids
+sobrepostos na mesma base.

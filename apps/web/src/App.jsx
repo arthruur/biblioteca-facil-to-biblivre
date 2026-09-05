@@ -32,6 +32,14 @@ const TelaFila = lazy(() =>
   import('./features/fila/TelaFila').then((m) => ({ default: m.TelaFila }))
 )
 /*
+  Migração é a tela do primeiro dia: traz o acervo inteiro de um sistema legado
+  e some do caminho depois. Fica no PC pelo mesmo motivo da fila — é decisão de
+  quem está sentado, lendo um relatório antes de gravar.
+*/
+const TelaMigracao = lazy(() =>
+  import('./features/migracao/TelaMigracao').then((m) => ({ default: m.TelaMigracao }))
+)
+/*
   A bancada do scanner é uma tela de conferência, não do fluxo: só se chega nela
   digitando /scanner-debug ou pelo atalho no painel de ajustes do celular. Fica
   fora da barra de navegação de propósito.
@@ -43,6 +51,7 @@ const TelaDebugScanner = lazy(() =>
 function rotaAtual() {
   const caminho = window.location.pathname.replace(/\/+$/, '')
   if (caminho === '/fila') return 'fila'
+  if (caminho === '/migracao') return 'migracao'
   if (caminho === '/scanner-debug') return 'debug'
   return 'captura'
 }
@@ -65,7 +74,8 @@ export default function App() {
   const dispositivo = useDispositivo({ ativo: !ehPc })
 
   const irPara = useCallback((destino) => {
-    const caminho = destino === 'fila' ? '/fila' : '/'
+    const caminho =
+      destino === 'fila' ? '/fila' : destino === 'migracao' ? '/migracao' : '/'
     window.history.pushState({}, '', caminho)
     setRota(destino)
   }, [])
@@ -76,12 +86,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', aoVoltar)
   }, [])
 
-  // Um link para /fila chega no celular por caminhos legítimos: o endereço
-  // colado do PC, um histórico anterior, o QR aberto duas vezes. Sem tela para
-  // servir, a URL é corrigida em vez de ficar um endereço que não resolve em
-  // nada.
+  // Um link para /fila ou /migracao chega no celular por caminhos legítimos: o
+  // endereço colado do PC, um histórico anterior, o QR aberto duas vezes. Sem
+  // tela para servir, a URL é corrigida em vez de ficar um endereço que não
+  // resolve em nada.
   useEffect(() => {
-    if (ehPc || rota !== 'fila') return
+    if (ehPc || (rota !== 'fila' && rota !== 'migracao')) return
     window.history.replaceState({}, '', '/')
     setRota('captura')
   }, [ehPc, rota])
@@ -180,6 +190,7 @@ export default function App() {
 
   const conexao = descreverConexao(db)
   const naFila = rota === 'fila' && ehPc
+  const naMigracao = rota === 'migracao' && ehPc
   const naBancada = rota === 'debug'
 
   return (
@@ -207,6 +218,11 @@ export default function App() {
         <Suspense fallback={<Carregando />}>
           {naBancada ? (
             <TelaDebugScanner />
+          ) : naMigracao ? (
+            <TelaMigracao
+              conexao={conexao}
+              aoAbrirBanco={() => setModalGlobal('banco')}
+            />
           ) : naFila ? (
             <TelaFila
               conexao={conexao}

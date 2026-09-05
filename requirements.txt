@@ -9,6 +9,7 @@
 -e ./packages/bf-legado
 -e ./packages/biblivre-client
 -e ./packages/catalogacao
+-e ./packages/migracao
 -e ./apps/api
 
 # OCR da ficha CIP (livro sem código de barras). Opcional: quem só usa o

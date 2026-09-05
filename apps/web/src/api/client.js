@@ -43,11 +43,14 @@ async function pedir(caminho, opcoes = {}) {
   try {
     resposta = await fetch(`/api${caminho}`, {
       headers: {
+        // FormData define o proprio Content-Type, com o boundary do multipart:
+        // declarar 'application/json' aqui faria o upload do .bkp chegar
+        // ilegivel do outro lado.
         ...(opcoes.corpo ? { 'Content-Type': 'application/json' } : {}),
         ...(opcoes.comDispositivo ? cabecalhosDispositivo() : {}),
       },
       method: opcoes.metodo || 'GET',
-      body: opcoes.corpo ? JSON.stringify(opcoes.corpo) : undefined,
+      body: opcoes.formulario || (opcoes.corpo ? JSON.stringify(opcoes.corpo) : undefined),
       signal: opcoes.signal,
     })
   } catch (e) {
@@ -79,6 +82,12 @@ const post = (caminho, corpo, opcoes) =>
 const put = (caminho, corpo, opcoes) =>
   pedir(caminho, { ...opcoes, metodo: 'PUT', corpo })
 const del = (caminho, opcoes) => pedir(caminho, { ...opcoes, metodo: 'DELETE' })
+
+function enviarArquivo(caminho, arquivo, campo = 'arquivo') {
+  const formulario = new FormData()
+  formulario.append(campo, arquivo)
+  return pedir(caminho, { metodo: 'POST', formulario })
+}
 
 // O lote e sempre "o meu lote": estas chamadas levam a identidade do aparelho.
 const meu = { comDispositivo: true }
@@ -131,6 +140,25 @@ export const api = {
     reconsultar: () => post('/fila/reconsultar'),
     exportar: ({ executar = false, ids = null, db = null } = {}) =>
       post('/fila/exportar-biblivre', { executar, ids, db }),
+  },
+
+  /**
+   * Migracao de acervo legado. Tres passos separados de proposito: enviar o
+   * backup, conferir (nao toca no banco) e gravar (uma transacao so).
+   *
+   * `conferir` e `executar` devolvem na hora — o trabalho corre no servidor, e
+   * quem acompanha e o laco de `estado()`.
+   */
+  migracao: {
+    estado: (signal) => json('/migracao', { signal }),
+    versao: (signal) => json('/migracao/versao', { signal }),
+    enviarBackup: (arquivo) => enviarArquivo('/migracao/backup', arquivo),
+    conferir: ({ opcoes = null, db = null } = {}) =>
+      post('/migracao/conferir', { opcoes, db }),
+    executar: ({ opcoes = null, db = null } = {}) =>
+      post('/migracao/executar', { opcoes, db, confirmado: true }),
+    descartar: () => del('/migracao'),
+    urlArquivo: (nome) => `/api/migracao/arquivos/${encodeURIComponent(nome)}`,
   },
 
   acervo: {

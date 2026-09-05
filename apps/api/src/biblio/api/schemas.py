@@ -44,6 +44,55 @@ class AcaoEmLote(BaseModel):
     acao: str = ""
 
 
+class OpcoesMigracao(BaseModel):
+    """
+    As escolhas da tela de migração — todas opcionais, e `None` quer dizer
+    "não mexi nisso".
+
+    Os padrões de verdade moram em `biblio.migracao.Opcoes`, que é onde os CLIs
+    de `scripts/` também os documentam. Repeti-los aqui daria duas listas para
+    manter em sincronia, e a que a tela veria seria a errada.
+    """
+
+    acervo: bool | None = None
+    leitores: bool | None = None
+    circulacao: bool | None = None
+
+    incluir_excluidos: bool | None = None
+    prefixo_tombo: str | None = None
+    ano_tombo: int | None = None
+    biblioteca: str | None = None
+
+    campos_extras: str | None = None
+    offset_id: int | None = None
+    email_obrigatorio: bool | None = None
+
+    apenas_abertos: bool | None = None
+    incluir_movimentacoes_excluidas: bool | None = None
+    sem_reservas: bool | None = None
+    reservas_desde: int | None = None
+
+    permitir_existentes: bool | None = None
+
+
+class PedidoMigracao(BaseModel):
+    """
+    Corpo de `/migracao/conferir` e `/migracao/executar`.
+
+    `confirmado` só é olhado na gravação: é a confirmação explícita que a spec
+    exige antes de qualquer escrita no acervo, e a rota recusa sem ela.
+    """
+
+    opcoes: OpcoesMigracao | None = None
+    db: ConexaoDb | None = None
+    confirmado: bool = False
+
+    def opcoes_dict(self) -> dict:
+        if self.opcoes is None:
+            return {}
+        return self.opcoes.model_dump(exclude_none=True)
+
+
 class PedidoExport(BaseModel):
     """
     `executar=False` só gera os arquivos de conferência; `True` grava no banco.

@@ -81,17 +81,38 @@ Reindexar exemplares **não** entra na lista: exemplar não tem tabela de
       `python tests/verificar.py` cobre as rotas, a persistência da fila e o
       formato do MARC gerado.
 
+- [x] **Migração pela mesma interface da catalogação (`/migracao`).** O que
+      antes eram oito CLIs em sequência virou três passos na tela: enviar o
+      `.bkp`, conferir e gravar. O pacote `biblio.migracao` orquestra os mesmos
+      módulos que os CLIs usam — nada foi reimplementado —, e acrescenta o que
+      a linha de comando não precisava: relatório estruturado em vez de
+      `print`; uma transação só para acervo **e** circulação (na linha de
+      comando cada passo commitava porque havia uma pessoa lendo o relatório
+      entre eles); e o casamento entre exemplar, obra e empréstimo em memória,
+      sem depender do `--mapa-out` em disco. Os CLIs continuam de pé, e
+      continuam sendo a referência.
+- [x] **Verificação offline da migração** (`tests/amostra_bkp.py` escreve um
+      `.bkp` sintético; `tests/banco_falso.py` responde ao que a carga
+      pergunta). Um botão que grava dezenas de milhares de linhas no PostgreSQL
+      da biblioteca não podia ter como única garantia "rodou uma vez em campo",
+      e backup real não entra no repositório.
+
 ## 🚧 Próximos passos
 
 O pipeline de migração deixou de ser trabalho pendente e virou **feature de
 produto**: é o caminho de onboarding de uma biblioteca nova que venha de
-sistema legado. O que segue em aberto é do lado da catalogação:
+sistema legado, e agora está na tela. O que segue em aberto é do lado da
+catalogação:
 
 - [ ] Reindex automático depois de gravar obra nova (hoje é aviso na tela)
 - [ ] Medir em campo quanto o dedup por ISBN de fato pega — o teste com a fila
       real pegou 19 de 26
 - [ ] OCR de ficha CIP para livro sem código de barras (fase de projeto, ver
       [CATALOGACAO_POR_FOTO.md](CATALOGACAO_POR_FOTO.md))
+- [ ] Rodar a migração **pela tela** contra um BibLivre real, de ponta a ponta.
+      O código de gravação é o mesmo já validado em campo pelos CLIs, e a
+      verificação offline cobre o encadeamento; o que falta medir é a carga
+      completa disparada pelo botão, com o tempo de uma base de 14 mil obras.
 
 ## Decisão tomada: 1 registro bibliográfico por obra
 

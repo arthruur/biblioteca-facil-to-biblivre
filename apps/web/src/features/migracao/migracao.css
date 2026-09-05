@@ -1,0 +1,376 @@
+/*
+ * Tela de migração de acervo.
+ *
+ * Mesma linguagem da fila — prancheta técnica, fio de 1px, nada arredondado —
+ * com uma diferença de ritmo: aqui a pessoa lê antes de agir, então a tela é
+ * uma coluna de blocos empilhados, na ordem da decisão (o que veio no backup,
+ * o que migrar, o que aconteceria, gravar), e não uma tabela densa.
+ *
+ * Só existe no PC. Não há versão para celular pelo mesmo motivo da fila: isto
+ * é decisão de quem está sentado, com o relatório inteiro à vista.
+ */
+
+.migracao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  padding: var(--e5);
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.migracao__topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e4);
+}
+
+.migracao__titulo {
+  font-size: var(--txt-lg);
+  color: var(--texto);
+}
+
+.migracao__sub {
+  margin-top: var(--e1);
+  max-width: 62ch;
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+
+.migracao__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e2);
+}
+
+.migracao__arquivos {
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+.migracao__arquivos a {
+  color: var(--acento);
+}
+
+/* --- Envio do backup --- */
+
+.envio {
+  background: var(--superficie);
+  border: 1px dashed var(--borda-forte);
+  transition: background var(--transicao), border-color var(--transicao);
+}
+
+/* O feedback de arrasto é do bloco inteiro: o alvo é a área, não o botão. */
+.envio--sobre {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+
+/* --- Bloco genérico --- */
+
+.bloco {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e4);
+  background: var(--superficie);
+}
+
+.bloco--sucesso {
+  border-left: 3px solid var(--existente);
+}
+
+.bloco__cabecalho {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+
+.bloco__titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-size: var(--txt-md);
+  color: var(--texto);
+}
+
+.bloco__meta {
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+.bloco__link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--txt-sm);
+  color: var(--acento);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- Inventário do backup --- */
+
+.tabela-tabelas {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--txt-sm);
+}
+
+.tabela-tabelas th {
+  text-align: left;
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--entre-micro);
+  color: var(--texto-3);
+  padding: var(--e1) var(--e2);
+  border-bottom: 1px solid var(--borda);
+}
+
+.tabela-tabelas td {
+  padding: var(--e1) var(--e2);
+  border-bottom: 1px solid var(--borda-suave);
+  color: var(--texto-2);
+}
+
+.tabela-tabelas .num {
+  text-align: right;
+}
+
+/* --- Etapas e ajustes --- */
+
+.etapas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--e2);
+}
+
+.etapa {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  padding: var(--e3);
+  border: 1px solid var(--borda);
+  cursor: pointer;
+}
+
+.etapa--ativa {
+  border-color: var(--acento-borda);
+  background: var(--acento-suave);
+}
+
+.etapa__corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.etapa__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-base);
+  color: var(--texto);
+}
+
+.etapa__desc {
+  font-size: var(--txt-xs);
+  color: var(--texto-2);
+}
+
+.ajustes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  padding-top: var(--e3);
+  border-top: 1px solid var(--borda);
+}
+
+.chave {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  font-size: var(--txt-sm);
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.chave__rotulo {
+  display: block;
+}
+
+.chave__ajuda {
+  display: block;
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+/* A opção que pode duplicar um acervo inteiro não pode parecer com as outras. */
+.chave--alerta .chave__rotulo {
+  color: var(--alerta);
+}
+
+/* --- Progresso --- */
+
+.passos {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e1);
+}
+
+.passo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e2);
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+}
+
+.passo__marca {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--borda-forte);
+  flex-shrink: 0;
+}
+
+.passo--ok {
+  color: var(--texto-2);
+}
+
+.passo--ok .passo__marca {
+  color: var(--existente);
+  border-color: var(--existente-borda);
+  background: var(--existente-suave);
+}
+
+.passo--rodando {
+  color: var(--texto);
+}
+
+/* O passo em curso é o único que se mexe — é onde o olho tem de pousar. */
+.passo--rodando .passo__marca {
+  border-color: var(--acento);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      var(--acento-suave) 0 4px,
+      transparent 4px 8px
+    );
+}
+
+.passo--pulado {
+  opacity: 0.5;
+}
+
+.passo__detalhe {
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+/* --- Cartões do relatório --- */
+
+.cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--e3);
+}
+
+.cartao {
+  padding: var(--e4);
+  background: var(--superficie);
+}
+
+.cartao__titulo {
+  font-size: var(--txt-md);
+  color: var(--texto);
+  margin-bottom: var(--e2);
+}
+
+.cartao__lista {
+  display: flex;
+  flex-direction: column;
+}
+
+.linha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: var(--e1) 0;
+  border-bottom: 1px solid var(--borda-suave);
+  font-size: var(--txt-sm);
+}
+
+.linha:last-child {
+  border-bottom: none;
+}
+
+.linha dt {
+  color: var(--texto-2);
+}
+
+.linha dd {
+  color: var(--texto);
+  white-space: nowrap;
+}
+
+.linha__nota {
+  display: block;
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+.linha--alerta dt,
+.linha--alerta dd {
+  color: var(--alerta);
+}
+
+/* --- Prévia com número variável de células --- */
+/* A do export tem sempre três (nova, existente, exemplares); aqui são de duas
+   a quatro, conforme as etapas escolhidas. */
+.previa--fluida {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+/* --- Recados e próximos passos --- */
+
+.lista-recados {
+  list-style: disc;
+  padding-left: var(--e4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e1);
+}
+
+.proximos {
+  list-style: decimal;
+  padding-left: var(--e4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  font-size: var(--txt-sm);
+  color: var(--texto);
+}
+
+/* --- Caixa de ciência do modal --- */
+
+.ciencia {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  padding: var(--e3);
+  border: 1px solid var(--alerta-borda);
+  background: var(--alerta-suave);
+  font-size: var(--txt-sm);
+  color: var(--texto);
+  cursor: pointer;
+}

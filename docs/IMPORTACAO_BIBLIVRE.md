@@ -319,6 +319,11 @@ backup **gerado pelo próprio BibLivre** como o arquivo único de
 implantação. Todos os passos abaixo foram rodados contra uma instância
 real (Windows, BibLivre 5.0.x, PostgreSQL 9.1, Tomcat 7).
 
+> As cargas em SQL deste roteiro também rodam pela tela `/migracao`, num clique
+> e numa transação só — ver `biblio.migracao` e a seção 9 de
+> [SPEC_UI.md](SPEC_UI.md). O que está aqui continua sendo a referência do
+> **porquê** de cada passo, e é o caminho de quem precisa parar entre um e outro.
+
 **Na instância de teste:**
 
 1. **Instalar o BibLivre 5 limpo** — o instalador de Windows, baixado em

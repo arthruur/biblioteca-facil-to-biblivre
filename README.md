@@ -7,8 +7,9 @@ Duas coisas que se apoiam no mesmo núcleo:
 1. **Catalogação por ISBN** — bipar o código de barras no celular, revisar no PC
    e gravar no BibLivre, sem duplicar o que a biblioteca já tem.
 2. **Migração de acervo legado** — trazer um acervo inteiro do *Biblioteca
-   Fácil* para o BibLivre 5. Executado e validado em campo: 14.880 obras,
-   16.251 exemplares, 2.743 leitores e 19.592 empréstimos.
+   Fácil* para o BibLivre 5, pela mesma interface (`/migracao`) ou pelos CLIs.
+   Executado e validado em campo: 14.880 obras, 16.251 exemplares, 2.743
+   leitores e 19.592 empréstimos.
 
 > **Status:** migração completa e validada (`docs/IMPORTACAO_BIBLIVRE.md`).
 > Catalogação por ISBN em uso. Ver `docs/ROADMAP.md`.
@@ -20,11 +21,12 @@ Duas coisas que se apoiam no mesmo núcleo:
 ```
 apps/
   api/          FastAPI — só monta os routers, sem regra de negócio
-  web/          React + Vite — as duas telas
+  web/          React + Vite — as telas
 packages/
   bf-legado/         biblio.legado      lê o .bkp do Biblioteca Fácil
   biblivre-client/   biblio.biblivre    fala com o PostgreSQL do BibLivre
   catalogacao/       biblio.catalogacao ISBN, lote, fila, export
+  migracao/          biblio.migracao    o pipeline do .bkp ao BibLivre
 scripts/        CLIs finos por cima dos pacotes (dry-run por padrão)
 tests/          verificação de fumaça, sem banco e sem rede
 docs/           formato do .bkp, tabelas, importação, spec de UI
@@ -40,6 +42,7 @@ para quem chamou, porque obras e exemplares precisam fechar na mesma transação
 | `biblio.legado` | `bkp`, `tabela`, `consolidar` — o formato proprietário do sistema antigo |
 | `biblio.biblivre` | `conexao`, `marc`, `obras`, `exemplares`, `acervo`, `leitores`, `circulacao` |
 | `biblio.catalogacao` | `lookup`, `fila`, `export`, `ficha` (OCR), `config`, `cert` |
+| `biblio.migracao` | `pipeline` (o que fazer, na ordem dos CLIs), `execucao` (uma por vez, em segundo plano, com estado persistido) |
 
 ---
 
@@ -100,9 +103,10 @@ imagem só, sem depender do que está instalado na máquina.
 
 ```bash
 docker compose up --build
-# https://<IP-DO-PC>:8000        celular — escanear (aceite o certificado)
-# https://<IP-DO-PC>:8000/fila   PC — revisar e exportar
-# https://<IP-DO-PC>:8000/docs   OpenAPI
+# https://<IP-DO-PC>:8000            celular — escanear (aceite o certificado)
+# https://<IP-DO-PC>:8000/fila       PC — revisar e exportar
+# https://<IP-DO-PC>:8000/migracao   PC — trazer o acervo legado
+# https://<IP-DO-PC>:8000/docs       OpenAPI
 ```
 
 O compose fala com o PostgreSQL do host via `host.docker.internal`. Numa
@@ -162,6 +166,55 @@ contrato das rotas.
 
 ## 4) Migração de acervo legado
 
+O acervo inteiro do *Biblioteca Fácil* — obras, exemplares, leitores,
+empréstimos, multas e reservas — entra no BibLivre 5 por dois caminhos, e os
+dois chamam o mesmo código (`biblio.migracao`, sobre `biblio.legado` e
+`biblio.biblivre`). O que muda é quem está na frente.
+
+### Pela tela — `/migracao`
+
+É o caminho de quem vai instalar numa biblioteca: nenhum terminal, nenhum
+arquivo intermediário para carregar de um passo ao outro.
+
+```
+1. enviar o .bkp   arrasta o backup; o servidor extrai e lista as 16 tabelas
+2. conferir        NÃO toca no banco — devolve o relatório inteiro:
+                   obras, exemplares, leitores, empréstimos, descartes,
+                   o que já existe no destino e o que barra a gravação
+3. gravar          uma transação só, com confirmação explícita
+```
+
+O passo 2 existe porque o 3 não tem desfazer: é o mesmo dry-run que os CLIs
+imprimem no terminal, em números na tela. Ele roda **sem senha do Postgres** —
+o que depende do banco (contagens do destino, prefixo de tombo, base já
+ocupada) aparece como aviso, em vez de o passo inteiro falhar.
+
+Três coisas que a tela garante e que valem repetir:
+
+- **Uma transação, do primeiro registro bibliográfico à última reserva.** Os
+  CLIs commitam por passo porque entre um e outro havia uma pessoa lendo o
+  relatório; aqui a decisão é tomada uma vez. Falhou no meio, não entrou nada.
+- **Base ocupada barra a gravação.** Migração é carga de base nova; rodar por
+  cima duplicaria o cadastro e colidiria ids. Existe a opção de prosseguir
+  assim mesmo (o `--permitir-existentes` dos CLIs), e ela é a única marcada em
+  âmbar na tela.
+- **O relatório sobrevive a F5 e a restart** (`data/migracao/<id>/estado.json`),
+  como a fila de revisão. Se o processo cair *durante* a gravação, a execução
+  volta dizendo exatamente isso — daqui não dá para saber se a transação
+  chegou a commitar, e fingir que dá seria pior.
+
+O `.bkp` enviado e os CSVs gerados ficam em `data/migracao/<id>/` e têm nome,
+CPF e endereço de leitores dentro. O botão **Descartar** apaga a pasta.
+
+Depois de gravar sobram dois passos fora do app, e a tela os repete: reindexar
+a base bibliográfica no BibLivre e reiniciar o Tomcat (os campos novos de
+leitor são cache estático).
+
+### Pelos CLIs
+
+Continuam sendo a referência, e são o caminho de quem quer parar entre um passo
+e outro ou automatizar:
+
 ```bash
 python scripts/extrair_bkp.py backup.bkp saida/
 python scripts/extrair_tabela.py saida/ --listar
@@ -175,7 +228,7 @@ python scripts/inserir_emprestimos.py saida/ --executar
 
 Sem `--executar` é dry-run: o script relata exatamente o que faria e não escreve
 nada. Os CLIs são casca fina — a lógica está em `biblio.legado` e
-`biblio.biblivre`, e é a mesma que a API usa.
+`biblio.biblivre`, e é a mesma que a tela usa.
 
 Duas decisões que moldaram tudo, detalhadas em
 [docs/IMPORTACAO_BIBLIVRE.md](docs/IMPORTACAO_BIBLIVRE.md):
@@ -194,8 +247,8 @@ Duas decisões que moldaram tudo, detalhadas em
 Atrás de Nginx com Let's Encrypt (trocando o certificado autoassinado),
 `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD` por ambiente e
 `restart: unless-stopped`. O volume `./data` guarda a fila de revisão, os
-exports e o certificado — é trabalho de gente pendente e não pode morrer com o
-container.
+exports, as execuções de migração e o certificado — é trabalho de gente
+pendente e não pode morrer com o container.
 
 O BibLivre 5 continua no instalador Windows/Java-Tomcat-Postgres: são 61
 tabelas e um restore `.b5bz` destrutivo, não vale replicar no Compose. Por isso
@@ -205,5 +258,5 @@ silêncio e disputar a porta 5432 com o BibLivre real.
 
 ## Aviso
 
-Backups reais (`.bkp`, `.csv`, `data/fila/*.json`) contêm dados pessoais de
-leitores — o `.gitignore` já os exclui. Ver [LICENSE](LICENSE) (MIT).
+Backups reais (`.bkp`, `.csv`, `data/fila/*.json`, `data/migracao/**`) contêm
+dados pessoais de leitores — o `.gitignore` já os exclui. Ver [LICENSE](LICENSE) (MIT).

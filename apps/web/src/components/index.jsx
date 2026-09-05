@@ -350,6 +350,28 @@ export function IconeCopiar({ tamanho = 16, className = '' }) {
 
 /* --- Componentes Básicos --- */
 
+export function IconeMigracao({ tamanho = 18, className = '' }) {
+  return (
+    <svg
+      width={tamanho}
+      height={tamanho}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h4a2 2 0 0 1 2 2v1" />
+      <path d="M4 21h13a2 2 0 0 0 2-2v-6" />
+      <polyline points="9 13 13 17 9 21" />
+      <line x1="13" y1="17" x2="3" y2="17" />
+    </svg>
+  )
+}
+
 export function Botao({
   variante = 'secundario',
   tamanho,
@@ -658,6 +680,20 @@ export function Navbar({
               continua na fila para consulta, e um "7" ao lado de uma fila sem
               nada a fazer e so um alarme falso. */}
           {filaQtd > 0 && <span className="badge-fila">{filaQtd}</span>}
+        </button>
+
+        {/* Migração fica ao lado das duas telas de trabalho, e não escondida
+            num menu: é o primeiro caminho de uma biblioteca que chega de
+            sistema legado, e quem não souber que ele existe vai digitar 14 mil
+            fichas à mão. */}
+        <button
+          className={juntar('app-nav__item', rotaAtiva === 'migracao' && 'app-nav__item--ativo')}
+          onClick={() => aoNavegar('migracao')}
+          aria-current={rotaAtiva === 'migracao' ? 'page' : undefined}
+          title="Trazer um acervo inteiro do Biblioteca Fácil"
+        >
+          <IconeMigracao tamanho={16} />
+          <span>Migração</span>
         </button>
 
         <button

@@ -7,25 +7,41 @@
  * para navegadores sem suporte nativo (iOS Safari, desktop).
  *
  * INTERFACE:
- * - FORMATOS_NATIVOS: string[]
- * - formatosNativos(): Promise<string[] | null>
+ * - FORMATOS_ISBN: string[]            (modo 'isbn' — catalogação, o de sempre)
+ * - FORMATOS_CIRCULACAO: string[]      (modo 'circulacao' — etiqueta de tombo)
+ * - FORMATOS_NATIVOS: string[]         (apelido histórico de FORMATOS_ISBN)
+ * - formatosNativos(modo?: 'isbn' | 'circulacao'): Promise<string[] | null>
+ * - nomesFormatosReserva(modo?: 'isbn' | 'circulacao'): string[]
  * - criarDetectorNativo(formatos: string[]): BarcodeDetector
- * - iniciarLeitorReserva(elementoId: string, restricoes: object, aoLer: Function): Promise<any>
+ * - iniciarLeitorReserva(elementoId: string, restricoes: object, aoLer: Function, modo?: string): Promise<any>
  * - decodificarFoto(arquivo: Blob, formatos: string[] | null): Promise<string | null>
  *
  * FLUXO:
  * Invocado por `useScanner.js` na inicialização para decidir qual motor usar e para
  * decodificar fotos do rolo da câmera.
  *
+ * MODOS:
+ * Na catalogação o que interessa é o EAN-13 da capa; na circulação o que identifica o
+ * exemplar é a etiqueta colada nele, que o BibLivre 5 imprime em Code 39 Estendido
+ * (veja o cabeçalho de `../codigos.js`). São dois conjuntos de formatos, e cada um
+ * vale para os dois motores — o nativo e o de reserva.
+ *
  * LIMITACOES:
  * Chrome desktop expõe a classe `BarcodeDetector`, mas `getSupportedFormats` pode não
- * ter `ean_13` caso a biblioteca do sistema operacional não esteja presente.
+ * ter `ean_13` caso a biblioteca do sistema operacional não esteja presente. Na
+ * circulação a exigência é maior: sem `code_128` nem `code_39` o motor nativo não lê
+ * etiqueta nenhuma, e é melhor cair para o de reserva, que lê as duas simbologias.
  */
 
 import { BarcodeDetector as BarcodeDetectorPolyfill } from 'barcode-detector'
 import { maiorArea } from './geometria.js'
 
-export const FORMATOS_NATIVOS = Object.freeze([
+/**
+ * Modo catalogação: a lista de sempre, intocada. O alvo é o EAN-13 da capa, mas
+ * UPC e Code 39/128 continuam ligados porque o acervo tem livro antigo com ISBN-10
+ * impresso em etiqueta e livro importado com UPC-A.
+ */
+export const FORMATOS_ISBN = Object.freeze([
   'ean_13',
   'ean_8',
   'upc_a',
@@ -34,7 +50,40 @@ export const FORMATOS_NATIVOS = Object.freeze([
   'code_39',
 ])
 
-let suporteNativoPromessa = null
+/**
+ * Modo circulação: a etiqueta do exemplar (Code 39 no BibLivre 5, Code 128 em
+ * etiqueta impressa por outros meios) mais o EAN-13, que é o caminho alternativo —
+ * bipar o ISBN da capa devolve a lista de exemplares da obra. Código de produto
+ * (UPC) fica de fora: não identifica exemplar nem leitor.
+ */
+export const FORMATOS_CIRCULACAO = Object.freeze([
+  'ean_13',
+  'code_128',
+  'code_39',
+])
+
+/** Apelido do conjunto de catalogação, mantido para quem já importava este nome. */
+export const FORMATOS_NATIVOS = FORMATOS_ISBN
+
+const FORMATOS_POR_MODO = Object.freeze({
+  isbn: FORMATOS_ISBN,
+  circulacao: FORMATOS_CIRCULACAO,
+})
+
+/**
+ * Nomes dos formatos no vocabulário do `html5-qrcode` (`Html5QrcodeSupportedFormats`).
+ *
+ * Separado da inicialização do motor para poder ser conferido em teste sem carregar
+ * a biblioteca, que só existe no navegador.
+ *
+ * @param {'isbn' | 'circulacao'} [modo]
+ * @returns {string[]}
+ */
+export function nomesFormatosReserva(modo = 'isbn') {
+  return (FORMATOS_POR_MODO[modo] || FORMATOS_ISBN).map((f) => f.toUpperCase())
+}
+
+const suporteNativoPromessas = new Map()
 
 /**
  * Retorna a classe BarcodeDetector adequada: nativa se existir, ou polyfill WASM.
@@ -61,23 +110,34 @@ export function tipoMotor() {
 /**
  * Consulta os formatos realmente suportados pelo BarcodeDetector deste sistema (ou polyfill WASM).
  *
+ * Devolver `null` é o sinal de "use o motor de reserva". Na catalogação basta faltar
+ * `ean_13`; na circulação também falta o essencial se não houver nenhuma simbologia
+ * linear de etiqueta (`code_128` ou `code_39`), porque aí o nativo leria a capa e
+ * ficaria cego para o tombo.
+ *
+ * @param {'isbn' | 'circulacao'} [modo]
  * @returns {Promise<string[] | null>}
  */
-export function formatosNativos() {
-  if (!suporteNativoPromessa) {
-    suporteNativoPromessa = (async () => {
+export function formatosNativos(modo = 'isbn') {
+  if (!suporteNativoPromessas.has(modo)) {
+    const desejados = FORMATOS_POR_MODO[modo] || FORMATOS_ISBN
+    suporteNativoPromessas.set(modo, (async () => {
       try {
         const Detector = obterClasseDetector()
         if (!Detector?.getSupportedFormats) return null
         const disponiveis = await Detector.getSupportedFormats()
-        const uteis = FORMATOS_NATIVOS.filter((f) => disponiveis.includes(f))
-        return uteis.includes('ean_13') ? uteis : null
+        const uteis = desejados.filter((f) => disponiveis.includes(f))
+        if (!uteis.includes('ean_13')) return null
+        if (modo === 'circulacao' && !uteis.some((f) => f === 'code_128' || f === 'code_39')) {
+          return null
+        }
+        return uteis
       } catch {
         return null
       }
-    })()
+    })())
   }
-  return suporteNativoPromessa
+  return suporteNativoPromessas.get(modo)
 }
 
 /**
@@ -94,21 +154,22 @@ export function criarDetectorNativo(formatos) {
 /**
  * Inicializa o motor de reserva ZXing via html5-qrcode.
  *
+ * O `formatsToSupport` sai do mesmo conjunto por modo do motor nativo: cada formato
+ * a mais é uma passada a mais por quadro no ZXing, que já é o caminho lento (iOS
+ * Safari, desktop). Na circulação o que entra é CODE_39 e CODE_128, sem os códigos
+ * de produto.
+ *
  * @param {string} elementoId
  * @param {object} restricoesVideo
  * @param {(texto: string) => void} aoLer
+ * @param {'isbn' | 'circulacao'} [modo]
  * @returns {Promise<any>}
  */
-export async function iniciarLeitorReserva(elementoId, restricoesVideo, aoLer) {
+export async function iniciarLeitorReserva(elementoId, restricoesVideo, aoLer, modo = 'isbn') {
   const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode')
-  const formatos = [
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E,
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-  ]
+  const formatos = nomesFormatosReserva(modo)
+    .map((nome) => Html5QrcodeSupportedFormats[nome])
+    .filter((f) => f !== undefined)
 
   const instancia = new Html5Qrcode(elementoId, { formatsToSupport: formatos })
   await instancia.start(

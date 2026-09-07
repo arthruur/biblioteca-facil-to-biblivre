@@ -1,0 +1,718 @@
+/*
+ * Tela de circulação do celular.
+ *
+ * Mesma postura física da tela de captura (docs/SPEC_UI.md §1): de pé, uma mão
+ * no livro, a outra no aparelho. Ocupa a viewport inteira e não rola — o que
+ * cresce (a lista de exemplares, o painel de resposta) rola por dentro, na sua
+ * própria caixa.
+ *
+ * O QUE MUDA EM RELAÇÃO À CAPTURA
+ * Lá a área nobre é o visor e só ele. Aqui são duas: o visor e o PAINEL DE
+ * RESPOSTA, porque nesta tela existe uma pergunta que o servidor responde e
+ * que muda o que a pessoa faz com o livro na mão. Por isso o visor encolhe
+ * (`flex: 1`, mínimo de 140px) em vez de ter altura fixa: quando a resposta é
+ * longa — multa, reserva, motivo de recusa — ela ganha o espaço, e quando não
+ * há resposta a câmera toma a tela de volta.
+ *
+ * AS CORES
+ * Roxo e azul são MODO (onde estou); verde, âmbar e vermelho são RESPOSTA (o
+ * que acabou de acontecer). Os dois vocabulários não se cruzam de propósito:
+ * se o modo devolver fosse verde, a tela inteira pareceria uma confirmação
+ * permanente e o verde deixaria de significar "gravou".
+ *
+ * Nada de valor solto: tudo vem de styles/tokens.css. Alvo mínimo de toque é
+ * `--toque-min` (48px), e os dois botões de modo passam disso de propósito.
+ */
+
+.circ {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--fundo);
+  overflow: hidden;
+  position: relative;
+}
+
+.circ--espera {
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Cabeçalho: fino, porque o topo do celular é o que a mão não alcança --- */
+
+.circ__topo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border-bottom: 1px solid var(--borda);
+  background: var(--superficie);
+}
+
+.circ__voltar,
+.circ__operador {
+  background: none;
+  border: none;
+  padding: var(--e1) 0;
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.circ__operador {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px dotted var(--borda-forte);
+}
+.circ__marca {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--entre-micro);
+  color: var(--texto-3);
+}
+
+/* --- Os dois modos --- */
+
+.circ__modos {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--borda);
+  border-bottom: 1px solid var(--borda);
+}
+
+.circ__modo {
+  min-height: 56px;
+  border: none;
+  background: var(--superficie-2);
+  color: var(--texto-3);
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-lg);
+  font-weight: var(--peso-forte);
+  text-transform: uppercase;
+  letter-spacing: var(--entre-micro);
+  cursor: pointer;
+  transition: background var(--transicao), color var(--transicao);
+}
+.circ__modo:disabled {
+  opacity: 0.55;
+}
+
+/* O modo ativo é chapado: à distância de um braço o que se lê é o bloco de
+   cor, não a borda. O inativo fica cinza e recuado — dois botões coloridos
+   lado a lado dariam a impressão de que os dois estão valendo. */
+.circ__modo--ativo.circ__modo--emprestar {
+  background: var(--nova);
+  color: #fff;
+}
+.circ__modo--ativo.circ__modo--devolver {
+  background: var(--acento);
+  color: var(--acento-texto);
+}
+
+/* --- Faixa de sem banco --- */
+
+.circ__sem-banco {
+  flex: none;
+  margin: 0;
+  padding: var(--e2) var(--e3);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  border-bottom: 1px solid var(--alerta-borda);
+  font-size: var(--txt-sm);
+  line-height: 1.35;
+}
+
+/* --- Etapa 1: quem vai levar --- */
+
+.circ__passo {
+  flex: none;
+  padding: var(--e2) var(--e3);
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+}
+.circ__passo-linha {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+.circ__passo-numero {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--nova);
+  color: #fff;
+  font-size: var(--txt-sm);
+}
+.circ__passo-texto {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.3;
+}
+.circ__passo-busca {
+  flex: none;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  padding: 0 var(--e2);
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font-size: var(--txt-sm);
+  cursor: pointer;
+}
+
+.circ-busca {
+  margin-top: var(--e2);
+}
+.circ-busca__campo {
+  width: 100%;
+  height: var(--toque-min);
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font-size: var(--txt-md);
+}
+.circ-busca__campo:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+.circ-busca__nota {
+  padding: var(--e2) 0;
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+}
+.circ-busca__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 40dvh;
+  overflow-y: auto;
+}
+.circ-busca__item {
+  width: 100%;
+  min-height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2);
+  border: none;
+  border-bottom: 1px solid var(--borda-suave);
+  background: none;
+  color: var(--texto);
+  font-size: var(--txt-base);
+  text-align: left;
+  cursor: pointer;
+}
+.circ-busca__nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.circ-busca__id {
+  flex: none;
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+/* --- O leitor fixado --- */
+
+.circ-leitor {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: var(--nova-suave);
+  border-bottom: 2px solid var(--nova);
+}
+.circ-leitor__corpo {
+  flex: 1;
+  min-width: 0;
+}
+.circ-leitor__nome {
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  color: var(--texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.circ-leitor__situacao {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+.circ-leitor__sair {
+  flex: none;
+  min-height: 40px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--nova-borda);
+  background: var(--superficie);
+  color: var(--nova);
+  font-size: var(--txt-sm);
+  cursor: pointer;
+}
+
+/* --- Visor --- */
+
+.circ__visor {
+  flex: 1 1 auto;
+  min-height: 140px;
+  position: relative;
+  background: var(--visor);
+  overflow: hidden;
+}
+.circ__camera,
+.circ__camera video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block;
+}
+/* O motor de reserva injeta o próprio cabeçalho com ícone; ele não pertence a
+   esta tela. */
+.circ__camera img[alt="Info icon"],
+.circ__camera > div:first-child > img {
+  display: none !important;
+}
+
+.circ__repouso {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--visor-fundo);
+}
+
+.circ__visor--negado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e2);
+  padding: var(--e4);
+  text-align: center;
+  color: var(--visor-texto);
+}
+.circ__negado-titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+}
+.circ__negado-texto,
+.circ__negado-nota {
+  font-size: var(--txt-sm);
+  color: var(--visor-texto-2);
+  line-height: 1.35;
+}
+
+.circ__controles {
+  position: absolute;
+  top: var(--e2);
+  right: var(--e2);
+  display: flex;
+  gap: var(--e2);
+  z-index: 3;
+}
+.circ__botao {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--visor-fio);
+  background: color-mix(in srgb, #16222e 60%, transparent);
+  color: var(--visor-texto);
+  cursor: pointer;
+}
+.circ__botao--ativo {
+  background: var(--alerta);
+  color: #16222e;
+}
+
+.circ__barra {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: color-mix(in srgb, #16222e 82%, transparent);
+  color: var(--visor-texto);
+  font-size: var(--txt-sm);
+  z-index: 3;
+}
+
+/* "Gravando…" é o único momento em que esta tela pede para esperar. Ele tem de
+   ser visível sem leitura: a barra muda de cor e ganha um pulso. */
+.circ__barra--ocupada {
+  background: var(--acento);
+  color: var(--acento-texto);
+  font-weight: var(--peso-forte);
+}
+.circ__barra-espera {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: currentColor;
+  animation: circ-pulso 900ms ease-in-out infinite;
+}
+@keyframes circ-pulso {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/* --- Painel de resposta --- */
+
+.circ-res {
+  flex: none;
+  max-height: 45dvh;
+  overflow-y: auto;
+  padding: var(--e3);
+  border-top: 3px solid var(--borda-forte);
+  background: var(--superficie);
+}
+.circ-res--ok {
+  border-top-color: var(--existente);
+  background: var(--existente-suave);
+}
+.circ-res--aviso {
+  border-top-color: var(--alerta);
+  background: var(--alerta-suave);
+}
+.circ-res--erro {
+  border-top-color: var(--erro);
+  background: var(--erro-suave);
+}
+/* `incerto` não é verde nem vermelho: a rede caiu e a tela não sabe o que o
+   servidor gravou. O tom neutro com a barra lateral diz "isto está em aberto"
+   sem afirmar nada. */
+.circ-res--incerto {
+  border-top-color: var(--texto-2);
+  background: var(--superficie-2);
+  border-left: 4px solid var(--texto-3);
+}
+
+.circ-res__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  margin-bottom: var(--e1);
+}
+.circ-res__fechar {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: var(--texto-3);
+  font-size: var(--txt-md);
+  cursor: pointer;
+}
+.circ-res__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-lg);
+  line-height: 1.1;
+  color: var(--texto);
+}
+.circ-res--ok .circ-res__titulo { color: var(--existente); }
+.circ-res--erro .circ-res__titulo { color: var(--erro); }
+.circ-res--aviso .circ-res__titulo { color: var(--alerta); }
+
+.circ-res__frase {
+  margin-top: var(--e1);
+  font-size: var(--txt-md);
+  color: var(--texto);
+  line-height: 1.3;
+}
+.circ-res__saida {
+  margin-top: var(--e1);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.35;
+}
+
+.circ-res__linhas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e1) var(--e4);
+  margin-top: var(--e2);
+  padding-top: var(--e2);
+  border-top: 1px solid var(--borda-suave);
+}
+.circ-res__linhas div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e1);
+}
+.circ-res__linhas dt {
+  font-size: var(--txt-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--entre-micro);
+  color: var(--texto-3);
+}
+.circ-res__linhas dd {
+  font-size: var(--txt-base);
+  color: var(--texto);
+}
+.circ-res__linha--alerta dd {
+  color: var(--alerta);
+  font-weight: var(--peso-forte);
+}
+
+.circ-res__multa,
+.circ-res__reserva,
+.circ-res__ignorado {
+  margin-top: var(--e2);
+  padding: var(--e2);
+  font-size: var(--txt-base);
+  line-height: 1.35;
+  border-left: 3px solid var(--alerta);
+  background: var(--superficie);
+  color: var(--texto);
+}
+.circ-res__reserva {
+  border-left-color: var(--acento);
+}
+.circ-res__ignorado {
+  border-left-color: var(--texto-3);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+
+.circ-res__motivos {
+  margin: var(--e2) 0 0;
+  padding-left: var(--e4);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.4;
+}
+.circ-res__motivos li + li {
+  margin-top: var(--e1);
+}
+
+/* --- Rodapé --- */
+
+.circ__rodape {
+  flex: none;
+  padding: var(--e2) var(--e3) var(--e3);
+  border-top: 1px solid var(--borda);
+  background: var(--superficie);
+}
+.circ__manual {
+  display: flex;
+  gap: var(--e2);
+}
+.circ__manual-campo {
+  flex: 1;
+  min-width: 0;
+  height: var(--toque-min);
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font-size: var(--txt-md);
+}
+.circ__manual-campo:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+.circ__manual .btn {
+  height: var(--toque-min);
+  min-width: 64px;
+}
+
+/* O que já saiu (e o que voltou) nesta sessão. Duas linhas no máximo: é
+   memória de curto prazo do atendimento, não relatório — relatório é no PC. */
+.circ__movimentos {
+  list-style: none;
+  margin: var(--e2) 0 0;
+  padding: 0;
+  max-height: 76px;
+  overflow-y: auto;
+}
+.circ__mov {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e2);
+  padding: var(--e1) 0;
+  font-size: var(--txt-sm);
+  border-bottom: 1px solid var(--borda-suave);
+}
+.circ__mov-marca {
+  flex: none;
+  font-weight: var(--peso-max);
+}
+.circ__mov--saiu .circ__mov-marca { color: var(--nova); }
+.circ__mov--voltou .circ__mov-marca { color: var(--acento); }
+.circ__mov-titulo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--texto);
+}
+.circ__mov-tombo {
+  flex: none;
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+/* --- Folhas de decisão (dentro do Modal compartilhado) --- */
+
+.circ-folha__obra {
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  color: var(--texto);
+}
+.circ-folha__nota {
+  margin-top: var(--e2);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.4;
+}
+.circ-folha__vazio {
+  margin-top: var(--e3);
+  padding: var(--e3);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  font-size: var(--txt-sm);
+}
+.circ-folha__lista {
+  list-style: none;
+  margin: var(--e3) 0 0;
+  padding: 0;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+.circ-folha__item {
+  width: 100%;
+  min-height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2);
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  color: var(--texto);
+  text-align: left;
+  cursor: pointer;
+}
+.circ-folha__lista li + li .circ-folha__item {
+  border-top: none;
+}
+.circ-folha__item--inerte {
+  background: var(--superficie-2);
+  color: var(--texto-3);
+  cursor: not-allowed;
+}
+.circ-folha__tombo {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--txt-base);
+}
+.circ-folha__estado {
+  flex: none;
+  font-size: var(--txt-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--entre-micro);
+}
+.circ-folha__estado--livre { color: var(--existente); }
+.circ-folha__estado--fora { color: var(--alerta); }
+.circ-folha__local {
+  flex: none;
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+.circ-folha__avisos {
+  margin: var(--e2) 0 0;
+  padding-left: var(--e4);
+  font-size: var(--txt-base);
+  line-height: 1.4;
+  color: var(--texto);
+}
+.circ-folha__avisos li + li {
+  margin-top: var(--e2);
+}
+.circ-folha__acoes {
+  display: flex;
+  gap: var(--e2);
+  width: 100%;
+}
+.circ-folha__acoes > * {
+  flex: 1;
+}
+
+/* --- Entrar --- */
+
+.circ--entrar {
+  justify-content: center;
+  padding: var(--e4);
+}
+.circ-entrar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.circ-entrar__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-lg);
+  color: var(--texto);
+}
+.circ-entrar__texto {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.4;
+  margin-bottom: var(--e2);
+}
+.circ-entrar__campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e1);
+}
+.circ-entrar__campo input {
+  height: var(--toque-min);
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: var(--txt-md);
+}
+.circ-entrar__campo input:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+.circ-entrar__erro {
+  padding: var(--e2);
+  background: var(--erro-suave);
+  border-left: 3px solid var(--erro);
+  color: var(--erro);
+  font-size: var(--txt-sm);
+}
+.circ-entrar__voltar {
+  margin-top: var(--e2);
+  background: none;
+  border: none;
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+  text-decoration: underline;
+  cursor: pointer;
+}

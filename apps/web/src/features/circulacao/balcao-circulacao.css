@@ -1,0 +1,619 @@
+/*
+ * Balcão de circulação — a tela do PC.
+ *
+ * Quem está aqui está SENTADO, com teclado e com um leitor de código de barras
+ * USB na mão (que, para o navegador, é um teclado que digita rápido e aperta
+ * Enter). Por isso a densidade é a da tela da fila, não a do celular: fio de
+ * 1px separando, tabela onde cabe tabela, nada de alvo de 52px.
+ *
+ * A geometria é a da prancheta do resto do app (docs/SPEC_UI.md §4): canto
+ * vivo, contorno de fio, microrrótulo em versalete nomeando cada bloco. Nenhum
+ * valor de cor solto — tudo sai de styles/tokens.css.
+ *
+ * Prefixo `bcirc-` em TODA classe deste arquivo. O motivo é de organização do
+ * repositório, não de estética: a tela do celular (pacote A6) tem o seu próprio
+ * `circulacao.css` na mesma pasta, e os dois são carregados juntos no bundle.
+ * Prefixo distinto é o que garante que um não pinte o outro.
+ */
+
+.bcirc {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 56px);
+  background: var(--fundo);
+}
+
+/* --- Cabeçalho: título e quem está operando --- */
+
+.bcirc__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  padding: var(--e3) var(--e5);
+  background: var(--superficie);
+}
+
+.bcirc__topo-esq {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e3);
+  min-width: 0;
+}
+
+.bcirc__titulo {
+  font-size: var(--txt-lg);
+  color: var(--texto);
+}
+
+.bcirc__sub {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bcirc__topo-dir {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  flex-shrink: 0;
+}
+
+/* O operador não é enfeite: é ele que vai para `lendings.created_by`, e quem
+   está no balcão precisa ver de relance em nome de quem está registrando. */
+.bcirc__operador {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.bcirc__operador-nome {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  color: var(--texto);
+}
+
+/* --- Barra de comando: o campo único, sempre com foco --- */
+
+.bcirc__barra {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e3) var(--e5);
+  background: var(--superficie);
+  border-top: 1px solid var(--borda-suave);
+  border-bottom: 1px solid var(--borda);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.bcirc-cmd {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.bcirc-cmd__icone {
+  position: absolute;
+  left: var(--e3);
+  color: var(--texto-3);
+  pointer-events: none;
+}
+
+/* Alto e monoespaçado: é um campo de código, e o bibliotecário confere dígito
+   a dígito quando a etiqueta está gasta. */
+.bcirc-cmd__campo {
+  width: 100%;
+  height: 46px;
+  padding: 0 var(--e4) 0 42px;
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie-2);
+  font-family: var(--fonte-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--txt-md);
+  letter-spacing: 0.03em;
+  caret-color: var(--acento);
+  transition: border-color var(--transicao), background var(--transicao);
+}
+
+.bcirc-cmd__campo:focus {
+  outline: none;
+  border-color: var(--acento);
+  background: var(--superficie);
+}
+
+.bcirc-cmd__campo:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bcirc-cmd__dica {
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+  white-space: nowrap;
+}
+
+/* --- Faixas de estado (sem banco, sessão, erro) --- */
+
+.bcirc__faixa {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e2) var(--e5);
+  font-size: var(--txt-sm);
+  border-bottom: 1px solid var(--borda);
+}
+
+.bcirc__faixa--alerta {
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  border-bottom-color: var(--alerta-borda);
+}
+
+.bcirc__faixa--erro {
+  background: var(--erro-suave);
+  color: var(--erro);
+  border-bottom-color: var(--erro-borda);
+}
+
+.bcirc__faixa--ok {
+  background: var(--existente-suave);
+  color: var(--existente);
+  border-bottom-color: var(--existente-borda);
+}
+
+.bcirc__faixa strong {
+  font-weight: var(--peso-forte);
+}
+
+.bcirc__faixa-fim {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+
+/* --- Corpo em duas colunas --- */
+
+.bcirc__corpo {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+  gap: var(--e4);
+  align-items: start;
+  padding: var(--e4) var(--e5) var(--e6);
+}
+
+@media (max-width: 1080px) {
+  .bcirc__corpo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.bcirc__coluna {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  min-width: 0;
+}
+
+/* --- Bloco genérico de prancheta --- */
+
+.bcirc-bloco {
+  background: var(--superficie);
+  padding: var(--e4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+
+.bcirc-bloco__cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+
+.bcirc-bloco__acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+
+.bcirc-bloco__vazio {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.5;
+}
+
+/* --- Atendimento: leitor corrente --- */
+
+.bcirc-leitor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+
+.bcirc-leitor__nome {
+  font-family: var(--fonte-titulo);
+  font-size: 22px;
+  font-weight: var(--peso-forte);
+  line-height: 1.15;
+  color: var(--texto);
+}
+
+.bcirc-leitor__meta {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+
+.bcirc-leitor__selos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  margin-top: var(--e1);
+}
+
+/* Busca de leitor por nome — o caminho de quem esqueceu a carteirinha. */
+.bcirc-busca {
+  display: flex;
+  gap: var(--e2);
+}
+
+.bcirc-busca__campo {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--borda);
+  background: var(--superficie-2);
+  font-size: var(--txt-base);
+}
+
+.bcirc-busca__campo:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+
+.bcirc-lista {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borda);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.bcirc-lista__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: var(--e2) var(--e3);
+  text-align: left;
+  border-bottom: 1px solid var(--borda-suave);
+  transition: background var(--transicao);
+}
+
+.bcirc-lista__item:last-child {
+  border-bottom: none;
+}
+
+.bcirc-lista__item:hover {
+  background: color-mix(in srgb, var(--texto) 5%, transparent);
+}
+
+.bcirc-lista__nome {
+  font-weight: var(--peso-medio);
+  color: var(--texto);
+}
+
+.bcirc-lista__meta {
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+  white-space: nowrap;
+}
+
+/* --- Atendimento: o exemplar em mãos --- */
+
+.bcirc-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  padding: var(--e3);
+  border: 1px solid var(--borda-forte);
+  background: var(--superficie-2);
+}
+
+.bcirc-item__tombo {
+  font-family: var(--fonte-mono);
+  font-size: var(--txt-sm);
+  letter-spacing: 0.04em;
+  color: var(--texto-2);
+}
+
+.bcirc-item__titulo {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  line-height: 1.2;
+  color: var(--texto);
+}
+
+.bcirc-item__autor {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+
+.bcirc-item__estado {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.45;
+}
+
+/* Nenhuma ação acontece sozinha: este é o PC, e o botão é a decisão. */
+.bcirc-item__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  padding-top: var(--e1);
+}
+
+/* --- Impedimentos, avisos e confirmação --- */
+
+.bcirc-motivos {
+  list-style: none;
+  padding: 0;
+  margin: var(--e1) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e1);
+}
+
+.bcirc-motivos li {
+  position: relative;
+  padding-left: var(--e3);
+  font-size: var(--txt-sm);
+  line-height: 1.45;
+}
+
+.bcirc-motivos li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+}
+
+/* --- Recibo da sessão: o que já saiu e o que já voltou --- */
+
+.bcirc-recibo {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borda);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.bcirc-recibo__linha {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border-bottom: 1px solid var(--borda-suave);
+  font-size: var(--txt-sm);
+}
+
+.bcirc-recibo__linha:last-child {
+  border-bottom: none;
+}
+
+.bcirc-recibo__obra {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--texto);
+}
+
+.bcirc-recibo__hora {
+  font-family: var(--fonte-mono);
+  font-size: var(--txt-xs);
+  color: var(--texto-3);
+}
+
+.bcirc-recibo__detalhe {
+  grid-column: 1 / -1;
+  font-size: var(--txt-xs);
+  color: var(--texto-2);
+  line-height: 1.4;
+}
+
+/* --- Tabelas (ficha e atrasos) --- */
+
+.bcirc-tabela-wrap {
+  border: 1px solid var(--borda);
+  overflow-x: auto;
+}
+
+.bcirc-tabela {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: var(--txt-base);
+  background: var(--superficie);
+}
+
+.bcirc-tabela th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: var(--peso-medio);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--texto-2);
+  padding: var(--e2) var(--e3);
+  border-bottom: 1px solid var(--borda);
+  white-space: nowrap;
+}
+
+.bcirc-tabela td {
+  padding: var(--e2) var(--e3);
+  border-bottom: 1px solid var(--borda-suave);
+  vertical-align: top;
+}
+
+.bcirc-tabela tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.bcirc-tabela tbody tr:hover {
+  background: color-mix(in srgb, var(--texto) 4%, transparent);
+}
+
+/* Atraso não é um selo discreto no fim da linha: é a linha inteira mudando de
+   cor, porque é o que a pessoa precisa ver antes de emprestar outro livro. */
+.bcirc-tabela tbody tr.bcirc-linha--atraso {
+  background: var(--erro-suave);
+}
+
+.bcirc-tabela tbody tr.bcirc-linha--atraso:hover {
+  background: color-mix(in srgb, var(--erro) 12%, transparent);
+}
+
+.bcirc-tabela__ordenar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.bcirc-tabela__ordenar:hover {
+  color: var(--texto);
+}
+
+.bcirc-tabela__seta {
+  font-size: 9px;
+  color: var(--acento);
+}
+
+.bcirc-col-acoes {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bcirc-cel-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e1);
+}
+
+.bcirc-obra {
+  font-family: var(--fonte-titulo);
+  font-size: var(--txt-md);
+  font-weight: var(--peso-forte);
+  line-height: 1.2;
+  color: var(--texto);
+}
+
+.bcirc-obra__sub {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.35;
+}
+
+.bcirc-data {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bcirc-dias {
+  font-family: var(--fonte-titulo);
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+  color: var(--erro);
+}
+
+/* --- Paginação do histórico --- */
+
+.bcirc-pagina {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--e3);
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+}
+
+.bcirc-pagina__contagem {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Atrasos: filtros do bloco --- */
+
+.bcirc-atrasos__filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e3);
+}
+
+.bcirc-atrasos__contagem {
+  margin-left: auto;
+  font-size: var(--txt-sm);
+  color: var(--texto-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Entrada do operador (a tela inteira quando não há sessão) --- */
+
+.bcirc-entrada {
+  display: grid;
+  place-items: center;
+  min-height: calc(100dvh - 56px);
+  padding: var(--e6) var(--e4);
+  background: var(--fundo);
+}
+
+.bcirc-entrada__caixa {
+  width: min(420px, 100%);
+  background: var(--superficie);
+  padding: var(--e5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+}
+
+.bcirc-entrada__titulo {
+  font-size: var(--txt-lg);
+  color: var(--texto);
+}
+
+.bcirc-entrada__texto {
+  font-size: var(--txt-sm);
+  color: var(--texto-2);
+  line-height: 1.5;
+}
+
+.bcirc-entrada__campos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+
+.bcirc-entrada__erro {
+  font-size: var(--txt-sm);
+  color: var(--erro);
+}

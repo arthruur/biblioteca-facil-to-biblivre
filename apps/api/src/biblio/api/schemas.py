@@ -104,3 +104,82 @@ class PedidoExport(BaseModel):
     executar: bool = False
     ids: list[str] | None = None
     db: ConexaoDb | None = None
+
+
+# --- Circulação, sessão e manutenção (pacote A8) -------------------------
+#
+# Acrescentados pelo A8: são os corpos das rotas do balcão. Continuam valendo
+# as duas regras do topo deste arquivo — só entra o que o cliente ENVIA, e a
+# resposta continua sendo o dict que o módulo de domínio devolveu.
+
+
+class Credenciais(BaseModel):
+    """
+    Corpo de `POST /api/sessao`: o login do próprio BibLivre.
+
+    A senha em claro morre dentro de `operador.autenticar` (que compara o
+    SHA-1 + Base64 e não a guarda). Ela não é logada, não vai para disco e não
+    volta na resposta — a resposta leva só o token e quem é o operador.
+    """
+
+    usuario: str = ""
+    senha: str = ""
+
+
+class PedidoEmprestimo(BaseModel):
+    """
+    Corpo de `POST /api/circulacao/emprestimos`.
+
+    Não existe `operador_id` aqui, e isso é de propósito: quem empresta sai da
+    sessão (`X-Sessao`), nunca do corpo. Aceitar o operador pelo corpo seria
+    deixar qualquer celular do wi-fi gravar empréstimo em nome de outra pessoa
+    — exatamente o que a decisão §1.4 do plano existe para impedir.
+
+    `forcar_avisos` é a confirmação explícita do balcão depois de um 409 que
+    veio só com avisos (leitor em atraso, multa em aberto, reserva de
+    terceiro). Impedimento de verdade não passa nem com ele.
+    """
+
+    holding_id: int | None = None
+    user_id: int | None = None
+    forcar_avisos: bool = False
+    previsto_para: str | None = None
+
+
+class PedidoDevolucao(BaseModel):
+    """
+    Corpo de `POST /api/circulacao/devolucoes`: o exemplar OU o empréstimo.
+
+    `holding_id` é o caminho do bipe (o livro está na mão de quem atende);
+    `lending_id` é o caminho da ficha do leitor. Um dos dois basta — a rota
+    recusa quando os dois vêm vazios, porque devolver "alguma coisa" não é
+    operação que se adivinhe.
+    """
+
+    holding_id: int | None = None
+    lending_id: int | None = None
+
+
+class PedidoRenovacao(BaseModel):
+    """Corpo de `POST /api/circulacao/renovacoes`."""
+
+    lending_id: int | None = None
+
+
+class ConfigBiblivre(BaseModel):
+    """
+    Corpo de `POST /api/manutencao/biblivre`: URL e admin da instalação.
+
+    Mesma regra da senha do Postgres (`ConexaoDb`): memória, nunca disco,
+    nunca de volta na resposta.
+    """
+
+    url: str = ""
+    usuario: str = ""
+    senha: str = ""
+
+
+class PedidoBackup(BaseModel):
+    """Corpo de `POST /api/manutencao/backup`. `full` é o que gera o `.b5bz`."""
+
+    tipo: str = "full"

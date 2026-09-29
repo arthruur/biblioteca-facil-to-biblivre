@@ -67,14 +67,18 @@ falhas: list[str] = []
 
 
 def checar(rotulo, condicao, extra=""):
+    # `flush` porque o caso de falha proposital da circulação imprime um
+    # traceback no stderr (que não tem buffer): sem descarregar cada linha, a
+    # saída redirecionada para arquivo mostraria o traceback no meio de outra
+    # seção, e quem lê o log procuraria defeito onde não há.
     print(("  ok   " if condicao else "  FALHA") + f"  {rotulo}"
-          + (f"   {extra}" if extra and not condicao else ""))
+          + (f"   {extra}" if extra and not condicao else ""), flush=True)
     if not condicao:
         falhas.append(rotulo)
 
 
 def secao(titulo):
-    print(f"\n{titulo}")
+    print(f"\n{titulo}", flush=True)
 
 
 # ---------------------------------------------------------------- API
@@ -950,7 +954,8 @@ def verificar_circulacao():
         commits_antes, rollbacks_antes = banco.commits, banco.rollbacks
         linhas_antes = len(banco.emprestimos)
         banco.explodir_em = "INSERT INTO lendings"
-        print("  ...   (o traceback a seguir é do caso de falha proposital)")
+        print("  ...   (o traceback a seguir é do caso de falha proposital)",
+              flush=True)
         r = c.post("/api/circulacao/renovacoes", headers=cab,
                    json={"lending_id": aberto["id"]})
         banco.explodir_em = ""
@@ -1422,16 +1427,17 @@ def verificar_manutencao_api():
         # --- instalação sem BibLivre configurado ---
         r = c.get("/api/manutencao", headers=cab)
         p = r.json()
+        biblivre = p.get("biblivre") or {}
         checar("sem BibLivre configurado o panorama responde 200 e diz o que falta",
                r.status_code == 200 and set(p) == {"biblivre", "reindex", "backup"}
-               and p["biblivre"]["configurado"] is False
-               and p["biblivre"]["erro"], p.get("biblivre"))
+               and biblivre.get("configurado") is False
+               and biblivre.get("erro"), p.get("biblivre"))
         recusas = {}
         for rota in ("/api/manutencao/reindexar", "/api/manutencao/caches",
                      "/api/manutencao/backup"):
             resp = c.post(rota, headers=cab)
             recusas[rota] = (resp.status_code, resp.json().get("codigo"))
-        checar("os três botões, sem configuração, são 409 biblivre_nao_configurado",
+        checar("sem configuração, os três botões são biblivre_nao_configurado",
                set(recusas.values()) == {(409, "biblivre_nao_configurado")},
                recusas)
         checar("o progresso responde 200 mesmo sem configuração nenhuma",
@@ -1446,8 +1452,8 @@ def verificar_manutencao_api():
                    json={"url": url, "usuario": "admin", "senha": "senha-certa"})
         dados = r.json()
         checar("POST /biblivre guarda a credencial e sonda na hora",
-               r.status_code == 200 and dados["configurado"] is True
-               and dados["conectado"] is True, dados)
+               r.status_code == 200 and dados.get("configurado") is True
+               and dados.get("conectado") is True, dados)
         checar("a senha do admin não volta na resposta nem no panorama",
                "senha-certa" not in r.text
                and "senha-certa" not in c.get("/api/manutencao", headers=cab).text)
@@ -1457,7 +1463,7 @@ def verificar_manutencao_api():
         r = c.post("/api/manutencao/reindexar", headers=cab)
         gasto = time.time() - marca
         checar("POST /reindexar dispara e volta na hora (não pendura a tela)",
-               r.status_code == 200 and r.json()["iniciado"] is True
+               r.status_code == 200 and r.json().get("iniciado") is True
                and gasto < 0.4, f"{gasto:.2f}s {r.json()}")
         # Segunda chamada simultânea: o BibLivre tem lock por tipo de registro
         # e responderia sucesso calado, sem indexar nada. O 409 é o certo; o
@@ -1466,18 +1472,19 @@ def verificar_manutencao_api():
         # pacote como divergência, e é decisão do router, não daqui.
         segunda = c.post("/api/manutencao/reindexar", headers=cab)
         checar("segunda reindexação simultânea é 409, não sucesso calado",
-               segunda.status_code == 409 and segunda.json()["mensagem"],
+               segunda.status_code == 409 and segunda.json().get("mensagem"),
                segunda.json())
         p = c.get("/api/manutencao/reindexar", headers=cab).json()
         checar("o progresso é rota separada e responde durante a varredura",
-               p["rodando"] is True and p["total"] == 100, p)
+               p.get("rodando") is True and p.get("total") == 100, p)
         limite = time.time() + 5
-        while (c.get("/api/manutencao/reindexar", headers=cab).json()["rodando"]
+        while (c.get("/api/manutencao/reindexar", headers=cab).json().get("rodando")
                and time.time() < limite):
             time.sleep(0.05)
         p = c.get("/api/manutencao/reindexar", headers=cab).json()
         checar("a reindexação fecha em 100% e sem erro",
-               p["rodando"] is False and p["pct"] == 100 and not p["erro"], p)
+               p.get("rodando") is False and p.get("pct") == 100
+               and not p.get("erro"), p)
         with trava:
             checar("o BibLivre de mentira recebeu UMA reindexação pela API",
                    estado["reindexes"] == 1, estado["reindexes"])
@@ -1486,29 +1493,30 @@ def verificar_manutencao_api():
         r = c.post("/api/manutencao/caches", headers=cab)
         dados = r.json()
         checar("POST /caches derruba a tradução e responde 200",
-               r.status_code == 200 and dados["ok"] is True
-               and dados["traducoes"] is True, dados)
+               r.status_code == 200 and dados.get("ok") is True
+               and dados.get("traducoes") is True, dados)
         checar("e avisa que campo de leitor ainda exige restart do Tomcat",
-               dados["campos_de_leitor"] is False
-               and "restart" in dados["detalhe"], dados.get("detalhe"))
+               dados.get("campos_de_leitor") is False
+               and "restart" in (dados.get("detalhe") or ""), dados.get("detalhe"))
 
         # --- backup: o .b5bz saindo do próprio BibLivre ---
         r = c.post("/api/manutencao/backup", headers=cab, json={"tipo": "full"})
         dados = r.json()
         checar("POST /backup dispara o .b5bz e devolve o id, sem esperar o pg_dump",
-               r.status_code == 200 and dados["iniciado"] is True
-               and dados["id"], dados)
+               r.status_code == 200 and dados.get("iniciado") is True
+               and dados.get("id"), dados)
         b = c.get("/api/manutencao/backup", headers=cab).json()
         checar("GET /backup traz o andamento e a URL de download do .b5bz",
-               b["rodando"] is True
-               and "controller=download" in b["url_download"], b)
+               b.get("rodando") is True
+               and "controller=download" in (b.get("url_download") or ""), b)
         limite = time.time() + 5
-        while (c.get("/api/manutencao/backup", headers=cab).json()["rodando"]
+        while (c.get("/api/manutencao/backup", headers=cab).json().get("rodando")
                and time.time() < limite):
             time.sleep(0.05)
         b = c.get("/api/manutencao/backup", headers=cab).json()
         checar("o backup termina, fecha em 100% e sem erro",
-               b["rodando"] is False and b["pct"] == 100 and not b["erro"], b)
+               b.get("rodando") is False and b.get("pct") == 100
+               and not b.get("erro"), b)
         with trava:
             checar("o BibLivre de mentira gerou UM backup",
                    estado["backups"] == 1, estado["backups"])
@@ -1521,28 +1529,28 @@ def verificar_manutencao_api():
         # --- Tomcat fora do ar ---
         # `server_close` junto com o `shutdown` pelo mesmo motivo da seção de
         # cima: sem fechar o socket que escuta, a chamada esperaria o timeout
-        # inteiro em vez de levar "conexão recusada" na hora.
+        # inteiro em vez de levar "conexão recusada".
+        #
+        # Daqui para baixo cada chamada que sai custa DOIS SEGUNDOS de relógio:
+        # nesta máquina, conexão recusada em 127.0.0.1 leva ~2s para voltar
+        # (retransmissão de SYN do stack do Windows), não é instantânea como em
+        # Linux. Por isso o trecho tem três checagens e nenhum laço de polling
+        # — a regra deste arquivo é rodar em segundos, e um laço aqui custaria
+        # 2s por volta.
         servidor.shutdown()
         servidor.server_close()
         r = c.post("/api/manutencao/reindexar", headers=cab)
         checar("com o Tomcat fora do ar o disparo ainda volta 200: é assíncrono",
-               r.status_code == 200 and r.json()["iniciado"] is True, r.json())
-        limite = time.time() + 5
-        while (c.get("/api/manutencao/reindexar", headers=cab).json()["rodando"]
-               and time.time() < limite):
-            time.sleep(0.05)
+               r.status_code == 200 and r.json().get("iniciado") is True, r.json())
         p = c.get("/api/manutencao/reindexar", headers=cab)
-        checar("a falha aparece no progresso, em português e sem exceção crua",
-               p.status_code == 200 and p.json()["rodando"] is False
-               and "BibLivre" in p.json()["erro"], p.json())
-        checar("o progresso nunca vira 409, nem com o Tomcat fora do ar",
-               c.get("/api/manutencao/reindexar", headers=cab).status_code == 200
-               and c.get("/api/manutencao/backup", headers=cab).status_code == 200)
+        checar("o progresso não vira 409: 200 com o erro dentro do corpo",
+               p.status_code == 200
+               and "BibLivre" in (p.json().get("erro") or ""), p.json())
         r = c.post("/api/manutencao/caches", headers=cab)
         checar("o botão síncrono, aí sim, é 409 biblivre_indisponivel com motivo",
                r.status_code == 409
-               and r.json()["codigo"] == "biblivre_indisponivel"
-               and r.json()["mensagem"], r.json())
+               and r.json().get("codigo") == "biblivre_indisponivel"
+               and r.json().get("mensagem"), r.json())
     finally:
         try:
             servidor.shutdown()

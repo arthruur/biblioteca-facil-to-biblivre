@@ -2,7 +2,7 @@
 
 Ferramentas de gestão de acervo para bibliotecas que rodam **BibLivre 5**.
 
-Duas coisas que se apoiam no mesmo núcleo:
+Três coisas que se apoiam no mesmo núcleo:
 
 1. **Catalogação por ISBN** — bipar o código de barras no celular, revisar no PC
    e gravar no BibLivre, sem duplicar o que a biblioteca já tem.
@@ -10,9 +10,20 @@ Duas coisas que se apoiam no mesmo núcleo:
    Fácil* para o BibLivre 5, pela mesma interface (`/migracao`) ou pelos CLIs.
    Executado e validado em campo: 14.880 obras, 16.251 exemplares, 2.743
    leitores e 19.592 empréstimos.
+3. **Circulação** — emprestar, devolver, renovar e consultar no balcão, pelo
+   celular (bipando) ou pelo PC, gravando no PostgreSQL do próprio BibLivre.
+   Mais os passos de manutenção que antes eram instrução de papel: reindexar,
+   limpar caches, conferir a base e gerar o `.b5bz`.
 
-> **Status:** migração completa e validada (`docs/IMPORTACAO_BIBLIVRE.md`).
-> Catalogação por ISBN em uso. Ver `docs/ROADMAP.md`.
+As três compartilham o mesmo núcleo e a mesma postura: o BibLivre **continua
+instalado** e continua sendo a verdade. Este projeto tira do caminho o que a
+tela dele torna penoso no dia a dia — não substitui o sistema.
+
+> **Status:** migração completa e validada em campo
+> (`docs/IMPORTACAO_BIBLIVRE.md`). Catalogação por ISBN em uso. Circulação e
+> manutenção implementadas e cobertas por verificação offline, **ainda não
+> exercitadas contra um BibLivre real** — a pauta desse primeiro teste está em
+> `docs/ROADMAP.md`.
 
 ---
 
@@ -24,23 +35,27 @@ apps/
   web/          React + Vite — as telas
 packages/
   bf-legado/         biblio.legado      lê o .bkp do Biblioteca Fácil
-  biblivre-client/   biblio.biblivre    fala com o PostgreSQL do BibLivre
+  biblivre-client/   biblio.biblivre    fala com o PostgreSQL do BibLivre —
+                                        e, na manutenção, por HTTP com ele
   catalogacao/       biblio.catalogacao ISBN, lote, fila, export
   migracao/          biblio.migracao    o pipeline do .bkp ao BibLivre
 scripts/        CLIs finos por cima dos pacotes (dry-run por padrão)
 tests/          verificação de fumaça, sem banco e sem rede
-docs/           formato do .bkp, tabelas, importação, spec de UI
+docs/           formato do .bkp, tabelas, importação, spec de UI, roadmap
 ```
 
 O namespace Python é `biblio`, e a regra que atravessa os pacotes é: **nada
 neles commita**. Toda função de gravação recebe a conexão e devolve o commit
 para quem chamou, porque obras e exemplares precisam fechar na mesma transação
-— não existe "gravou metade".
+— não existe "gravou metade". Com a circulação essa regra ganhou a outra
+metade: **uma operação de balcão é uma transação e um commit, e quem commita é
+o router** — recusa faz `ROLLBACK`, porque uma recusa pode ter deixado trava
+ou `UPDATE` no meio do caminho.
 
 | Pacote | Responde por |
 |---|---|
 | `biblio.legado` | `bkp`, `tabela`, `consolidar` — o formato proprietário do sistema antigo |
-| `biblio.biblivre` | `conexao`, `marc`, `obras`, `exemplares`, `acervo`, `leitores`, `circulacao` |
+| `biblio.biblivre` | `conexao`, `marc`, `obras`, `exemplares`, `acervo`, `leitores`, `circulacao` (carga), `emprestimo` (balcão), `operador` (sessão), `web` (HTTP com o BibLivre), `verificacao` (conferência) |
 | `biblio.catalogacao` | `lookup`, `fila`, `export`, `ficha` (OCR), `config`, `cert` |
 | `biblio.migracao` | `pipeline` (o que fazer, na ordem dos CLIs), `execucao` (uma por vez, em segundo plano, com estado persistido) |
 
@@ -106,6 +121,7 @@ docker compose up --build
 # https://<IP-DO-PC>:8000            celular — escanear (aceite o certificado)
 # https://<IP-DO-PC>:8000/fila       PC — revisar e exportar
 # https://<IP-DO-PC>:8000/migracao   PC — trazer o acervo legado
+# https://<IP-DO-PC>:8000/circulacao balcão — emprestar e devolver (celular e PC)
 # https://<IP-DO-PC>:8000/docs       OpenAPI
 ```
 
@@ -206,9 +222,13 @@ Três coisas que a tela garante e que valem repetir:
 O `.bkp` enviado e os CSVs gerados ficam em `data/migracao/<id>/` e têm nome,
 CPF e endereço de leitores dentro. O botão **Descartar** apaga a pasta.
 
-Depois de gravar sobram dois passos fora do app, e a tela os repete: reindexar
-a base bibliográfica no BibLivre e reiniciar o Tomcat (os campos novos de
-leitor são cache estático).
+Depois de gravar sobravam dois passos fora do app: reindexar a base
+bibliográfica e reiniciar o Tomcat. O **reindex virou botão** — o app pede ao
+próprio BibLivre que indexe, por HTTP (ver a seção 5) —, e vale a mesma
+recomendação de conferir a base antes de liberar o balcão
+(`python scripts/conferir.py`). O **restart do Tomcat continua manual**, e não
+por falta de tentativa: está verificado no fonte que nenhuma ação alcançável
+por HTTP derruba o cache de campos de leitor sem destruir a instalação.
 
 ### Pelos CLIs
 
@@ -242,7 +262,93 @@ Duas decisões que moldaram tudo, detalhadas em
 
 ---
 
-## 5) Produção
+## 5) Circulação — o balcão
+
+Emprestar, devolver, renovar e consultar sem abrir o BibLivre. É a frente que
+mais gente usa por dia: catalogação acontece quando chega livro novo, migração
+acontece uma vez, e o balcão acontece toda hora em que a biblioteca está
+aberta — e é exatamente onde a tela do BibLivre pesa mais.
+
+**Celular (`/circulacao`)** — dois modos no topo, EMPRESTAR e DEVOLVER. Empréstimo
+é o único fluxo com duas etapas, porque precisa de duas identidades: bipa a
+carteirinha (ou busca pelo nome), o leitor fica fixo no topo, e os livros
+entram em sequência. Devolução é uma etapa: o exemplar já sabe de quem é.
+
+**PC (`/circulacao`)** — uma barra de comando só, sempre com foco, que aceita
+tombo, ISBN ou número de leitor; o leitor de código de barras USB é, para o
+navegador, um teclado que digita rápido e aperta Enter. Aqui **bipar nunca
+grava**: a tela mostra o exemplar "em mãos" com o estado real e oferece a ação
+explícita. Mais a ficha completa do leitor (empréstimos em aberto, multas,
+histórico) e o painel de atrasados do dia.
+
+**Aqui o celular espera** — e é exceção declarada à regra de que a tela do
+celular nunca bloqueia. Na captura, bipe é rascunho e o servidor reconcilia
+depois. No balcão não existe rascunho: dizer "levou" antes do commit é mentir
+para quem está na frente. Cada bipe passa por "Gravando…" e termina em
+confirmação, recusa, aviso — ou "não deu para confirmar", quando a rede cai
+depois do envio e a tela admite não saber.
+
+**Grava no PostgreSQL do próprio BibLivre, reproduzindo o `LendingBO`.** Nada
+de tabela nova, nada de schema paralelo: um empréstimo feito aqui tem de ser
+indistinguível de um feito pela tela do BibLivre, porque ele continua
+instalado, pode estar aberto na mesma base no PC ao lado, e o `.b5bz` continua
+sendo a verdade da biblioteca. Daí três invariantes:
+
+- **uma operação, uma transação, um commit** — com `SELECT … FOR UPDATE` no
+  exemplar e revalidação **dentro** da transação, porque entre consultar e
+  clicar o livro pode ter saído pela tela do outro sistema;
+- **`created_by` é o operador de verdade** — o app autentica contra a tabela
+  `logins` do próprio BibLivre (SHA-1 + Base64, como ele faz) e usa o
+  `logins.id` real. Não inventamos cadastro de usuário, e é também o mínimo de
+  barreira que o recurso exige: sem login, qualquer celular no wi-fi da
+  biblioteca registraria empréstimo;
+- **impedimento barra, aviso passa com confirmação.** Os que barram são
+  exatamente os que o `LendingBO` recusa; atraso, multa em aberto e reserva de
+  terceiro apenas **avisam**, porque o BibLivre não checa nenhum dos três e
+  barrar deixaria o app mais rígido que a tela do PC ao lado. A confirmação
+  precisa dizer o que está sendo ignorado.
+
+**O caminho do ISBN é de primeira classe.** Boa parte do acervo migrado não tem
+etiqueta impressa — os 16.251 tombos existem no banco, nem todos no papel.
+Bipar o código de barras da capa devolve os exemplares da obra com o estado de
+cada um, e o operador escolhe qual está na mão.
+
+Continuam no BibLivre, e a tela diz isso quando o caso aparece: cadastro e
+edição de leitor, reativar ou desbloquear cadastro, receber multa, a fila de
+reservas e a catalogação avançada. Ver [docs/SPEC_UI.md](docs/SPEC_UI.md) §10
+para os estados e as frases de balcão de cada impedimento, e
+[docs/IMPORTACAO_BIBLIVRE.md](docs/IMPORTACAO_BIBLIVRE.md) para as regras
+lidas no fonte (prazo, multa, renovação, `logins`).
+
+### Manutenção
+
+Os passos que o roteiro de importação terminava mandando fazer "no BibLivre,
+depois" — reindexar, limpar caches, conferir a base e gerar o `.b5bz`. Eles
+são feitos por **HTTP contra o próprio BibLivre**, logado como admin, e não
+reimplementados: reproduzir o indexador seria copiar a tokenização Java, e
+índice errado falha em silêncio.
+
+| Ação | Rota | Observação |
+|---|---|---|
+| Reindexar | `POST` / `GET /api/manutencao/reindexar` | dispara e volta; o progresso é o `GET`. O índice fica **vazio** no meio do trabalho |
+| Limpar caches | `POST /api/manutencao/caches` | traduções sim; campo de leitor **continua** exigindo restart do Tomcat, e a resposta diz isso |
+| Conferir a base | `POST /api/manutencao/conferencia` | 26 checagens em SQL, só leitura — também por `python scripts/conferir.py` |
+| Gerar backup | `POST` / `GET /api/manutencao/backup` | quem gera é o BibLivre; o `.b5bz` leva dado pessoal de todos os leitores |
+
+**As rotas existem; a tela de manutenção ainda não** — hoje o caminho é a API
+ou o `scripts/conferir.py`. O contrato que essa tela vai cumprir está na §11 do
+[SPEC_UI.md](docs/SPEC_UI.md).
+
+A conferência é o que responde à pergunta que nenhuma tela responde: **as
+sequences estão à frente do `max(id)`?** A migração grava id explícito (é o que
+preserva a numeração de origem), id explícito não avança a sequence, e o
+primeiro empréstimo que o app tentar gravar é o que estoura chave duplicada —
+no balcão, com fila. Rode `scripts/conferir.py` **antes** de ligar a circulação
+contra uma base real.
+
+---
+
+## 6) Produção
 
 Atrás de Nginx com Let's Encrypt (trocando o certificado autoassinado),
 `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD` por ambiente e

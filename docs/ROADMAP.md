@@ -97,22 +97,191 @@ Reindexar exemplares **não** entra na lista: exemplar não tem tabela de
       da biblioteca não podia ter como única garantia "rodou uma vez em campo",
       e backup real não entra no repositório.
 
+- [x] **Circulação no app: emprestar, devolver, renovar e consultar
+      (2026-09-06).** O balcão saiu do BibLivre e entrou na mesma interface da
+      catalogação, em duas telas para duas posturas — celular (bipando, de pé,
+      com o leitor na frente) e PC (leitor USB, ficha completa, painel de
+      atrasados). Grava no PostgreSQL do próprio BibLivre, reproduzindo o
+      `LendingBO`: nada de tabela nova, nada de schema paralelo, um empréstimo
+      nosso indistinguível de um feito pela tela dele. As regras que isso
+      exigiu — as quatro condições de `checkLending`, o prazo em dias corridos
+      empurrado para o próximo dia útil, a multa por dia e por item, a
+      renovação que é linha nova com `previous_lending_id` — estão em
+      [IMPORTACAO_BIBLIVRE.md](IMPORTACAO_BIBLIVRE.md), arquivo por arquivo.
+      Três invariantes carregam o resto: uma operação é uma transação com
+      `SELECT … FOR UPDATE` no exemplar e revalidação **dentro** dela (o
+      BibLivre pode estar aberto na mesma base no PC ao lado); só o router
+      commita; e impedimento barra enquanto aviso passa com confirmação que
+      diz o que está sendo ignorado. O desenho das telas está na §10 do
+      [SPEC_UI.md](SPEC_UI.md).
+- [x] **`created_by` passa a ser o operador de verdade.** O app autentica
+      contra a tabela `logins` do próprio BibLivre (SHA-1 + Base64, o hash
+      provado contra o `admin` que o instalador semeia) e usa o `logins.id`
+      real. Não inventamos cadastro: quem sai de férias é desligado num lugar
+      só, e o `created_by` faz sentido dentro das telas do BibLivre também. A
+      sessão é um token opaco em memória, expirando por inatividade — é
+      também o mínimo de barreira que a circulação exige, porque sem ela
+      qualquer celular no wi-fi da biblioteca registraria empréstimo.
+- [x] **Reindex automático depois de gravar obra nova** — o que era aviso na
+      tela virou ação do app. Reproduzir o indexador em SQL estava fora de
+      questão (seria copiar a tokenização Java do `IndexingBO`, e índice
+      errado falha em silêncio), então o app **manda o BibLivre indexar**, por
+      HTTP, logado como admin: as ações `reindex` e `progress` de
+      `administration.indexing`, com barra de progresso, uma reindexação por
+      vez e o aviso de que o índice fica vazio no meio do trabalho
+      (`clearIndexes` roda antes de reconstruir). O que **não** foi ligado, e
+      está em Próximos passos: o disparo automático dentro da gravação de obra
+      nova e a tela que aciona o botão — hoje o caminho é a rota
+      `POST /api/manutencao/reindexar`, e a tela de export continua mostrando
+      o lembrete.
+- [x] **Backup, caches e conferência pelo mesmo canal.** O `.b5bz` é gerado
+      pelo próprio BibLivre (`prepare` → `backup` → `progress`, com URL de
+      download) porque ele é um `pg_dump` empacotado, não um formato de
+      intercâmbio — reimplementá-lo seria entregar um restore que ninguém
+      testou. As traduções são derrubadas sem reiniciar o Tomcat
+      (`administration.translations/list`). E ficou **provado no fonte** que o
+      cache de campos de leitor não tem saída por HTTP: os três chamadores de
+      `StaticBO.resetCache()` são destrutivos, então o restart do Tomcat
+      continua necessário para campo novo em `users_fields` — o botão diz isso
+      na resposta em vez de prometer o que não cumpre.
+- [x] **Conferência pós-carga em SQL** (`biblio.biblivre.verificacao`,
+      `scripts/conferir.py`, `POST /api/manutencao/conferencia`): 26 checagens
+      só de leitura — o índice, as quatro sequences, 12 de integridade
+      referencial e 9 contagens informativas. Checagem que não pôde rodar
+      (tabela ausente, sem `GRANT`) volta como "não verificada", nunca como
+      "passou". Ela existe por causa de dois sintomas silenciosos: obra fora de
+      `biblio_idx_fields` (o catálogo existe e não aparece na busca) e
+      sequence atrás do `max(id)` — a armadilha que a migração arma e que o
+      **primeiro empréstimo do app** dispara, no balcão, com fila. Por isso a
+      checagem das sequences é bloqueante antes de liberar a circulação.
+- [x] **Scanner em modo circulação** — além do EAN-13 da capa, o decodificador
+      passa a ler Code 39 e Code 128, com o conjunto de formatos escolhido por
+      modo (`isbn` ou `circulacao`) tanto no motor nativo quanto no de
+      reserva. A classificação local do que foi lido é **dica de interface** e
+      nada mais: quem decide se aquilo é tombo, ISBN ou leitor é o servidor.
+      Ficou documentado no fonte do BibLivre o que a etiqueta impressa
+      realmente carrega — e não é o tombo (ver Próximos passos).
+
 ## 🚧 Próximos passos
 
-O pipeline de migração deixou de ser trabalho pendente e virou **feature de
-produto**: é o caminho de onboarding de uma biblioteca nova que venha de
-sistema legado, e agora está na tela. O que segue em aberto é do lado da
-catalogação:
+Duas frentes deixaram de ser trabalho pendente e viraram **feature de
+produto**: a migração de acervo legado (o onboarding de uma biblioteca que vem
+de sistema legado) e a circulação (o balcão de todo dia). O que sobra em aberto
+é de três naturezas — o que precisa de um BibLivre real na frente, o que ficou
+sem tela, e o que continua obrigando a abrir o outro sistema.
 
-- [ ] Reindex automático depois de gravar obra nova (hoje é aviso na tela)
+### O primeiro teste contra o BibLivre real (a pauta, nesta ordem)
+
+Nada da circulação foi exercitado contra um Postgres de verdade nem contra um
+Tomcat de verdade: a garantia de hoje é a verificação offline
+(`python tests/verificar.py` cobre as rotas, a transação, o vocabulário de
+erro e a conferência contra um banco de mentira) e a leitura do fonte. A ordem
+abaixo não é arbitrária — cada passo desarma o risco do seguinte:
+
+1. [ ] `python scripts/conferir.py` — **as sequences primeiro.** Sequence
+       atrás do `max(id)` faz o primeiro empréstimo estourar chave duplicada.
+2. [ ] Login de operador: que `POST /api/sessao` devolve o `logins.id` certo,
+       e que ele aparece em `lendings.created_by` depois.
+3. [ ] Um empréstimo de teste: que o prazo calculado bate com o que a tela do
+       BibLivre calcularia para o mesmo leitor e o mesmo dia.
+4. [ ] A devolução do mesmo: atraso, multa (se houver `fine_value`
+       configurado) e o aviso de reserva pendente.
+5. [ ] Reindex e backup pela rota (`POST /api/manutencao/reindexar` e
+       `.../backup`, com os `GET` de progresso) — enquanto não há tela, é por
+       aí que se dispara.
+6. [ ] Só então: encostar num acervo de produção.
+
+### O que ainda precisa ser confirmado na instalação (5.0.x)
+
+Todo o fonte que sustenta a circulação e a manutenção foi lido num **fork** no
+GitHub. A biblioteca roda um 5.0.x instalado pelo instalador de Windows, e
+estas afirmações são as que uma diferença de versão derrubaria:
+
+- [ ] **A etiqueta impressa e o `resolver`** — é o item mais urgente. No fonte,
+      `HoldingBO.printLabelsToPDF` imprime na barra o `biblio_holdings.id` com
+      zeros à esquerda até 10 dígitos, **não** o `accession_number`; e
+      `UserBO` imprime a carteirinha do leitor exatamente na mesma forma
+      (`users.id`, 10 dígitos). Hoje o `resolver` procura tombo exato, tenta
+      ISBN e depois procura leitor por id — então `0000000842` cai no
+      **leitor** 842, não no exemplar 842. Precisa ser testado com uma
+      etiqueta de verdade desta biblioteca, e a ordem de resolução decidida
+      com essa informação na mão.
+- [ ] `configurations['general.business_days']` na base da biblioteca: o
+      instalador semeia segunda-a-sexta e o template tem uma linha comentada
+      com segunda-a-sábado. Se a biblioteca abre sábado, o prazo muda.
+- [ ] `users_types.fine_value` — vale 0,00 nos dois tipos semeados, o que quer
+      dizer que **nenhuma multa é gravada** até alguém configurar o valor em
+      Administração. Se esta biblioteca cobra multa hoje, é configuração no
+      BibLivre, não código. Conferir também se existem tipos além de Leitor e
+      Funcionário, porque limite e prazo saem de lá.
+- [ ] A tabela `logins`: que tem as colunas que o fonte diz, que `permissions`
+      é legível pelo papel `biblivre`, e se o `admin` ainda está com o hash
+      público do instalador.
+- [ ] O canal HTTP: o contexto da URL (`/Biblivre5/` é padrão, mas é
+      configurável), o nome do schema, e se as ações `reindex`/`progress`,
+      `translations/list` e as três de `backup` respondem como o fonte diz.
+- [ ] O leitor de código de barras USB do balcão: que ele entrega os dígitos e
+      o Enter no campo com foco permanente, inclusive logo depois de um clique
+      em botão.
+- [ ] A carga completa da migração disparada **pela tela** (o código de
+      gravação é o mesmo já validado pelos CLIs; o que falta medir é o tempo
+      de uma base de 14 mil obras num clique).
+
+### O que ficou sem tela
+
+- [ ] **Tela de manutenção.** As oito rotas de `/api/manutencao` estão
+      implementadas e testadas, e nenhuma tela as consome: hoje o caminho é a
+      API ou o `scripts/conferir.py`. O contrato que essa tela vai cumprir
+      está escrito na §11 do [SPEC_UI.md](SPEC_UI.md), inclusive o custo do
+      painel (laço lento) e o aviso de que o índice fica vazio durante o
+      reindex.
+- [ ] **Reindex automático dentro da gravação de obra nova.** A capacidade
+      existe (`web.reindexar`); o que falta é chamá-la quando o export cria
+      registro novo, em vez de mostrar o lembrete. Enquanto isso o lembrete
+      continua correto e continua aparecendo só quando houve obra nova.
+- [ ] **O contador de atrasos na barra de navegação** nasce em zero e nunca é
+      alimentado — quem alimentaria é o `App.jsx`, com a mesma rota que o
+      painel do PC já consome.
+- [ ] **O histórico do leitor.** A ficha do PC tem a seção, paginada, e ela
+      está vazia: `GET /api/circulacao/leitor/{id}` devolve só os empréstimos
+      em aberto. Fazer a rota devolver os devolvidos exige paginação **no
+      servidor** — leitor antigo desta base tem centenas de linhas, e a
+      migração trouxe 18.618 devolvidos.
+
+### O que continua obrigando a abrir o BibLivre
+
+Recorte deliberado — o balcão é 90% do uso diário e é onde a tela do BibLivre
+pesa; o resto é uso ocasional, de gente sentada. Mas é o que o usuário vai
+perguntar primeiro:
+
+| Continua no BibLivre | Consequência no balcão |
+|---|---|
+| Cadastro e edição de leitor | leitor novo interrompe o atendimento e obriga a abrir o outro sistema — é o primeiro candidato à fase 2 |
+| Reativar ou desbloquear cadastro | o app diz o motivo e manda para lá |
+| Receber/quitar multa | o app mostra o valor apurado; receber dinheiro é operação de caixa |
+| Fila de reservas | a devolução avisa "separe para tal leitor", mas administrar a fila não tem rota |
+| Restart do Tomcat depois de criar campo de leitor | provado no fonte que não há saída por HTTP |
+| Restore do `.b5bz` | é destrutivo por natureza |
+| Catalogação avançada, etiquetas, cartões, relatórios, permissões, Z39.50 | uso ocasional, de gente sentada |
+
+### Fica em aberto, sem urgência
+
 - [ ] Medir em campo quanto o dedup por ISBN de fato pega — o teste com a fila
-      real pegou 19 de 26
+      real pegou 19 de 26.
 - [ ] OCR de ficha CIP para livro sem código de barras (fase de projeto, ver
-      [CATALOGACAO_POR_FOTO.md](CATALOGACAO_POR_FOTO.md))
-- [ ] Rodar a migração **pela tela** contra um BibLivre real, de ponta a ponta.
-      O código de gravação é o mesmo já validado em campo pelos CLIs, e a
-      verificação offline cobre o encadeamento; o que falta medir é a carga
-      completa disparada pelo botão, com o tempo de uma base de 14 mil obras.
+      [CATALOGACAO_POR_FOTO.md](CATALOGACAO_POR_FOTO.md)).
+- [ ] Duas rotas que o contrato não previu e que as telas pediriam:
+      um `GET /api/circulacao/checar` (mostrar o prazo previsto e os avisos
+      **antes** do clique, em vez de descobrir tudo pelo 409) e um
+      `GET /api/sessao/ativas` (quem está no balcão). As duas funções de
+      domínio já existem; falta decidir se entram no contrato.
+- [ ] Contenção no `POST /api/sessao`. Não há bloqueio por tentativas — nem
+      aqui, nem no BibLivre (verificado no fonte). Enquanto o app vive na LAN
+      da biblioteca isso é aceitável; exposto para fora, não.
+- [ ] Cobertura automatizada da lógica das telas de circulação. O repositório
+      não tem runner de DOM (`npm test` é `node --test src`), então o que
+      existe são as funções puras e a verificação do servidor; montar
+      componente exigiria dependência nova.
 
 ## Decisão tomada: 1 registro bibliográfico por obra
 
@@ -168,9 +337,11 @@ normalizadas, mas nada além disso é adivinhado. Dos 16.251 registros,
 1.385 foram reconhecidos como cópias; o que restou de duplicata real
 aparece como fichas separadas, não como perda.
 
-## Circulação: o que entra e o que não entra
+## A circulação migrada: o que entra e o que não entra
 
-A circulação entrou no escopo depois do acervo, com estas decisões:
+Esta seção é sobre a **carga** dos dados de circulação do sistema antigo, não
+sobre o balcão de todo dia (esse está na §10 do [SPEC_UI.md](SPEC_UI.md)). Ela
+entrou no escopo depois do acervo, com estas decisões:
 
 - **Histórico completo de empréstimos**, não só os abertos: 19.592 linhas em
   `lendings` (974 em aberto, 18.618 devolvidos). O `--apenas-abertos` existe

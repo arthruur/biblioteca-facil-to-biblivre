@@ -18,6 +18,7 @@ e a API HTTP chama os mesmos módulos.
     emprestimo   a mesma circulação no balcão: emprestar, devolver, renovar
     operador     quem está no balcão, autenticado contra `logins`
     verificacao  conferência pós-carga (só leitura)
+    substituicao esvaziar o que a migração carrega, para recarregar um backup
     web          o único que não fala SQL: HTTP contra o próprio BibLivre
                  (reindexar, caches, backup `.b5bz`)
 
@@ -39,7 +40,8 @@ commitar, como todo mundo aqui.
 """
 
 from . import (acervo, circulacao, conexao, emprestimo, exemplares, leitores,
-               marc, obras, operador, verificacao, web)
+               marc, obras, operador, substituicao, verificacao, web)
 
 __all__ = ["acervo", "circulacao", "conexao", "emprestimo", "exemplares",
-           "leitores", "marc", "obras", "operador", "verificacao", "web"]
+           "leitores", "marc", "obras", "operador", "substituicao",
+           "verificacao", "web"]

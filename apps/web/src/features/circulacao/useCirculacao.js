@@ -521,6 +521,18 @@ export function useCirculacao() {
     }
   }, [])
 
+  /** Obras pelo título, cada uma já com os exemplares e o estado. */
+  const buscarObras = useCallback(async (busca) => {
+    const texto = String(busca || '').trim()
+    if (texto.length < 2) return []
+    try {
+      const d = await api.circulacao.obras(texto)
+      return d?.obras || []
+    } catch {
+      return []
+    }
+  }, [])
+
   /** Recarrega a situação depois de um empréstimo, sem segurar a tela. */
   const recarregarFicha = useCallback((userId) => {
     if (userId == null) return
@@ -702,7 +714,11 @@ export function useCirculacao() {
       abrirTrabalho('Conferindo…')
       let r
       try {
-        r = await api.circulacao.resolver(codigo)
+        // O tombo do acervo migrado é o NUMACERVO, só dígitos como o número do
+        // leitor: esperando a carteirinha, "842" é o leitor; depois, o livro.
+        const preferir =
+          modoRef.current === 'emprestar' && !fichaRef.current ? 'leitor' : 'exemplar'
+        r = await api.circulacao.resolver(codigo, preferir)
       } catch (e) {
         tratarFalha(e, 'ao consultar o código')
         fecharTrabalho()
@@ -813,6 +829,35 @@ export function useCirculacao() {
     [devolverExemplar, emprestarExemplar]
   )
 
+  /**
+   * O livro achado pela busca por título: segue o caminho do ISBN — a lista
+   * dos exemplares, e o operador escolhe o que está na mão.
+   */
+  const abrirObra = useCallback(
+    (obra) => {
+      if (!obra || ocupadoRef.current || decisaoRef.current) return
+      if (modoRef.current === 'emprestar' && !fichaRef.current) {
+        anunciarRecusa({
+          tom: 'aviso',
+          titulo: 'Falta dizer quem vai levar',
+          frase: 'Identifique o leitor antes de escolher o livro.',
+          saida: 'Bipe a carteirinha, digite o número ou procure pelo nome.',
+          linhas: [],
+        })
+        return
+      }
+      setDecisao({
+        tipo: 'exemplares',
+        acao: modoRef.current === 'devolver' ? 'devolver' : 'emprestar',
+        origem: 'titulo',
+        obra,
+        exemplares: obra.exemplares || [],
+      })
+      vibrarPadrao(40)
+    },
+    [anunciarRecusa]
+  )
+
   const confirmarAvisos = useCallback(async () => {
     const d = decisaoRef.current
     if (d?.tipo !== 'avisos') return
@@ -857,6 +902,8 @@ export function useCirculacao() {
     fixarLeitorPorId,
     soltarLeitor,
     buscarLeitores,
+    buscarObras,
+    abrirObra,
     // bipe
     processar,
     ocupado,

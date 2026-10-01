@@ -59,6 +59,7 @@ class OpcoesMigracao(BaseModel):
     circulacao: bool | None = None
 
     incluir_excluidos: bool | None = None
+    tombo_numacervo: bool | None = None
     prefixo_tombo: str | None = None
     ano_tombo: int | None = None
     biblioteca: str | None = None
@@ -72,6 +73,7 @@ class OpcoesMigracao(BaseModel):
     sem_reservas: bool | None = None
     reservas_desde: int | None = None
 
+    substituir: bool | None = None
     permitir_existentes: bool | None = None
 
 

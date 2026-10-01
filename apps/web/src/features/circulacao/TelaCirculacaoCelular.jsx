@@ -57,6 +57,7 @@ export function TelaCirculacaoCelular({ conexao, aoNavegar }) {
 
   const [manual, setManual] = useState('')
   const [mostrarBusca, setMostrarBusca] = useState(false)
+  const [buscandoLivro, setBuscandoLivro] = useState(false)
 
   const semAcervo = Boolean(conexao?.bruto) && !conexao.conectado
   const emprestando = c.modo === 'emprestar'
@@ -189,7 +190,27 @@ export function TelaCirculacaoCelular({ conexao, aoNavegar }) {
           <Botao variante="secundario" onClick={enviarManual} disabled={!manual.trim() || c.ocupado}>
             Ir
           </Botao>
+          {(!emprestando || leitor) && (
+            <button
+              className="circ__passo-busca"
+              onClick={() => setBuscandoLivro((v) => !v)}
+              aria-expanded={buscandoLivro}
+            >
+              <IconeBuscar tamanho={14} />
+              Título
+            </button>
+          )}
         </div>
+
+        {buscandoLivro && (!emprestando || leitor) && (
+          <BuscaLivro
+            aoBuscar={c.buscarObras}
+            aoEscolher={(obra) => {
+              setBuscandoLivro(false)
+              c.abrirObra(obra)
+            }}
+          />
+        )}
 
         {c.movimentos.length > 0 && (
           <ul className="circ__movimentos">
@@ -381,6 +402,64 @@ function BuscaLeitor({ aoBuscar, aoEscolher }) {
             <button className="circ-busca__item" onClick={() => aoEscolher(l)}>
               <span className="circ-busca__nome">{nomeDe(l)}</span>
               <span className="circ-busca__id mono">#{idDoLeitor(l)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * Busca por título: o livro sem etiqueta legível e sem ISBN na capa. Escolher
+ * a obra abre a mesma folha do caminho do ISBN.
+ */
+function BuscaLivro({ aoBuscar, aoEscolher }) {
+  const [texto, setTexto] = useState('')
+  const [achados, setAchados] = useState([])
+  const [procurando, setProcurando] = useState(false)
+  const pedido = useRef(0)
+
+  useEffect(() => {
+    const alvo = texto.trim()
+    if (alvo.length < 3) {
+      setAchados([])
+      return
+    }
+    const meu = ++pedido.current
+    setProcurando(true)
+    const t = setTimeout(async () => {
+      const r = await aoBuscar(alvo)
+      if (pedido.current === meu) {
+        setAchados(r)
+        setProcurando(false)
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [texto, aoBuscar])
+
+  return (
+    <div className="circ-busca">
+      <input
+        className="circ-busca__campo"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        placeholder="Parte do título ou do autor"
+        aria-label="Procurar livro pelo título"
+        autoFocus
+      />
+      {procurando && <p className="circ-busca__nota">procurando…</p>}
+      {!procurando && texto.trim().length >= 3 && achados.length === 0 && (
+        <p className="circ-busca__nota">Nenhum livro com esse título no acervo.</p>
+      )}
+      <ul className="circ-busca__lista">
+        {achados.map((o) => (
+          <li key={o.record_id}>
+            <button className="circ-busca__item" onClick={() => aoEscolher(o)}>
+              <span className="circ-busca__nome">{o.titulo || 'sem título'}</span>
+              <span className="circ-busca__id mono">
+                {o.disponiveis}/{o.total}
+              </span>
             </button>
           </li>
         ))}
@@ -637,8 +716,10 @@ function FolhaExemplares({ decisao, aoEscolher, aoFechar }) {
     <Modal titulo={devolvendo ? 'Qual exemplar voltou?' : 'Qual exemplar está na mão?'} aoFechar={aoFechar}>
       <p className="circ-folha__obra">{titulo}</p>
       <p className="circ-folha__nota">
-        Este livro não foi identificado pela etiqueta, e sim pelo código de barras
-        da capa. A biblioteca tem {exemplares.length}{' '}
+        {decisao.origem === 'titulo'
+          ? 'Livro encontrado pela busca por título. '
+          : 'Este livro não foi identificado pela etiqueta, e sim pelo código de barras da capa. '}
+        A biblioteca tem {exemplares.length}{' '}
         {exemplares.length === 1 ? 'exemplar' : 'exemplares'} desta obra — escolha
         pelo tombo escrito no livro.
       </p>

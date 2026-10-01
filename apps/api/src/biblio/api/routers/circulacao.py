@@ -132,7 +132,8 @@ def _incompleto(mensagem: str):
 
 
 @router.get("/resolver", summary="Tombo, ISBN ou leitor? Quem decide é o servidor")
-async def resolver(codigo: str = "", x_sessao: str = Sessao):
+async def resolver(codigo: str = "", preferir: str = "",
+                   x_sessao: str = Sessao):
     """
     O bipe cru vira `{"tipo": "tombo"|"isbn"|"leitor"|"desconhecido", …}`.
 
@@ -141,11 +142,17 @@ async def resolver(codigo: str = "", x_sessao: str = Sessao):
     200 com `tipo: "desconhecido"`, porque errar a leitura do código de barras
     é rotina no balcão e a tela precisa mostrar "não reconheci isto" sem
     tratar como falha.
+
+    `preferir` (`leitor` | `exemplar`) é o que a tela espera agora: o tombo
+    do acervo migrado é o NUMACERVO, só dígitos, e "842" pode ser exemplar ou
+    leitor.
     """
     if quem_e(x_sessao) is None:
         return sem_operador()
+    if preferir not in ("", "leitor", "exemplar"):
+        return _incompleto("preferir é 'leitor' ou 'exemplar'.")
     try:
-        return await com_banco(emprestimo.resolver, codigo)
+        return await com_banco(emprestimo.resolver, codigo, preferir)
     except Exception as e:
         return falha(e, "a leitura do código")
 
@@ -165,6 +172,22 @@ async def leitores(busca: str = "", limite: int = 20, x_sessao: str = Sessao):
     except Exception as e:
         return falha(e, "a busca de leitores")
     return {"leitores": achados, "total": len(achados), "busca": busca}
+
+
+@router.get("/obras", summary="Busca de obra por título, com os exemplares")
+async def obras(busca: str = "", limite: int = 20, x_sessao: str = Sessao):
+    """
+    O caminho do livro sem etiqueta e sem ISBN: parte do título (ou do autor)
+    devolve as obras e, em cada uma, os exemplares com o estado — a mesma lista
+    que o caminho do ISBN mostra. Busca vazia é lista vazia (200).
+    """
+    if quem_e(x_sessao) is None:
+        return sem_operador()
+    try:
+        achados = await com_banco(emprestimo.procurar_obras, busca, limite)
+    except Exception as e:
+        return falha(e, "a busca de obras")
+    return {"obras": achados, "total": len(achados), "busca": busca}
 
 
 @router.get("/leitor/{user_id}", summary="Ficha, situação e empréstimos do leitor")

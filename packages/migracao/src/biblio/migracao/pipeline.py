@@ -46,7 +46,8 @@ from datetime import datetime
 from pathlib import Path
 
 from biblio.biblivre import acervo as _acervo
-from biblio.biblivre import circulacao, exemplares, leitores, marc, obras
+from biblio.biblivre import (circulacao, exemplares, leitores, marc, obras,
+                             substituicao)
 from biblio.biblivre.conexao import SCHEMA_PADRAO
 from biblio.legado import bkp, tabela
 from biblio.legado.consolidar import consolidar
@@ -89,6 +90,9 @@ class Opcoes:
 
     # Acervo
     incluir_excluidos: bool = False
+    # O tombo é o NUMACERVO do Biblioteca Fácil — o número que está no livro, e
+    # o mesmo em qualquer backup. Prefixo e ano só valem com isto desligado.
+    tombo_numacervo: bool = True
     prefixo_tombo: str = ""
     ano_tombo: int | None = None
     biblioteca: str = ""
@@ -106,6 +110,10 @@ class Opcoes:
     reservas_desde: int = 2026
 
     # Gravação
+    # Recarga: apaga o que a migração carrega (inclusive o que foi feito no
+    # BibLivre depois da carga anterior) e grava este backup, na mesma
+    # transação. Vale o último backup. Exige as três etapas.
+    substituir: bool = False
     permitir_existentes: bool = False
     usuario: int = 1
 
@@ -272,6 +280,11 @@ def analisar(pasta, opcoes: "Opcoes", con=None, schema: str = SCHEMA_PADRAO,
     if con is not None:
         progresso("destino", "conferindo o estado do BibLivre")
         rel["destino"] = _estado_do_destino(con, opcoes, schema, rel)
+    elif opcoes.substituir:
+        rel["impedimentos"].append(
+            "Para substituir a base, conecte ao PostgreSQL antes de conferir: "
+            "apagar é a parte que não volta, e a conferência precisa mostrar o "
+            "que vai ser apagado.")
     else:
         rel["avisos"].append(
             "Sem conexão com o Postgres: as contagens do destino, o prefixo de "
@@ -364,14 +377,22 @@ def _estado_do_destino(con, opcoes: "Opcoes", schema: str, rel: dict) -> dict:
         **circulacao.contar(con),
     }
 
-    with con.cursor() as cur:
-        prefixo, origem = exemplares.ler_prefixo_tombo(cur, schema)
-    estado["prefixo_tombo"] = opcoes.prefixo_tombo or prefixo
-    estado["origem_prefixo"] = ("informado na tela" if opcoes.prefixo_tombo
-                                else origem)
+    if opcoes.tombo_numacervo:
+        estado["prefixo_tombo"] = "NUMACERVO"
+        estado["origem_prefixo"] = "o número do livro no Biblioteca Fácil"
+    else:
+        with con.cursor() as cur:
+            prefixo, origem = exemplares.ler_prefixo_tombo(cur, schema)
+        estado["prefixo_tombo"] = opcoes.prefixo_tombo or prefixo
+        estado["origem_prefixo"] = ("informado na tela" if opcoes.prefixo_tombo
+                                    else origem)
 
     if opcoes.leitores:
         estado["campos_a_criar"] = [c[0] for c in leitores.faltando(con)]
+
+    if opcoes.substituir:
+        _substituicao_no_relatorio(con, opcoes, estado, rel)
+        return estado
 
     ocupacoes = [
         (opcoes.acervo, estado["obras"], "registros bibliográficos em biblio_records"),
@@ -388,9 +409,50 @@ def _estado_do_destino(con, opcoes: "Opcoes", schema: str, rel: dict) -> dict:
         else:
             rel["impedimentos"].append(
                 recado + " A migração é uma carga de base nova: rodar por cima "
-                "duplicaria o cadastro e os ids colidiriam. Apague os registros "
-                "de teste ou marque 'prosseguir com a base ocupada'.")
+                "duplicaria o cadastro e os ids colidiriam. Para carregar um "
+                "backup mais novo, marque 'substituir a base pelo backup'.")
     return estado
+
+
+def _substituicao_no_relatorio(con, opcoes: "Opcoes", estado: dict,
+                               rel: dict) -> None:
+    """
+    Com `substituir`, base ocupada deixa de ser impedimento e vira o que é: a
+    lista do que vai ser apagado. Ela vai para a tela antes da gravação porque
+    é a única coisa desta carga que não volta — o resto o próximo backup
+    refaz.
+    """
+    faltam = [e for e in ("acervo", "leitores", "circulacao")
+              if not getattr(opcoes, e)]
+    if faltam:
+        rel["impedimentos"].append(
+            "Substituir a base apaga acervo, leitores e circulação juntos — "
+            "empréstimo aponta para exemplar e para leitor, e não dá para "
+            "recarregar só um lado. Marque as três etapas "
+            f"(falta: {', '.join(faltam)}).")
+
+    apagar = substituicao.contar(con)
+    estado["a_apagar"] = apagar
+    if not any(v for k, v in apagar.items() if k != "obras_fora_da_migracao"):
+        rel["avisos"].append(
+            "Você marcou substituir, mas a base está vazia: é uma carga normal.")
+        return
+
+    partes = [f"{apagar['biblio_records']:,} obras",
+              f"{apagar['biblio_holdings']:,} exemplares",
+              f"{apagar['users']:,} leitores",
+              f"{apagar['lendings']:,} empréstimos",
+              f"{apagar['reservations']:,} reservas"]
+    rel["avisos"].append(
+        "A gravação vai APAGAR o que está no BibLivre e carregar este backup no "
+        f"lugar: {', '.join(partes)}. Empréstimos, devoluções e cadastros "
+        "feitos no BibLivre ou no balcão depois da última carga se perdem — "
+        "vale o que está neste backup.")
+    if apagar["obras_fora_da_migracao"]:
+        rel["avisos"].append(
+            f"{apagar['obras_fora_da_migracao']:,} obra(s) não vieram de um "
+            "backup do Biblioteca Fácil (catalogadas por ISBN ou à mão no "
+            "BibLivre) e também serão apagadas.")
 
 
 # ------------------------------------------------------------------ mapas
@@ -433,14 +495,17 @@ def _mapas(pasta, opcoes: "Opcoes", grupos, plano_leitores, con, schema,
             # Conferência: as obras ainda não existem. Os tombos saem do mesmo
             # gerador que a gravação usa (mesmo prefixo, mesmo contador) e os
             # record_ids são projetados — servem para contar, não para gravar.
-            prefixo, contador = opcoes.prefixo_tombo or "Bib", None
-            if con is not None:
-                with con.cursor() as cur:
-                    if not opcoes.prefixo_tombo:
-                        prefixo, _ = exemplares.ler_prefixo_tombo(cur, schema)
-                    contador, _ = exemplares.tombos_existentes(cur, prefixo)
-            tombos, _, _ = exemplares.gerar_tombos(
-                linhas_ex, prefixo, opcoes.ano_tombo, contador)
+            if opcoes.tombo_numacervo:
+                tombos = exemplares.tombos_de_origem(linhas_ex)
+            else:
+                prefixo, contador = opcoes.prefixo_tombo or "Bib", None
+                if con is not None:
+                    with con.cursor() as cur:
+                        if not opcoes.prefixo_tombo:
+                            prefixo, _ = exemplares.ler_prefixo_tombo(cur, schema)
+                        contador, _ = exemplares.tombos_existentes(cur, prefixo)
+                tombos, _, _ = exemplares.gerar_tombos(
+                    linhas_ex, prefixo, opcoes.ano_tombo, contador)
 
             ids = (obras.projetar_ids(con, len(grupos)) if con is not None
                    else list(range(1, len(grupos) + 1)))
@@ -471,7 +536,9 @@ def _mapas(pasta, opcoes: "Opcoes", grupos, plano_leitores, con, schema,
 
     holding_de: dict[str, int] = {}
     id_base = 0
-    if con is not None:
+    # Na conferência de uma substituição o que está no banco vai embora antes
+    # da carga: casar contra ele daria ids que não vão existir.
+    if con is not None and not (provisorio and opcoes.substituir):
         ctx = circulacao.contexto_do_banco(con)
         holding_de = dict(ctx["holding_de"])
         id_base = ctx["id_base"]
@@ -505,6 +572,7 @@ def gravar(pasta, opcoes: "Opcoes", con, schema: str = SCHEMA_PADRAO,
         "iniciado_em": datetime.now().isoformat(timespec="seconds"),
         "etapas": opcoes.etapas(),
         "obras": 0, "exemplares": 0, "leitores": 0, "valores": 0,
+        "apagados": {},
         "campos_criados": [], "emprestimos": 0, "multas": 0, "reservas": 0,
         "avisos": [], "proximos_passos": [],
     }
@@ -514,6 +582,16 @@ def gravar(pasta, opcoes: "Opcoes", con, schema: str = SCHEMA_PADRAO,
     mapa_exemplares: list[tuple] = []
 
     try:
+        if opcoes.substituir:
+            faltam = [e for e in ("acervo", "leitores", "circulacao")
+                      if not getattr(opcoes, e)]
+            if faltam:
+                raise RuntimeError(
+                    "Substituir a base exige as três etapas (falta: "
+                    f"{', '.join(faltam)}). Nada foi gravado.")
+            progresso("substituir", "apagando a carga anterior")
+            resultado["apagados"] = substituicao.apagar(con)
+
         if opcoes.acervo:
             progresso("obras", "inserindo registros bibliográficos")
             registros = marc.ler_mrc(pasta / ARQ_MRC)
@@ -534,7 +612,8 @@ def gravar(pasta, opcoes: "Opcoes", con, schema: str = SCHEMA_PADRAO,
                 con, linhas_ex, schema=schema,
                 prefixo_tombo=opcoes.prefixo_tombo or None,
                 ano_tombo=opcoes.ano_tombo, biblioteca=opcoes.biblioteca,
-                tipo_aquisicao=opcoes.tipo_aquisicao, usuario=opcoes.usuario)
+                tipo_aquisicao=opcoes.tipo_aquisicao, usuario=opcoes.usuario,
+                tombo_de_origem=opcoes.tombo_numacervo)
             if plano_exemplares["nao_casados"]:
                 resultado["avisos"].append(
                     f"{len(plano_exemplares['nao_casados']):,} exemplar(es) sem "

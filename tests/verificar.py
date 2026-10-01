@@ -393,8 +393,11 @@ def verificar_migracao_pela_tela():
     checar("o exemplar acha a obra pelo 035 $a",
            [a[0] for _, a in banco.holdings] == [1, 1, 2, 3],
            [a[0] for _, a in banco.holdings])
-    checar("tombos no formato do BibLivre",
-           [a[5] for _, a in banco.holdings][0] == "Bib.2026.1")
+    with open(pasta / "exemplares.csv", encoding="utf-8-sig", newline="") as f:
+        numacervos = [str(int(l["numacervo"])) for l in csv.DictReader(f)]
+    checar("o tombo é o NUMACERVO do Biblioteca Fácil",
+           [a[5] for _, a in banco.holdings] == numacervos,
+           [a[5] for _, a in banco.holdings])
     checar("9 campos novos com tradução nos 3 idiomas",
            len(r["campos_criados"]) == 9 and len(banco.traducoes) == 27)
     checar("empréstimo aponta para o exemplar certo",
@@ -408,6 +411,49 @@ def verificar_migracao_pela_tela():
     checar("reindex e restart do Tomcat aparecem como próximo passo",
            any("Reindexar" in p for p in r["proximos_passos"])
            and any("Tomcat" in p for p in r["proximos_passos"]))
+
+    gerado = BancoFalso()
+    pipeline.gravar(pasta, pipeline.Opcoes(tombo_numacervo=False), gerado)
+    checar("com o tombo gerado, volta o formato do BibLivre",
+           gerado.holdings[0][1][5] == "Bib.2026.1", gerado.holdings[0][1][5])
+
+    # Um backup depois do outro. Sem substituir, o NUMACERVO repetido bate no
+    # UNIQUE do tombo antes de gravar exemplar nenhum.
+    try:
+        pipeline.gravar(pasta, pipeline.Opcoes(), banco)
+        barrou = False
+    except RuntimeError as e:
+        barrou = "substituir" in str(e)
+    checar("segundo backup sem substituir é barrado e desfeito",
+           barrou and banco.rollbacks == 1)
+
+    r2 = pipeline.gravar(pasta, pipeline.Opcoes(substituir=True), banco)
+    checar("substituir apaga a carga anterior antes de gravar",
+           r2["apagados"].get("biblio_holdings") == 4
+           and r2["apagados"].get("users") == 2, r2["apagados"])
+    checar("depois da recarga a base tem um backup só, não dois",
+           len(banco.registros) == 3 and len(banco.holdings) == 4
+           and len(banco.usuarios) == 2 and len(banco.emprestimos) == 2,
+           (len(banco.registros), len(banco.holdings), len(banco.usuarios),
+            len(banco.emprestimos)))
+    checar("o mesmo livro mantém o mesmo tombo na recarga",
+           [a[5] for _, a in banco.holdings] == numacervos)
+    checar("o empréstimo recarregado aponta para o exemplar novo",
+           {e[1] for e in banco.emprestimos} <= {h for h, _ in banco.holdings},
+           banco.emprestimos)
+
+    try:
+        pipeline.gravar(pasta, pipeline.Opcoes(substituir=True, leitores=False),
+                        BancoFalso())
+        so_um_lado = False
+    except RuntimeError as e:
+        so_um_lado = "três etapas" in str(e)
+    checar("substituir só o acervo é recusado (empréstimo aponta para leitor)",
+           so_um_lado)
+    rel_sem_banco = pipeline.analisar(pasta, pipeline.Opcoes(substituir=True))
+    checar("substituir sem Postgres na conferência é impedimento",
+           any("substituir" in i for i in rel_sem_banco["impedimentos"]),
+           rel_sem_banco["impedimentos"])
 
     # Falha no meio: a promessa é "ou entra tudo, ou não entra nada".
     quebrado = BancoFalso()
@@ -428,6 +474,11 @@ def verificar_migracao_pela_tela():
     repetida = c.post("/api/migracao/executar", json={"confirmado": True})
     checar("etapa já gravada não grava de novo",
            repetida.status_code == 409, repetida.json())
+    trocada = c.post("/api/migracao/executar",
+                     json={"confirmado": True, "opcoes": {"substituir": True}})
+    checar("substituir marcado depois da conferência exige conferir de novo",
+           trocada.status_code == 409 and "mudou" in str(trocada.json()),
+           trocada.json())
 
     checar("descartar apaga a pasta da execução",
            c.delete("/api/migracao").status_code == 200 and not pasta.exists())
@@ -998,6 +1049,9 @@ def verificar_resolver():
 
     secao("Balcão — resolver tombo, ISBN e leitor")
     banco = _cenario()
+    # Um tombo de acervo migrado (o NUMACERVO, só dígitos) que é também o
+    # número de uma leitora — a ambiguidade que o `preferir` resolve.
+    banco.exemplar(52, 5, "105")
     desligar = _ligar(banco)
     operador.esquecer_tudo()
     c = TestClient(app)
@@ -1035,6 +1089,47 @@ def verificar_resolver():
                resolver("00101")["leitor"]["id"] == 101)
         checar("matrícula impressa (users_values) também resolve",
                resolver("2023-101")["leitor"]["id"] == 101)
+
+        # O tombo migrado é o NUMACERVO: "105" é o exemplar 52 E a leitora 105.
+        def resolver_como(codigo, preferir):
+            return c.get("/api/circulacao/resolver", headers=cab,
+                         params={"codigo": codigo, "preferir": preferir}).json()
+
+        r = resolver("105")
+        checar("tombo que também é nº de leitor vem como tombo, com o aviso",
+               r["tipo"] == "tombo" and r["exemplar"]["holding_id"] == 52
+               and r.get("tambem_leitor", {}).get("user_id") == 105, r)
+        r = resolver_como("105", "leitor")
+        checar("esperando a carteirinha, o mesmo número é o leitor",
+               r["tipo"] == "leitor" and r["leitor"]["id"] == 105, r.get("tipo"))
+        r = resolver_como("105", "exemplar")
+        checar("esperando o livro, é o exemplar, sem perguntar do leitor",
+               r["tipo"] == "tombo" and "tambem_leitor" not in r, r.get("tipo"))
+        checar("preferir inventado é 400",
+               c.get("/api/circulacao/resolver", headers=cab,
+                     params={"codigo": "105", "preferir": "x"}).status_code == 400)
+        checar("preferir leitor não atrapalha o tombo que não é leitor",
+               resolver_como("Bib.2026.1", "leitor")["tipo"] == "tombo")
+
+        # Busca de obra por título: o livro sem etiqueta e sem ISBN.
+        def obras(busca):
+            return c.get("/api/circulacao/obras", headers=cab,
+                         params={"busca": busca}).json()["obras"]
+
+        achadas = obras("casmurro")
+        checar("título acha a obra com os exemplares e o estado",
+               len(achadas) == 1 and achadas[0]["record_id"] == 1
+               and achadas[0]["total"] == 3 and achadas[0]["disponiveis"] == 1,
+               achadas)
+        checar("busca por título ignora acento (memorias → Memórias)",
+               [o["record_id"] for o in obras("memorias postumas")] == [6])
+        checar("o autor também serve de busca",
+               {o["record_id"] for o in obras("machado")} == {1, 6})
+        checar("palavras em qualquer ordem",
+               [o["record_id"] for o in obras("secas vidas")] == [4])
+        checar("título que não existe é lista vazia",
+               obras("xilogravura") == [])
+        checar("busca vazia é lista vazia, não erro", obras("") == [])
 
         r = resolver("999999999")
         checar("código que não é nada volta 200 com tipo=desconhecido",

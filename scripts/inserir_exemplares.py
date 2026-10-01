@@ -9,7 +9,8 @@ Cria os exemplares (holdings) no BibLivre 5, a partir do `exemplares.csv`.
 
 Por que este passo existe (a importação por arquivo do BibLivre só cria
 registros bibliográficos, nunca exemplares), o que o MARC do exemplar reproduz
-e por que os tombos são gerados: `biblio.biblivre.exemplares`.
+e por que o tombo é o NUMACERVO do Biblioteca Fácil (`--tombo-gerado` volta ao
+formato `<prefixo>.<ano>.<contador>`): `biblio.biblivre.exemplares`.
 """
 
 import argparse
@@ -31,10 +32,14 @@ def main():
                    help="grava de verdade (uma transação; sem isto é só relatório)")
     p.add_argument("--mapa-out", metavar="ARQUIVO",
                    help="CSV de conferência: numacervo, record_id, tombo")
+    p.add_argument("--tombo-gerado", action="store_true",
+                   help="gera <prefixo>.<ano>.<contador> em vez de usar o NUMACERVO")
     p.add_argument("--prefixo-tombo",
-                   help="padrão: lido de configurations.cataloging.accession_number_prefix")
+                   help="com --tombo-gerado; padrão: lido de "
+                        "configurations.cataloging.accession_number_prefix")
     p.add_argument("--ano-tombo", type=int,
-                   help="usa este ano em todos os tombos, em vez do ano de aquisição")
+                   help="com --tombo-gerado: este ano em todos os tombos, em vez "
+                        "do ano de aquisição")
     p.add_argument("--biblioteca", default="",
                    help="541 $a — biblioteca depositária (padrão: não preenche)")
     p.add_argument("--tipo-aquisicao", default=exemplares.TIPO_AQUISICAO_MIGRACAO,
@@ -61,10 +66,14 @@ def main():
         plano = exemplares.preparar_do_csv(
             con, linhas, schema=args.schema, prefixo_tombo=args.prefixo_tombo,
             ano_tombo=args.ano_tombo, biblioteca=args.biblioteca,
-            tipo_aquisicao=args.tipo_aquisicao, usuario=args.usuario)
+            tipo_aquisicao=args.tipo_aquisicao, usuario=args.usuario,
+            tombo_de_origem=not args.tombo_gerado)
 
-        print(f"prefixo de tombo: {plano['prefixo']!r} "
-              f"(de {plano['origem_prefixo']})")
+        if args.tombo_gerado:
+            print(f"prefixo de tombo: {plano['prefixo']!r} "
+                  f"(de {plano['origem_prefixo']})")
+        else:
+            print(f"tombo: {plano['origem_prefixo']}")
         print(f"{len(plano['mapa']):,} registros bibliográficos com 035 $a legível")
         if plano["sem_035"]:
             print(f"  ATENÇÃO: {len(plano['sem_035']):,} registros sem 035 $a "
@@ -90,8 +99,9 @@ def main():
             print(f"  {len(plano['anos_invalidos'])} data(s) de aquisição fora "
                   f"de {exemplares.ANO_MIN}-{exemplares.ANO_MAX}, tombo emitido "
                   f"no ano corrente: {amostra}")
-        print("tombos por ano: " + ", ".join(
-            f"{ano}:{qtd:,}" for ano, qtd in sorted(plano["por_ano"].items())))
+        if plano["por_ano"]:
+            print("tombos por ano: " + ", ".join(
+                f"{ano}:{qtd:,}" for ano, qtd in sorted(plano["por_ano"].items())))
 
         if args.mapa_out:
             with open(args.mapa_out, "w", encoding="utf-8-sig", newline="") as f:

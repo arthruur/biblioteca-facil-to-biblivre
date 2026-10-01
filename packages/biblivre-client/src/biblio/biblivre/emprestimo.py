@@ -568,7 +568,7 @@ def _emprestimos_do_leitor(cur, user_id: int) -> list:
 
 # ------------------------------------------------ o que o balcão acabou de ler
 
-def resolver(con, codigo: str) -> dict:
+def resolver(con, codigo: str, preferir: str = "") -> dict:
     """
     O que o balcão acabou de bipar ou digitar?
 
@@ -576,6 +576,16 @@ def resolver(con, codigo: str) -> dict:
     ISBN-13) → id/matrícula de leitor. No caminho do ISBN devolve **todos** os
     exemplares da obra com o estado de cada um: é assim que se empresta o livro
     cuja etiqueta nunca foi impressa, que é o caso comum do acervo migrado.
+
+    O tombo do acervo migrado é o NUMACERVO — só dígitos, como o número do
+    leitor —, então "842" digitado à mão pode ser os dois. `preferir` é a tela
+    dizendo o que espera naquele momento:
+
+        "leitor"    leitor primeiro (o celular, esperando a carteirinha)
+        "exemplar"  a ordem de sempre, sem perguntar pelo leitor
+        ""          a ordem de sempre; se o tombo também é número de leitor,
+                    a resposta leva `tambem_leitor` para a tela oferecer a
+                    ficha (o PC, onde a barra aceita os dois)
 
     -> {"tipo": "tombo"|"isbn"|"leitor"|"desconhecido", ...}
     """
@@ -585,9 +595,19 @@ def resolver(con, codigo: str) -> dict:
                 "mensagem": "Nada foi lido."}
 
     with con.cursor() as cur:
-        achado = _ler_exemplar(cur, "h.accession_number = %s", bruto)
+        user_id = None
+        if preferir == "leitor":
+            user_id = _leitor_por_codigo(cur, bruto)
+
+        achado = None if user_id is not None else _ler_exemplar(
+            cur, "h.accession_number = %s", bruto)
         if achado:
-            return {"tipo": "tombo", "codigo": bruto, **achado}
+            resposta = {"tipo": "tombo", "codigo": bruto, **achado}
+            if not preferir and bruto.isdigit():
+                outro = _leitor_por_codigo(cur, bruto)
+                if outro is not None:
+                    resposta["tambem_leitor"] = {"user_id": outro}
+            return resposta
 
         # ISBN: só faz sentido tentar com 10 ou 13 dígitos, senão qualquer
         # matrícula viraria consulta de acervo.
@@ -595,12 +615,13 @@ def resolver(con, codigo: str) -> dict:
         obra = None
         if len(digitos) in (10, 13):
             obra = _obra_por_isbn(cur, bruto)
-        if obra:
+        if obra and user_id is None:
             exemplares = _exemplares_da_obra(cur, obra["record_id"])
             return {"tipo": "isbn", "codigo": bruto, "obra": obra,
                     "exemplares": exemplares}
 
-        user_id = _leitor_por_codigo(cur, bruto)
+        if user_id is None:
+            user_id = _leitor_por_codigo(cur, bruto)
 
     if user_id is not None:
         ficha = buscar_leitor(con, user_id)
@@ -793,6 +814,86 @@ def procurar_leitores(con, busca: str, limite: int = 20) -> list:
             "limite": teto,
             "pode_levar": abertos < teto,
         })
+    return saida
+
+
+# A busca de obra por título. Não existe coluna de título: ele mora no MARC
+# (`iso2709`), e o índice do BibLivre (`biblio_idx_*`) só existe depois de um
+# reindex — que é justamente o que falta logo depois de uma carga. Então o
+# filtro grosso roda no Postgres, sobre o MARC cru e sem acento, e o fino roda
+# aqui, sobre título e autor de verdade.
+_ACENTOS = "ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇçÑñ"
+_SEM_ACENTOS = "AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn"
+
+# Quantas obras o filtro grosso traz para o fino escolher. Uma palavra comum
+# ("história") casa com centenas; o teto protege o balcão de trazer o acervo
+# inteiro para dentro do Python.
+_CANDIDATOS_TITULO = 400
+
+_SQL_PROCURAR_OBRAS = """
+SELECT r.id, r.iso2709
+  FROM biblio_records r
+ WHERE r.database = 'main' AND {filtros}
+ ORDER BY r.id
+ LIMIT %s
+"""
+
+
+def _normalizar(texto: str) -> str:
+    return sem_acento(texto or "").lower()
+
+
+def procurar_obras(con, busca: str, limite: int = 20) -> list:
+    """
+    Obras pelo título (ou autor), com os exemplares de cada uma.
+
+    É o caminho do livro que não tem etiqueta legível nem ISBN na capa: o
+    operador digita parte do título e escolhe o exemplar que está na mão, como
+    no caminho do ISBN. Cada palavra precisa aparecer no título ou no autor,
+    em qualquer ordem, sem acento e sem caixa. Título que começa pelo termo vem
+    primeiro.
+
+    -> [{record_id, titulo, autor, exemplares: [...], total, disponiveis}]
+    """
+    palavras = [w for w in _normalizar(busca).split() if len(w) >= 2][:5]
+    if not palavras:
+        return []
+    limite = max(1, min(int(limite or 20), 50))
+
+    filtros = " AND ".join(
+        "translate(r.iso2709, %s, %s) ILIKE %s" for _ in palavras)
+    args: list = []
+    for w in palavras:
+        args += [_ACENTOS, _SEM_ACENTOS, f"%{w}%"]
+    args.append(_CANDIDATOS_TITULO)
+
+    with con.cursor() as cur:
+        cur.execute(_SQL_PROCURAR_OBRAS.format(filtros=filtros), tuple(args))
+        candidatos = cur.fetchall()
+
+        termo = " ".join(palavras)
+        achados = []
+        for rec_id, iso in candidatos:
+            titulo, autor = _titulo_autor(iso)
+            t, a = _normalizar(titulo), _normalizar(autor)
+            if not all(w in t or w in a for w in palavras):
+                continue        # a palavra estava em outro campo do MARC
+            ordem = (0 if t.startswith(termo)
+                     else 1 if all(w in t for w in palavras) else 2)
+            achados.append((ordem, t, rec_id, titulo, autor))
+        achados.sort()
+
+        saida = []
+        for _, _, rec_id, titulo, autor in achados[:limite]:
+            exemplares = _exemplares_da_obra(cur, rec_id)
+            saida.append({
+                "record_id": rec_id,
+                "titulo": titulo,
+                "autor": autor,
+                "exemplares": exemplares,
+                "total": len(exemplares),
+                "disponiveis": sum(1 for e in exemplares if e["disponivel"]),
+            })
     return saida
 
 

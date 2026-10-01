@@ -58,6 +58,7 @@ class BancoFalso:
         self.reservas: list[tuple] = []
         self.commits = 0
         self.rollbacks = 0
+        self.rowcount = 0
         self._proximo_record = 0
         self._proximo_holding = 0
 
@@ -77,7 +78,24 @@ class BancoFalso:
 
     # --- escrita ---
 
+    # `DELETE FROM <tabela>` da substituição -> a lista que guarda a tabela.
+    # As de índice e de cache não existem aqui: apagar nelas é apagar nada.
+    _TABELAS_APAGAVEIS = {
+        "biblio_records": "registros", "biblio_holdings": "holdings",
+        "users": "usuarios", "users_values": "valores",
+        "lendings": "emprestimos", "lending_fines": "multas",
+        "reservations": "reservas",
+    }
+
     def escrever(self, sql: str, args) -> None:
+        self.rowcount = 0
+        apagar = re.match(r"\s*DELETE FROM (\w+)\s*$", sql)
+        if apagar:
+            atributo = self._TABELAS_APAGAVEIS.get(apagar.group(1))
+            if atributo:
+                self.rowcount = len(getattr(self, atributo))
+                setattr(self, atributo, [])
+            return
         if "INSERT INTO biblio_records" in sql:
             self.registros.append(args)              # (id, iso2709, ...)
         elif "INSERT INTO biblio_holdings" in sql:
@@ -131,6 +149,10 @@ class _Cursor:
     def __init__(self, banco: BancoFalso):
         self.banco = banco
         self._resultado: list[tuple] = []
+
+    @property
+    def rowcount(self):
+        return self.banco.rowcount
 
     def __enter__(self):
         return self
@@ -564,6 +586,16 @@ class BancoBalcao:
                 return []
             self.travas.append(ex["id"])
             return [(ex["id"], ex["record_id"], ex["disponibilidade"])]
+        if tem("translate(r.iso2709, %s, %s) ILIKE %s"):
+            # (acentos, sem acentos, %palavra%) por palavra, e o LIMIT no fim
+            palavras = [str(args[i]).strip("%").lower()
+                        for i in range(2, len(args) - 1, 3)]
+            saida = []
+            for obra in sorted(self.obras.values(), key=lambda o: o["id"]):
+                cru = _ascii(obra["iso2709"] or "").lower()
+                if obra["database"] == "main" and all(w in cru for w in palavras):
+                    saida.append((obra["id"], obra["iso2709"]))
+            return saida[:args[-1]]
         if tem("iso2709 LIKE %s"):
             alvo = str(args[0]).strip("%")
             for obra in self.obras.values():

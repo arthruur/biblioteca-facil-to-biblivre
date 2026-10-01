@@ -39,16 +39,26 @@ valores    availability='available', database=igual ao do bibliográfico,
            material='holdings' (os enums do BibLivre têm toString() em
            minúsculas; MaterialType também).
 
-TOMBOS SÃO GERADOS
-------------------
+O TOMBO DA MIGRAÇÃO É O NUMACERVO
+---------------------------------
 `accession_number` é NOT NULL e tem índice UNIQUE global
-(`IX_biblio_holdings_accession_number`). No acervo de origem só 188 dos 16.251
-exemplares tinham tombo, e entre esses havia apenas 4 valores distintos — não
-dava para aproveitar. Geramos no mesmo formato que o BibLivre usa
+(`IX_biblio_holdings_accession_number`). No acervo de origem o campo `TOMBO`
+quase não era usado (188 de 16.251 exemplares, com 4 valores distintos); o
+número que a biblioteca escreve no livro e usa no balcão é o `NUMACERVO` — um
+por exemplar, único no `.bkp`. É ele que vira o tombo (`tombos_de_origem`), e
+por isso o mesmo livro físico tem o mesmo tombo em qualquer carga, de qualquer
+backup.
+
+A catalogação por ISBN continua gerando no formato do próprio BibLivre
 (`HoldingBO.getNextAccessionNumber`): `<prefixo>.<ano>.<contador>`, com o
-prefixo lido da tabela `configurations`. Assim o contador do próprio BibLivre
-continua de onde paramos: ele faz `max(dígitos finais) + 1` dentro do prefixo
-`<prefixo>.<ano atual>.`.
+prefixo lido da tabela `configurations`. Os dois formatos não colidem — um é só
+dígitos, o outro sempre tem o prefixo —, e o contador do BibLivre continua de
+onde paramos: ele faz `max(dígitos finais) + 1` dentro de
+`<prefixo>.<ano atual>.`, e o NUMACERVO não entra nessa conta.
+
+O formato gerado continua disponível para a migração (`tombo_de_origem=False`,
+o `--tombo-gerado` do CLI), para o caso de uma biblioteca que nunca usou o
+NUMACERVO como identificação física.
 """
 
 import re
@@ -134,6 +144,15 @@ def gerar_tombos(linhas, prefixo, ano_fixo=None, contador_inicial=None):
         tombos.append(f"{prefixo}.{ano}.{contador[ano]}")
 
     return tombos, contador, anos_invalidos
+
+
+def tombos_de_origem(linhas) -> list[str]:
+    """
+    O tombo da migração: o `NUMACERVO` do Biblioteca Fácil, sem zeros à
+    esquerda. É o número que está no livro, e é estável entre backups — a mesma
+    cópia física tem o mesmo NUMACERVO em qualquer `.bkp` que se carregue.
+    """
+    return [str(int(str(linha["numacervo"]).strip())) for linha in linhas]
 
 
 def tombos_existentes(cur, prefixo: str) -> tuple[Counter, set]:
@@ -336,34 +355,45 @@ def preparar_do_csv(con, linhas: list[dict], schema: str = SCHEMA_PADRAO,
                     prefixo_tombo: str | None = None, ano_tombo: int | None = None,
                     biblioteca: str = "",
                     tipo_aquisicao: str = TIPO_AQUISICAO_MIGRACAO,
-                    usuario: int = USUARIO_PADRAO) -> dict:
+                    usuario: int = USUARIO_PADRAO,
+                    tombo_de_origem: bool = True) -> dict:
     """
     Monta os exemplares da migração sem escrever nada.
 
     Devolve tudo que o relatório de dry-run precisa mostrar e que a gravação
     precisa executar — a mesma estrutura serve aos dois, então o que se confere
     é exatamente o que se grava.
+
+    `tombo_de_origem` (o padrão) usa o NUMACERVO como tombo; `prefixo_tombo` e
+    `ano_tombo` só valem quando ele é falso e o tombo é gerado.
     """
     with con.cursor() as cur:
-        if prefixo_tombo:
+        if tombo_de_origem:
+            prefixo, origem_prefixo = "", "NUMACERVO do Biblioteca Fácil"
+        elif prefixo_tombo:
             prefixo, origem_prefixo = prefixo_tombo, "linha de comando"
         else:
             prefixo, origem_prefixo = ler_prefixo_tombo(cur, schema)
-        contador, existentes = tombos_existentes(cur, prefixo)
+        contador, existentes = tombos_existentes(cur, prefixo or "Bib")
 
     mapa, duplicados, sem_035 = _obras.mapa_por_035(con)
 
-    tombos, por_ano, anos_invalidos = gerar_tombos(
-        linhas, prefixo, ano_tombo, contador)
+    if tombo_de_origem:
+        tombos, por_ano, anos_invalidos = tombos_de_origem(linhas), Counter(), []
+    else:
+        tombos, por_ano, anos_invalidos = gerar_tombos(
+            linhas, prefixo, ano_tombo, contador)
 
     colisoes = sorted(set(tombos) & existentes)
     if colisoes:
         raise RuntimeError(
-            f"{len(colisoes):,} tombos gerados já existem no banco "
-            f"(ex.: {colisoes[:3]}). accession_number é UNIQUE; use outro "
-            f"prefixo ou outro ano para separar.")
+            f"{len(colisoes):,} tombo(s) da carga já existem no banco "
+            f"(ex.: {colisoes[:3]}). accession_number é UNIQUE: a base já tem "
+            f"estes exemplares — para recarregar, use 'substituir a base'.")
     if len(set(tombos)) != len(tombos):
-        raise RuntimeError("os tombos gerados não são únicos entre si.")
+        repetidos = [t for t, n in Counter(tombos).items() if n > 1]
+        raise RuntimeError(
+            f"os tombos da carga não são únicos entre si (ex.: {repetidos[:3]}).")
 
     valores = []
     registros_usados = set()

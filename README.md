@@ -136,6 +136,29 @@ cd apps/web && npm install && npm run build && cd ../..
 python scripts/servidor.py           # ou: biblio-servidor
 ```
 
+### Instalação na biblioteca (Windows, sem terminal)
+
+Para o PC da biblioteca subir o sistema sozinho, sem ninguém rodar
+`scripts/dev.py`:
+
+```bash
+python scripts/inicializacao.py instalar
+```
+
+Faz o build do frontend (se ainda não existir), cria a tarefa agendada
+`BiblioFacil`, que sobe o servidor de produção no logon do Windows, sem janela,
+e se reinicia sozinha se cair. Também põe na Área de Trabalho um atalho que abre
+o sistema. Não precisa de administrador. Se a política da máquina não deixar
+criar a tarefa, o script usa a pasta Inicializar do usuário. A senha do Postgres
+continua vindo do `.env`, e o log fica em `data/logs/servidor.log`.
+
+| | |
+|---|---|
+| `python scripts/inicializacao.py status` | está instalado? está no ar? qual o endereço |
+| `python scripts/inicializacao.py reiniciar` | depois de atualizar o código (`git pull` + `instalar --rebuildar` se mudou o frontend) |
+| `python scripts/inicializacao.py parar` / `iniciar` | derruba / sobe agora |
+| `python scripts/inicializacao.py remover` | tira da inicialização (os dados em `data/` ficam) |
+
 ---
 
 ## 3) Catalogação por ISBN
@@ -210,10 +233,21 @@ Três coisas que a tela garante e que valem repetir:
 - **Uma transação, do primeiro registro bibliográfico à última reserva.** Os
   CLIs commitam por passo porque entre um e outro havia uma pessoa lendo o
   relatório; aqui a decisão é tomada uma vez. Falhou no meio, não entrou nada.
-- **Base ocupada barra a gravação.** Migração é carga de base nova; rodar por
-  cima duplicaria o cadastro e colidiria ids. Existe a opção de prosseguir
-  assim mesmo (o `--permitir-existentes` dos CLIs), e ela é a única marcada em
-  âmbar na tela.
+- **Base ocupada barra a gravação**, a não ser que se marque **substituir a
+  base pelo backup**. Rodar por cima duplicaria o cadastro e colidiria ids.
+  Substituir é o caminho de quem continua no Biblioteca Fácil e recarrega de
+  tempos em tempos: na mesma transação da carga, apaga obras, exemplares,
+  leitores, empréstimos, multas, reservas e o índice de busca, e grava o backup
+  novo no lugar. **Vale o último backup**, e o que foi feito no BibLivre depois
+  da carga anterior se perde. A conferência mostra quanto vai ser apagado e
+  exige conexão com o Postgres. Os operadores (`logins`) e os campos de leitor
+  criados na primeira carga ficam. Depois da recarga, reindexe como numa carga
+  normal.
+- **O tombo é o NUMACERVO do Biblioteca Fácil**, o número escrito no livro e
+  usado no balcão. Por isso ele é o mesmo em qualquer backup carregado. O
+  formato gerado do BibLivre (`<prefixo>.<ano>.<contador>`) continua disponível
+  nos ajustes finos (`--tombo-gerado` no CLI), e é o que a catalogação por ISBN
+  usa para livro novo.
 - **O relatório sobrevive a F5 e a restart** (`data/migracao/<id>/estado.json`),
   como a fila de revisão. Se o processo cair *durante* a gravação, a execução
   volta dizendo exatamente isso — daqui não dá para saber se a transação
@@ -311,7 +345,15 @@ sendo a verdade da biblioteca. Daí três invariantes:
 **O caminho do ISBN é de primeira classe.** Boa parte do acervo migrado não tem
 etiqueta impressa — os 16.251 tombos existem no banco, nem todos no papel.
 Bipar o código de barras da capa devolve os exemplares da obra com o estado de
-cada um, e o operador escolhe qual está na mão.
+cada um, e o operador escolhe qual está na mão. Sem etiqueta e sem ISBN, o
+livro também é achado **pelo título** (ou pelo autor), sem acento e com as
+palavras em qualquer ordem (`GET /api/circulacao/obras`). No PC, basta digitar o
+título na barra de comando. No celular, é o botão "Título".
+
+Como o tombo migrado é o NUMACERVO (só dígitos, igual ao número do leitor),
+"842" digitado à mão pode ser as duas coisas. O `resolver` recebe da tela o que
+ela espera (`preferir=leitor` enquanto o celular aguarda a carteirinha). No PC
+ele mostra o livro e oferece a ficha do leitor de mesmo número.
 
 Continuam no BibLivre, e a tela diz isso quando o caso aparece: cadastro e
 edição de leitor, reativar ou desbloquear cadastro, receber multa, a fila de

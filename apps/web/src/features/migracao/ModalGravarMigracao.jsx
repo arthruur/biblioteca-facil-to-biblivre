@@ -16,6 +16,7 @@ export function ModalGravarMigracao({
   relatorio,
   conectado,
   ocupado,
+  substituir,
   aoFechar,
   aoConfirmar,
 }) {
@@ -30,7 +31,11 @@ export function ModalGravarMigracao({
 
   return (
     <Modal
-      titulo="Confirmar a migração para o BibLivre"
+      titulo={
+        substituir
+          ? 'Substituir a base do BibLivre por este backup'
+          : 'Confirmar a migração para o BibLivre'
+      }
       largo
       aoFechar={aoFechar}
       fecharNoFundo={false}
@@ -86,6 +91,15 @@ export function ModalGravarMigracao({
         </Aviso>
       )}
 
+      {substituir && (
+        <Aviso tom="erro" icone="⚠" titulo="A base atual será apagada">
+          Obras, exemplares, leitores, empréstimos, multas e reservas que estão
+          hoje no BibLivre saem antes da carga — inclusive o que foi feito lá ou
+          no balcão depois do último backup. Se houver algo a guardar, gere um
+          backup .b5bz do BibLivre antes de continuar.
+        </Aviso>
+      )}
+
       {!conectado && (
         <Campo
           rotulo="Senha do PostgreSQL"
@@ -104,9 +118,11 @@ export function ModalGravarMigracao({
           onChange={(e) => setCiente(e.target.checked)}
         />
         <span>
-          Entendi que isto grava direto no banco do BibLivre e que a tela não
-          desfaz. Se algo falhar no meio, a transação inteira é revertida — mas
-          uma carga concluída só se desfaz restaurando um backup do PostgreSQL.
+          {substituir
+            ? 'Entendi que o que está hoje no BibLivre será apagado e trocado por este backup. '
+            : 'Entendi que isto grava direto no banco do BibLivre e que a tela não desfaz. '}
+          Se algo falhar no meio, a transação inteira é revertida — mas uma carga
+          concluída só se desfaz restaurando um backup do PostgreSQL.
         </span>
       </label>
 

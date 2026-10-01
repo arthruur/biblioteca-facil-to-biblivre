@@ -49,6 +49,7 @@ const PADRAO = {
   leitores: true,
   circulacao: true,
   incluir_excluidos: false,
+  tombo_numacervo: true,
   prefixo_tombo: '',
   ano_tombo: null,
   biblioteca: '',
@@ -59,6 +60,7 @@ const PADRAO = {
   incluir_movimentacoes_excluidas: false,
   sem_reservas: false,
   reservas_desde: 2026,
+  substituir: false,
   permitir_existentes: false,
 }
 
@@ -167,12 +169,20 @@ export function TelaMigracao({ conexao, aoAbrirBanco }) {
   const impedimentos = relatorio?.impedimentos || []
   // Também se pode gravar depois de um erro: a transação foi desfeita por
   // inteiro, então o relatório na tela continua descrevendo o mesmo banco. É o
-  // caso de quem só esqueceu a senha do Postgres.
-  const jaGravadas = (estado?.gravadas || []).filter((e) => opcoes[e])
+  // caso de quem só esqueceu a senha do Postgres. Substituir apaga antes de
+  // gravar, então gravar de novo não duplica nada.
+  const jaGravadas = opcoes.substituir
+    ? []
+    : (estado?.gravadas || []).filter((e) => opcoes[e])
+  // Apagar a base só acontece se o relatório na tela já foi feito com essa
+  // opção — é ele que mostra o que vai ser apagado.
+  const substituirMudou =
+    !!relatorio && !!relatorio.opcoes?.substituir !== !!opcoes.substituir
   const podeGravar =
     (fase === 'conferido' || (fase === 'erro' && !!relatorio)) &&
     impedimentos.length === 0 &&
     jaGravadas.length === 0 &&
+    !substituirMudou &&
     !trabalhando
 
   return (
@@ -279,6 +289,13 @@ export function TelaMigracao({ conexao, aoAbrirBanco }) {
             </Aviso>
           )}
 
+          {substituirMudou && (
+            <Aviso tom="alerta" icone="⚠" titulo="Confira de novo">
+              A opção “substituir a base” mudou depois da conferência. A gravação
+              só aceita a opção com que o relatório foi feito.
+            </Aviso>
+          )}
+
           {relatorio && <Relatorio relatorio={relatorio} artefatos={estado.artefatos} />}
 
           {estado?.resultado && <Resultado resultado={estado.resultado} />}
@@ -290,6 +307,7 @@ export function TelaMigracao({ conexao, aoAbrirBanco }) {
           relatorio={relatorio}
           conectado={!!conexao?.conectado}
           ocupado={trabalhando}
+          substituir={!!opcoes.substituir}
           aoFechar={() => setConfirmando(false)}
           aoConfirmar={gravar}
         />
@@ -393,7 +411,9 @@ function Backup({ estado }) {
 
 function Opcoes({ valores, aoMudar, travado, gravadas }) {
   const [abertas, setAbertas] = useState(false)
-  const repetidas = (gravadas || []).filter((e) => valores[e])
+  const repetidas = valores.substituir
+    ? []
+    : (gravadas || []).filter((e) => valores[e])
 
   return (
     <Moldura className="bloco">
@@ -427,6 +447,15 @@ function Opcoes({ valores, aoMudar, travado, gravadas }) {
           </label>
         ))}
       </div>
+
+      <Chave
+        rotulo="Substituir a base pelo backup"
+        ajuda="Para carregar um backup mais novo: apaga obras, exemplares, leitores e circulação do BibLivre e grava este backup no lugar, numa transação só. Vale o último backup — o que foi feito no BibLivre depois da carga anterior se perde."
+        tom="alerta"
+        valor={valores.substituir}
+        aoMudar={aoMudar('substituir')}
+        travado={travado}
+      />
 
       {repetidas.length > 0 && (
         <Aviso tom="erro" icone="⚠" titulo="Etapa já gravada nesta execução">
@@ -472,8 +501,15 @@ function Opcoes({ valores, aoMudar, travado, gravadas }) {
             travado={travado}
           />
           <Chave
+            rotulo="Usar o NUMACERVO como tombo"
+            ajuda="O número do livro no Biblioteca Fácil vira o tombo, igual em toda carga. Desmarcado, o tombo é gerado no formato do BibLivre (prefixo.ano.contador) e muda a cada carga."
+            valor={valores.tombo_numacervo}
+            aoMudar={aoMudar('tombo_numacervo')}
+            travado={travado}
+          />
+          <Chave
             rotulo="Prosseguir com a base já ocupada"
-            ajuda="Perigoso: a migração é carga de base nova. Só marque se souber por quê."
+            ajuda="Perigoso: grava por cima sem apagar, e duplica o acervo. Para carregar um backup mais novo, use “Substituir a base pelo backup”."
             tom="alerta"
             valor={valores.permitir_existentes}
             aoMudar={aoMudar('permitir_existentes')}
@@ -481,13 +517,15 @@ function Opcoes({ valores, aoMudar, travado, gravadas }) {
           />
 
           <div className="grade-form">
-            <Campo
-              rotulo="Prefixo do tombo"
-              value={valores.prefixo_tombo || ''}
-              disabled={travado}
-              onChange={(e) => aoMudar('prefixo_tombo')(e.target.value)}
-              ajuda="Vazio: usa o configurado no próprio BibLivre."
-            />
+            {!valores.tombo_numacervo && (
+              <Campo
+                rotulo="Prefixo do tombo"
+                value={valores.prefixo_tombo || ''}
+                disabled={travado}
+                onChange={(e) => aoMudar('prefixo_tombo')(e.target.value)}
+                ajuda="Vazio: usa o configurado no próprio BibLivre."
+              />
+            )}
             <Campo
               rotulo="Reservas a partir do ano"
               inputMode="numeric"
@@ -558,7 +596,9 @@ function Relatorio({ relatorio, artefatos }) {
     acervo && { n: fmt(acervo.obras), rotulo: 'obras', tom: 'nova',
                 nota: 'Registros bibliográficos que nascem' },
     acervo && { n: fmt(acervo.exemplares), rotulo: 'exemplares',
-                nota: 'Um por cópia física, com tombo próprio' },
+                nota: relatorio.opcoes?.tombo_numacervo === false
+                  ? 'Um por cópia física, com tombo próprio'
+                  : 'Um por cópia física; o tombo é o NUMACERVO' },
     leitores && { n: fmt(leitores.total), rotulo: 'leitores',
                   nota: `${fmt(leitores.ativos)} ativos, ${fmt(leitores.inativos)} inativos` },
     circulacao && { n: fmt(circulacao.emprestimos), rotulo: 'empréstimos',
@@ -631,8 +671,21 @@ function Relatorio({ relatorio, artefatos }) {
             <Linha rotulo="Exemplares" valor={fmt(destino.exemplares)} />
             <Linha rotulo="Usuários" valor={fmt(destino.leitores)} />
             <Linha rotulo="Empréstimos" valor={fmt(destino.emprestimos)} />
+            {destino.a_apagar && (
+              <Linha
+                rotulo="Apagados na substituição"
+                valor={fmt(
+                  destino.a_apagar.biblio_records +
+                    destino.a_apagar.biblio_holdings +
+                    destino.a_apagar.users +
+                    destino.a_apagar.lendings
+                )}
+                nota="obras + exemplares + leitores + empréstimos"
+                tom="alerta"
+              />
+            )}
             <Linha
-              rotulo="Prefixo do tombo"
+              rotulo="Tombo"
               valor={destino.prefixo_tombo}
               nota={`de ${destino.origem_prefixo}`}
             />
@@ -708,6 +761,15 @@ function Resultado({ resultado }) {
           <span className="microrrotulo">empréstimos</span>
         </div>
       </div>
+
+      {resultado.apagados?.biblio_records != null && (
+        <p className="migracao__arquivos">
+          Substituiu a carga anterior: {fmt(resultado.apagados.biblio_records)} obras,{' '}
+          {fmt(resultado.apagados.biblio_holdings)} exemplares,{' '}
+          {fmt(resultado.apagados.users)} leitores e{' '}
+          {fmt(resultado.apagados.lendings)} empréstimos foram apagados antes da carga.
+        </p>
+      )}
 
       {resultado.avisos?.length > 0 && (
         <Aviso tom="alerta" icone="⚠" titulo="Ficou de fora">

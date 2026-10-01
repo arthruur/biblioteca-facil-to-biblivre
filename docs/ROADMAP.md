@@ -161,6 +161,25 @@ Reindexar exemplares **não** entra na lista: exemplar não tem tabela de
       nada mais: quem decide se aquilo é tombo, ISBN ou leitor é o servidor.
       Ficou documentado no fonte do BibLivre o que a etiqueta impressa
       realmente carrega — e não é o tombo (ver Próximos passos).
+- [x] **Tombo estável entre backups (2026-10-01).** O tombo da migração passou
+      a ser o `NUMACERVO` do Biblioteca Fácil, o número que está no livro e
+      que o balcão usa. Antes ele era gerado (`<prefixo>.<ano>.<contador>`) e
+      mudava a cada carga. O formato gerado ficou como opção
+      (`tombo_numacervo=False`, `--tombo-gerado`).
+- [x] **Recarregar um backup por cima do outro (2026-10-01).** A opção
+      "substituir a base pelo backup" (`biblio.biblivre.substituicao`) apaga o
+      que a migração carrega, índice incluído, e grava o backup novo na mesma
+      transação. Vale o último backup. Não usa `TRUNCATE … CASCADE`: uma FK
+      desconhecida faz a carga inteira voltar atrás, em vez de apagar em
+      silêncio o que ninguém conferiu.
+- [x] **Busca de livro pelo título no balcão (2026-10-01)**, no PC e no
+      celular, sem depender do índice do BibLivre (que fica vazio até o
+      reindex). Junto veio o `preferir` do `resolver`, porque o tombo só de
+      dígitos pode coincidir com o número de um leitor.
+- [x] **Subir com o Windows (2026-10-01):** `scripts/inicializacao.py
+      instalar` cria uma tarefa agendada de logon que roda o servidor de
+      produção sem janela e o reinicia se ele cair. Não precisa de
+      administrador.
 
 ## 🚧 Próximos passos
 

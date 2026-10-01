@@ -37,7 +37,9 @@ import './balcao-circulacao.css'
  *
  * UMA BARRA DE COMANDO SÓ
  * -----------------------
- * Um campo, sempre com foco, que aceita tombo, ISBN ou número de leitor. Quem
+ * Um campo, sempre com foco, que aceita tombo, ISBN ou número de leitor — e,
+ * quando o que foi digitado tem letra e não é código nenhum, vira busca de
+ * livro pelo título. Quem
  * decide o que foi bipado é o servidor (`GET /circulacao/resolver`), nunca o
  * bibliotecário: escolher "tipo" antes de bipar é um passo a mais em cima da
  * operação mais repetida do dia. Bipar com o foco perdido também funciona —
@@ -206,6 +208,10 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
   const [buscaLeitor, setBuscaLeitor] = useState('')
   const [achados, setAchados] = useState(null)
 
+  /* --- busca de livro por título --- */
+  const [buscaLivro, setBuscaLivro] = useState('')
+  const [obrasAchadas, setObrasAchadas] = useState(null)
+
   /* --- atrasos --- */
   const [aba, setAba] = useState('atrasos')
   const [atrasos, setAtrasos] = useState(null)
@@ -347,6 +353,33 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
     }
   }
 
+  /**
+   * Livro pelo título: o caminho de quem não tem etiqueta legível nem ISBN na
+   * capa. Uma obra só já abre a escolha do exemplar; várias viram lista.
+   */
+  const buscarLivros = async (termo = buscaLivro) => {
+    const busca = String(termo || '').trim()
+    if (busca.length < 2 || !liberado) return
+    setOcupado('busca-livro')
+    setErro(null)
+    try {
+      const d = await api.circulacao.obras(busca)
+      const obras = d?.obras || []
+      setPendente(null)
+      if (obras.length === 1) {
+        setObrasAchadas(null)
+        setEscolha({ obra: obras[0], exemplares: obras[0].exemplares || [], origem: 'titulo' })
+      } else {
+        setEscolha(null)
+        setObrasAchadas({ busca, obras })
+      }
+    } catch (e) {
+      tratarFalha(e, 'Não deu para buscar o livro')
+    } finally {
+      setOcupado('')
+    }
+  }
+
   /* ---------------------------------------------------------------- *
    * Atrasos — polling no padrão do balcão de captura
    * ---------------------------------------------------------------- */
@@ -452,23 +485,32 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
         }
       } else if (r?.tipo === 'tombo') {
         setEscolha(null)
+        setObrasAchadas(null)
         setPendente({
           holding_id: idDoExemplar(r.exemplar) ?? idDoExemplar(r),
           exemplar: r.exemplar || null,
           obra: r.obra || null,
           emprestimo: r.emprestimo || null,
+          /* O tombo migrado é o NUMACERVO, só dígitos: o mesmo número pode
+             ser de um leitor. A tela mostra o livro e oferece a ficha. */
+          tambemLeitor: r.tambem_leitor || null,
         })
       } else if (r?.tipo === 'isbn') {
         /* Livro sem etiqueta impressa é o caso comum do acervo migrado (§1.1
            do plano): bipar o ISBN da capa devolve os exemplares da obra, e
            escolher qual saiu da estante é trabalho do bibliotecário. */
         setPendente(null)
+        setObrasAchadas(null)
         setEscolha({ obra: r.obra || null, exemplares: r.exemplares || [] })
+      } else if (/\p{L}/u.test(bruto)) {
+        /* Tem letra e não é código nenhum: é alguém digitando o título. */
+        setBuscaLivro(bruto)
+        await buscarLivros(bruto)
       } else {
         setErro({
           titulo: `Não reconheci "${bruto}"`,
           texto:
-            'Não é tombo, ISBN nem número de leitor conhecido. Confira os dígitos, ou busque o leitor pelo nome no atendimento.',
+            'Não é tombo, ISBN nem número de leitor conhecido. Confira os dígitos, ou busque o leitor pelo nome e o livro pelo título no atendimento.',
         })
       }
     } catch (e) {
@@ -494,6 +536,7 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
       if (e.key === 'Escape') {
         setPendente(null)
         setEscolha(null)
+        setObrasAchadas(null)
         setConfirmacao(null)
         setErro(null)
         focar()
@@ -756,8 +799,8 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
                 if (document.activeElement === document.body) focar()
               }, 0)
             }}
-            placeholder="bipe ou digite: tombo, ISBN ou número do leitor"
-            aria-label="Tombo, ISBN ou número do leitor"
+            placeholder="bipe ou digite: tombo, ISBN, número do leitor ou título"
+            aria-label="Tombo, ISBN, número do leitor ou título do livro"
             autoComplete="off"
             spellCheck={false}
             disabled={!liberado}
@@ -897,6 +940,44 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
                   </div>
                 )}
               </>
+            )}
+
+            <div className="bcirc-busca">
+              <input
+                className="bcirc-busca__campo"
+                value={buscaLivro}
+                onChange={(e) => setBuscaLivro(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    buscarLivros()
+                  }
+                }}
+                placeholder="buscar livro pelo título ou autor"
+                aria-label="Buscar livro pelo título ou autor"
+                disabled={!liberado}
+              />
+              <Botao
+                variante="secundario"
+                onClick={() => buscarLivros()}
+                disabled={
+                  !liberado || buscaLivro.trim().length < 2 || ocupado === 'busca-livro'
+                }
+              >
+                <IconeLivro tamanho={13} />
+                {ocupado === 'busca-livro' ? '…' : 'Buscar'}
+              </Botao>
+            </div>
+
+            {obrasAchadas && (
+              <ObrasAchadas
+                achadas={obrasAchadas}
+                aoEscolher={(o) => {
+                  setObrasAchadas(null)
+                  setEscolha({ obra: o, exemplares: o.exemplares || [], origem: 'titulo' })
+                }}
+                aoFechar={() => setObrasAchadas(null)}
+              />
             )}
 
             {erro && (
@@ -1230,6 +1311,18 @@ function ItemEmMaos({
       <span className="bcirc-item__titulo">
         {tituloDaObra(obra) !== 'sem título' ? tituloDaObra(obra) : tituloDaObra(exemplar)}
       </span>
+      {pendente.tambemLeitor && (
+        <span className="bcirc-item__estado">
+          O número {tomboDoItem(exemplar)} também é de um leitor.{' '}
+          <Botao
+            variante="fantasma"
+            tamanho="pequeno"
+            onClick={() => aoAbrirLeitor(pendente.tambemLeitor.user_id)}
+          >
+            Era o leitor? Abrir a ficha
+          </Botao>
+        </span>
+      )}
       {campo(obra, 'autor', 'autores') && (
         <span className="bcirc-item__autor">{campo(obra, 'autor', 'autores')}</span>
       )}
@@ -1335,7 +1428,9 @@ function EscolhaDeExemplar({ escolha, ocupado, desabilitado, aoEscolher, aoFecha
 
   return (
     <div className="bcirc-item">
-      <span className="bcirc-item__tombo">ISBN da capa</span>
+      <span className="bcirc-item__tombo">
+        {escolha.origem === 'titulo' ? 'Busca por título' : 'ISBN da capa'}
+      </span>
       <span className="bcirc-item__titulo">{tituloDaObra(escolha.obra || {})}</span>
       <span className="bcirc-item__estado">
         {exemplares.length === 0
@@ -1374,6 +1469,48 @@ function EscolhaDeExemplar({ escolha, ocupado, desabilitado, aoEscolher, aoFecha
         </div>
       )}
 
+      <div className="bcirc-item__acoes">
+        <Botao variante="fantasma" tamanho="pequeno" onClick={aoFechar}>
+          Dispensar
+        </Botao>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Mais de uma obra com esse título: qual é? Cada linha já diz quantos
+ * exemplares estão na estante, que é o que decide entre duas edições.
+ */
+function ObrasAchadas({ achadas, aoEscolher, aoFechar }) {
+  const obras = achadas.obras || []
+  return (
+    <div className="bcirc-item">
+      <span className="bcirc-item__tombo">Busca por título</span>
+      <span className="bcirc-item__estado">
+        {obras.length === 0
+          ? `Nenhuma obra com “${achadas.busca}” no título ou no autor.`
+          : `${obras.length} ${obras.length === 1 ? 'obra' : 'obras'} com “${achadas.busca}”. Qual é a do livro na mão?`}
+      </span>
+      {obras.length > 0 && (
+        <div className="bcirc-lista">
+          {obras.map((o) => (
+            <button
+              key={o.record_id}
+              className="bcirc-lista__item"
+              onClick={() => aoEscolher(o)}
+            >
+              <span className="bcirc-lista__nome">{o.titulo || 'sem título'}</span>
+              <span className="bcirc-lista__meta">
+                {o.autor ? `${o.autor} · ` : ''}
+                {o.total === 0
+                  ? 'sem exemplar'
+                  : `${o.disponiveis} de ${o.total} na estante`}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="bcirc-item__acoes">
         <Botao variante="fantasma" tamanho="pequeno" onClick={aoFechar}>
           Dispensar

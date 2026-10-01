@@ -60,6 +60,7 @@ PASSOS_CONFERENCIA = [
     ("destino", "Conferir o BibLivre", None),
 ]
 PASSOS_GRAVACAO = [
+    ("substituir", "Apagar a carga anterior", "substituir"),
     ("obras", "Gravar os registros bibliográficos", "acervo"),
     ("exemplares", "Criar os exemplares e emitir os tombos", "acervo"),
     ("leitores", "Gravar os leitores", "leitores"),
@@ -270,13 +271,25 @@ def executar(opcoes: dict | None = None, db_args: dict | None = None) -> dict:
                 "Rode a conferência antes de gravar: é ela que gera os "
                 "arquivos que entram no banco.")
         impedimentos = _estado["relatorio"].get("impedimentos") or []
-        pedidas = Opcoes.de_dict({**_estado["opcoes"],
-                                  **{k: v for k, v in (opcoes or {}).items()
-                                     if v is not None}}).etapas()
+        pedido = Opcoes.de_dict({**_estado["opcoes"],
+                                 **{k: v for k, v in (opcoes or {}).items()
+                                    if v is not None}})
+        conferido = Opcoes.de_dict(_estado["relatorio"].get("opcoes"))
+        pedidas = pedido.etapas()
         repetidas = sorted(set(_estado.get("gravadas") or []) & set(pedidas))
     if impedimentos:
         raise RuntimeError("A conferência apontou impedimentos: "
                            + " ".join(impedimentos))
+    # Apagar a base é a única parte da carga que não volta: só acontece se a
+    # conferência que está na tela foi feita já com essa opção — é ela que
+    # mostrou o que ia ser apagado.
+    if pedido.substituir != conferido.substituir:
+        raise RuntimeError(
+            "A opção 'substituir a base' mudou depois da conferência. Confira "
+            "de novo antes de gravar.")
+    # Substituir apaga antes de gravar, então gravar de novo não duplica nada.
+    if pedido.substituir:
+        repetidas = []
     # A checagem de base ocupada cobre isto quando há banco conectado, mas ela
     # depende do banco — e o caminho sem senha na conferência é justamente o
     # comum. Duas cargas da mesma etapa duplicam um acervo inteiro; barrar aqui

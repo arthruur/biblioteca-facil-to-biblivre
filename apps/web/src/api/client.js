@@ -213,11 +213,21 @@ export const api = {
    * manda o codigo cru, o servidor diz se e tombo, ISBN ou leitor.
    */
   circulacao: {
-    resolver: (codigo) =>
-      json(`/circulacao/resolver?codigo=${encodeURIComponent(codigo)}`, { comSessao: true }),
+    /** `preferir`: 'leitor' | 'exemplar' — o que a tela espera agora (tombo
+        migrado é só dígitos, como o número do leitor). */
+    resolver: (codigo, preferir = '') =>
+      json(
+        `/circulacao/resolver?codigo=${encodeURIComponent(codigo)}${
+          preferir ? `&preferir=${preferir}` : ''
+        }`,
+        { comSessao: true }
+      ),
     leitor: (userId) => json(`/circulacao/leitor/${userId}`, { comSessao: true }),
     leitores: (busca) =>
       json(`/circulacao/leitores?busca=${encodeURIComponent(busca)}`, { comSessao: true }),
+    /** Obras pelo título (ou autor), cada uma com os exemplares e o estado. */
+    obras: (busca) =>
+      json(`/circulacao/obras?busca=${encodeURIComponent(busca)}`, { comSessao: true }),
     exemplar: (holdingId) =>
       json(`/circulacao/exemplar/${holdingId}`, { comSessao: true }),
     emprestar: ({ holding_id, user_id, forcar_avisos = false }) =>

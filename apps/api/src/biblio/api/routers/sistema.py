@@ -24,12 +24,24 @@ async def info():
     }
 
 
+# As telas que o celular abre direto pelo QR. Lista fechada: o QR é impresso
+# na tela do PC, e um parâmetro livre viraria QR para qualquer endereço.
+TELAS_DO_CELULAR = {"": "", "circulacao": "/circulacao"}
+
+
 @router.get("/qrcode", summary="QR code da URL do servidor, para abrir no celular")
-async def qrcode():
+async def qrcode(tela: str = ""):
+    """
+    `tela=circulacao` aponta o QR para `/circulacao` — o celular cai direto no
+    balcão, em vez da captura de ISBN que a raiz abre.
+    """
     import qrcode
     import qrcode.image.svg
 
-    img = qrcode.make(config.SERVER_URL, image_factory=qrcode.image.svg.SvgPathImage)
+    if tela not in TELAS_DO_CELULAR:
+        return Response(status_code=400, content=f"tela desconhecida: {tela}")
+    url = config.SERVER_URL.rstrip("/") + TELAS_DO_CELULAR[tela]
+    img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage)
     buf = io.BytesIO()
     img.save(buf)
     return Response(content=buf.getvalue(), media_type="image/svg+xml")

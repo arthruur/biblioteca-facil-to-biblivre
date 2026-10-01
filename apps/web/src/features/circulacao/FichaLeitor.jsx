@@ -54,8 +54,23 @@ export function campo(objeto, ...chaves) {
   return undefined
 }
 
+/**
+ * O leitor de um item, venha na forma que vier.
+ *
+ * A ficha manda `leitor` como objeto (`{id, nome, …}`); exemplar, empréstimo,
+ * atraso e reserva mandam `leitor` como o NOME, em texto, com o id ao lado em
+ * `user_id`. Para esses o próprio item é o leitor — é nele que estão os dois.
+ */
+export function leitorDe(item) {
+  const l = item?.leitor
+  return l && typeof l === 'object' ? l : item
+}
+
 export function nomeDoLeitor(leitor) {
-  const n = campo(leitor, 'nome', 'name', 'nome_completo')
+  if (typeof leitor === 'string') return leitor || 'Leitor sem nome'
+  const n =
+    campo(leitor, 'nome', 'name', 'nome_completo') ||
+    (typeof leitor?.leitor === 'string' ? leitor.leitor : undefined)
   if (n) return String(n)
   const id = campo(leitor, 'id', 'user_id')
   return id ? `Leitor #${id}` : 'Leitor sem nome'

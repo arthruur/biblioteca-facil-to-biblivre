@@ -617,3 +617,41 @@
   font-size: var(--txt-sm);
   color: var(--erro);
 }
+
+/* --- Abrir no celular: QR da rota /circulacao --- */
+
+.bcirc-parear__corpo {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+}
+
+.bcirc-parear__qr {
+  flex: none;
+  padding: var(--e2);
+  background: #fff;
+  border: 1px solid var(--borda);
+  line-height: 0;
+}
+
+.bcirc-parear__qr img {
+  display: block;
+  width: 120px;
+  height: 120px;
+}
+
+.bcirc-parear__url {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding-top: var(--e2);
+  border-top: 1px solid var(--borda-suave);
+  min-width: 0;
+}
+
+.bcirc-parear__url code {
+  font-size: var(--txt-sm);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

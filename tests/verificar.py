@@ -97,6 +97,11 @@ def verificar_api():
     checar("saúde responde", c.get("/api/saude").json()["status"] == "ok")
     checar("info do sistema tem server_url",
            "server_url" in c.get("/api/sistema/info").json())
+    qr = c.get("/api/qrcode", params={"tela": "circulacao"})
+    checar("QR da circulação é um SVG",
+           qr.status_code == 200 and "svg" in qr.headers["content-type"])
+    checar("QR só aponta para tela conhecida",
+           c.get("/api/qrcode", params={"tela": "http://outro"}).status_code == 400)
 
     # Sem banco o sistema funciona, mas nunca finge que verificou.
     checar("acervo responde sem banco", c.get("/api/acervo/status").status_code == 200)

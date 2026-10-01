@@ -7,6 +7,7 @@ import {
   IconeBuscar,
   IconeCheck,
   IconeCirculacao,
+  IconeCopiar,
   IconeLivro,
   IconeRecarregar,
   Segmentado,
@@ -20,6 +21,7 @@ import {
   idDoEmprestimo,
   idDoExemplar,
   idDoLeitor,
+  leitorDe,
   moeda,
   nomeDoLeitor,
   tituloDaObra,
@@ -220,6 +222,10 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
   const [ordem, setOrdem] = useState({ coluna: 'dias', desc: true })
   const assinaturaRef = useRef('')
 
+  /* --- pareamento do celular --- */
+  const [enderecoCelular, setEnderecoCelular] = useState('')
+  const [copiado, setCopiado] = useState(false)
+
   const bancoVerificando = !conexao || conexao.bruto == null
   const semBanco = !bancoVerificando && !conexao.conectado
   const liberado = !!operador && !!conexao?.conectado
@@ -300,6 +306,32 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
           : e?.message || 'Erro não identificado.',
     })
   }, [])
+
+  /* O endereço que o celular abre é o do servidor (IP da rede, não o
+     `localhost` que este PC pode estar usando), já na rota do balcão. */
+  useEffect(() => {
+    let vivo = true
+    api.sistema
+      .info()
+      .then((d) => {
+        if (vivo && d?.server_url) {
+          setEnderecoCelular(`${d.server_url.replace(/\/+$/, '')}/circulacao`)
+        }
+      })
+      .catch(() => {
+        /* sem o endereço a tela só não mostra o QR; o balcão segue */
+      })
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  const copiarEndereco = () => {
+    if (!enderecoCelular) return
+    navigator.clipboard?.writeText(enderecoCelular)
+    setCopiado(true)
+    window.setTimeout(() => setCopiado(false), 1500)
+  }
 
   /* ---------------------------------------------------------------- *
    * Leitor e ficha
@@ -645,7 +677,7 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
       }
       if (r?.reserva) {
         partes.push(
-          `reserva pendente — separe para ${nomeDoLeitor(r.reserva.leitor || r.reserva)}`
+          `reserva pendente — separe para ${nomeDoLeitor(leitorDe(r.reserva))}`
         )
       }
       registrar({
@@ -712,13 +744,13 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
     const busca = buscaAtrasos.trim().toLowerCase()
     const filtrados = busca
       ? base.filter((i) =>
-          `${nomeDoLeitor(i.leitor || i)} ${tituloDaObra(i)} ${tomboDoItem(i)}`
+          `${nomeDoLeitor(leitorDe(i))} ${tituloDaObra(i)} ${tomboDoItem(i)}`
             .toLowerCase()
             .includes(busca)
         )
       : base
     const chave = (i) => {
-      if (ordem.coluna === 'leitor') return nomeDoLeitor(i.leitor || i).toLowerCase()
+      if (ordem.coluna === 'leitor') return nomeDoLeitor(leitorDe(i)).toLowerCase()
       if (ordem.coluna === 'obra') return tituloDaObra(i).toLowerCase()
       if (ordem.coluna === 'previsto')
         return String(campo(i, 'previsto_para', 'expected_return_date') || '')
@@ -1115,6 +1147,32 @@ export function TelaBalcaoCirculacao({ conexao, aoAbrirBanco }) {
               </div>
             )}
           </section>
+
+          {enderecoCelular && (
+            <section className="bcirc-bloco moldura bcirc-parear">
+              <span className="microrrotulo">Abrir no celular</span>
+              <div className="bcirc-parear__corpo">
+                <div className="bcirc-parear__qr">
+                  <img
+                    src="/api/qrcode?tela=circulacao"
+                    alt="QR code para abrir a circulação no celular"
+                  />
+                </div>
+                <p className="bcirc-bloco__vazio">
+                  Aponte a câmera do celular para o QR: ele abre direto o balcão
+                  de circulação, para emprestar e devolver bipando. Aceite o
+                  certificado na primeira vez.
+                </p>
+              </div>
+              <div className="bcirc-parear__url">
+                <code className="mono">{enderecoCelular}</code>
+                <Botao variante="fantasma" tamanho="pequeno" onClick={copiarEndereco}>
+                  <IconeCopiar tamanho={12} />
+                  {copiado ? 'Copiado' : 'Copiar'}
+                </Botao>
+              </div>
+            </section>
+          )}
         </div>
 
         {/* ---------- Regiões 2 e 3: FICHA DO LEITOR e ATRASOS ----------
@@ -1300,7 +1358,7 @@ function ItemEmMaos({
   const obra = pendente.obra || {}
   const emprestimo = pendente.emprestimo
   const emprestado = !!emprestimo
-  const leitorDoEmprestimo = emprestimo?.leitor || emprestimo
+  const leitorDoEmprestimo = leitorDe(emprestimo)
   const atraso = emprestado ? diasDeAtraso(emprestimo) : 0
   const temLeitor = !!ficha
   const primeiroNome = temLeitor ? nomeDoLeitor(ficha.leitor).split(' ')[0] : ''
@@ -1609,7 +1667,7 @@ function Atrasos({
             <tbody>
               {itens.map((item, i) => {
                 const dias = diasDeAtraso(item)
-                const leitor = item.leitor || item
+                const leitor = leitorDe(item)
                 const lendingId = idDoEmprestimo(item)
                 const holdingId = idDoExemplar(item)
                 const chave = `devolver:${lendingId ?? holdingId}`

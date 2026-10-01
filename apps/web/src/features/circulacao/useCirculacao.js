@@ -155,7 +155,11 @@ export const tomboDe = (ex) =>
 export const tituloDe = (o) =>
   o?.titulo || o?.title || o?.obra?.titulo || o?.obra?.title || ''
 
-export const nomeDe = (p) => p?.nome || p?.name || ''
+// `leitor` chega como objeto na ficha e como o nome, em texto, no exemplar,
+// no empréstimo e na reserva.
+export const nomeDe = (p) =>
+  typeof p === 'string' ? p : p?.nome || p?.name || ''
+
 
 export const idDoExemplar = (ex) => ex?.holding_id ?? ex?.id ?? null
 

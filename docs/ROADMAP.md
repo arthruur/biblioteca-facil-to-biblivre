@@ -191,6 +191,9 @@ sem tela, e o que continua obrigando a abrir o outro sistema.
 
 ### O primeiro teste contra o BibLivre real (a pauta, nesta ordem)
 
+O passo a passo para seguir na frente do PC está em
+[ROTEIRO_TESTE_BALCAO.md](ROTEIRO_TESTE_BALCAO.md).
+
 Nada da circulação foi exercitado contra um Postgres de verdade nem contra um
 Tomcat de verdade: a garantia de hoje é a verificação offline
 (`python tests/verificar.py` cobre as rotas, a transação, o vocabulário de

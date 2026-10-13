@@ -32,7 +32,18 @@ não se reinicia sozinho.
 A senha do Postgres vem do `.env` da raiz, como no resto do projeto: a tarefa
 não guarda credencial nenhuma.
 
-Também deixa na Área de Trabalho um atalho que abre o sistema no navegador.
+Também deixa na Área de Trabalho e no menu Iniciar um atalho "BiblioFácil"
+que abre o sistema como um programa: o Edge em modo aplicativo (`--app`), numa
+janela própria, sem abas nem barra de endereço, com perfil separado em
+%LOCALAPPDATA%\\BiblioFacil — não mistura com o navegador de ninguém. Sem Edge
+nem Chrome, cai para o atalho de internet de antes, que abre no navegador
+padrão.
+
+Para essa janela abrir sem a tela "sua conexão não é particular", o certificado
+autoassinado de data/certs entra na raiz confiável **deste usuário** (não da
+máquina: não pede administrador, só um "Sim" na caixa do Windows). Ele vale
+só para `localhost`, então isso não muda nada para o celular, que continua
+aceitando o certificado na primeira vez.
 """
 
 import argparse
@@ -56,7 +67,9 @@ LOG_MAXIMO = 5 * 1024 * 1024        # passou disso, o log vira .1 na subida
 
 TAREFA = "BiblioFacil"
 ATALHO_INICIAR = "BiblioFacil.vbs"
-ATALHO_ABRIR = "BiblioFácil.url"
+ATALHO_ABRIR = "BiblioFácil.lnk"
+ATALHO_ABRIR_URL = "BiblioFácil.url"     # sem Edge/Chrome, e o das versões antigas
+ICONE = Path(__file__).resolve().with_name("bibliofacil.ico")
 WINDOWS = os.name == "nt"
 
 
@@ -99,6 +112,15 @@ def _area_de_trabalho() -> Path:
 
 def _inicializar() -> Path:
     return _pasta_especial(0x07)            # CSIDL_STARTUP
+
+
+def _menu_iniciar() -> Path:
+    return _pasta_especial(0x02)            # CSIDL_PROGRAMS
+
+
+def _perfil_navegador() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(base) / "BiblioFacil" / "navegador"
 
 
 def _porta_aberta(porta: int) -> bool:
@@ -221,11 +243,94 @@ def _criar_atalho_inicializar(comando: str, argumentos: str) -> Path:
     return destino
 
 
-def _criar_atalho_abrir(porta: int, sem_ssl: bool) -> Path:
-    destino = _area_de_trabalho() / ATALHO_ABRIR
+def _navegador() -> Path | None:
+    """Edge (vem com o Windows) ou, na falta dele, Chrome — os dois têm `--app`."""
+    bases = [os.environ.get(v) for v in
+             ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA")]
+    for relativo in (r"Microsoft\Edge\Application\msedge.exe",
+                     r"Google\Chrome\Application\chrome.exe"):
+        for base in filter(None, bases):
+            candidato = Path(base) / relativo
+            if candidato.exists():
+                return candidato
+    return None
+
+
+def _criar_lnk(destino: Path, alvo: Path, argumentos: str) -> None:
+    """
+    .lnk é binário; quem sabe escrever é o WScript.Shell. Os valores vão por
+    variável de ambiente para não ter que escapar aspas dentro de PowerShell.
+    """
+    script = (
+        "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:BF_LNK);"
+        "$s.TargetPath = $env:BF_ALVO; $s.Arguments = $env:BF_ARGS;"
+        "$s.WorkingDirectory = $env:BF_PASTA; $s.IconLocation = $env:BF_ICONE;"
+        "$s.Description = 'BiblioFácil: catalogação, migração e balcão do BibLivre';"
+        "$s.Save()")
+    ambiente = {**os.environ, "BF_LNK": str(destino), "BF_ALVO": str(alvo),
+                "BF_ARGS": argumentos, "BF_PASTA": str(RAIZ),
+                "BF_ICONE": f"{ICONE if ICONE.exists() else alvo},0"}
+    subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                   env=ambiente, check=True, capture_output=True)
+
+
+def _criar_atalho_abrir(porta: int, sem_ssl: bool) -> list[Path]:
     url = f"{'http' if sem_ssl else 'https'}://localhost:{porta}/"
-    destino.write_text(f"[InternetShortcut]\r\nURL={url}\r\n", encoding="utf-8")
-    return destino
+    navegador = _navegador()
+    antigo = _area_de_trabalho() / ATALHO_ABRIR_URL
+    if navegador is None:
+        antigo.write_text(f"[InternetShortcut]\r\nURL={url}\r\n", encoding="utf-8")
+        return [antigo]
+
+    # Perfil próprio: a janela vira um "programa" separado na barra de tarefas
+    # e não herda abas, extensões nem conta do navegador de quem usa o PC.
+    argumentos = (f'--app={url} --user-data-dir="{_perfil_navegador()}" '
+                  f'--no-first-run --no-default-browser-check')
+    criados = []
+    for pasta in (_area_de_trabalho(), _menu_iniciar()):
+        destino = pasta / ATALHO_ABRIR
+        _criar_lnk(destino, navegador, argumentos)
+        criados.append(destino)
+    if antigo.exists():
+        antigo.unlink()         # um atalho só na Área de Trabalho
+    return criados
+
+
+# ------------------------------------------------------------ certificado
+
+def _certificado() -> tuple[Path, str]:
+    """O cert.pem do servidor (gerado agora se ainda não existir) e a impressão SHA-1."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+    from biblio.catalogacao.cert import gerar_certificado
+
+    caminho = Path(gerar_certificado()[0])
+    cert = x509.load_pem_x509_certificate(caminho.read_bytes())
+    return caminho, cert.fingerprint(hashes.SHA1()).hex()
+
+
+def _certutil(*args) -> tuple[int, str]:
+    r = subprocess.run(["certutil", "-user", *args], capture_output=True)
+    return r.returncode, _oem(r.stdout or r.stderr)
+
+
+def _certificado_confiavel(impressao: str) -> bool:
+    return _certutil("-verifystore", "Root", impressao)[0] == 0
+
+
+def _confiar_certificado() -> None:
+    caminho, impressao = _certificado()
+    if _certificado_confiavel(impressao):
+        print("  certificado: já é confiável neste usuário")
+        return
+    print("  certificado: o Windows vai perguntar se confia nele — clique em Sim")
+    codigo, saida = _certutil("-addstore", "Root", str(caminho))
+    if codigo == 0 and _certificado_confiavel(impressao):
+        print("  certificado: confiável — a janela do BiblioFácil abre sem aviso")
+    else:
+        print(f"  certificado: não ficou confiável ({saida.splitlines()[-1] if saida else codigo}).\n"
+              f"  O sistema funciona igual; a janela só vai mostrar o aviso de\n"
+              f"  conexão na primeira vez (Avançado → Continuar).")
 
 
 # --------------------------------------------------------------- comandos
@@ -249,8 +354,10 @@ def instalar(args) -> None:
         destino = _criar_atalho_inicializar(comando, argumentos)
         print(f"  plano B: atalho em {destino}")
 
-    atalho = _criar_atalho_abrir(args.porta, args.sem_ssl)
-    print(f"  atalho para abrir o sistema: {atalho}")
+    if not args.sem_ssl:
+        _confiar_certificado()
+    for atalho in _criar_atalho_abrir(args.porta, args.sem_ssl):
+        print(f"  atalho para abrir o sistema: {atalho}")
 
     if not (RAIZ / ".env").exists():
         print("  ATENÇÃO: não há .env na raiz. Sem a senha do Postgres o balcão "
@@ -270,10 +377,23 @@ def remover(args) -> None:
         codigo, saida = _schtasks("/Delete", "/TN", TAREFA, "/F")
         print(f"  tarefa '{TAREFA}': {'removida' if codigo == 0 else saida}")
     for destino in (_inicializar() / ATALHO_INICIAR,
-                    _area_de_trabalho() / ATALHO_ABRIR):
+                    _area_de_trabalho() / ATALHO_ABRIR,
+                    _area_de_trabalho() / ATALHO_ABRIR_URL,
+                    _menu_iniciar() / ATALHO_ABRIR):
         if destino.exists():
             destino.unlink()
             print(f"  removido: {destino}")
+    # O certificado sai da raiz confiável junto: ninguém vai lembrar dele lá.
+    # O perfil do navegador fica — é só cache, e some com a pasta do usuário.
+    try:
+        from biblio.catalogacao.config import CERT_DIR
+        impressao = (_certificado()[1] if (CERT_DIR / "cert.pem").exists()
+                     else None)     # sem cert.pem, não gerar um só para apagar
+    except (ImportError, OSError):
+        impressao = None
+    if impressao and _certificado_confiavel(impressao):
+        codigo, saida = _certutil("-delstore", "Root", impressao)
+        print(f"  certificado: {'removido da raiz confiável' if codigo == 0 else saida}")
     print("O servidor não sobe mais com o Windows. Os dados em data/ ficaram.")
 
 

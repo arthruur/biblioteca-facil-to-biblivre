@@ -147,8 +147,13 @@ python scripts/inicializacao.py instalar
 
 Faz o build do frontend (se ainda não existir), cria a tarefa agendada
 `BiblioFacil`, que sobe o servidor de produção no logon do Windows, sem janela,
-e se reinicia sozinha se cair. Também põe na Área de Trabalho um atalho que abre
-o sistema. Não precisa de administrador. Se a política da máquina não deixar
+e se reinicia sozinha se cair. Também põe na Área de Trabalho e no menu Iniciar
+um atalho **BiblioFácil** que abre o sistema como um programa: o Edge em modo
+aplicativo, numa janela própria, sem abas nem barra de endereço (sem Edge nem
+Chrome, abre no navegador padrão). Para essa janela abrir sem o aviso de
+"conexão não particular", o certificado de `data/certs` passa a ser confiável
+para este usuário do Windows. O Windows pergunta uma vez, e é só clicar em
+**Sim**. Não precisa de administrador. Se a política da máquina não deixar
 criar a tarefa, o script usa a pasta Inicializar do usuário. A senha do Postgres
 continua vindo do `.env`, e o log fica em `data/logs/servidor.log`.
 
